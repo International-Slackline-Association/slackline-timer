@@ -45,7 +45,7 @@
     "constructs": "10.8.1",
     "esbuild": "0.28.2",
     "tsx": "4.23.15",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "vitest": "4.1.10",
     "ws": "8.21.3"
   },
