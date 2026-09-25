@@ -46,7 +46,7 @@
     "esbuild": "0.28.2",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
-    "vitest": "4.1.10",
+    "vitest": "5.0.1",
     "ws": "8.21.3"
   },
   "author": "Can Sahin, Simon Hiller",
