@@ -1,0 +1,129 @@
+name: CI
+
+# Every change reaches `main` through a pull request (see CONTRIBUTING.md);
+# commit messages are enforced by the local commit-msg hook. CI validates every
+# PR targeting `main` and every push to it — the push trigger is mainline-only,
+# so an open PR's branch runs once, not twice.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: nothing here writes to the repository. A fork PR's token is
+# read-only regardless, but the explicit grant also caps the token on pushes.
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint & format (repo-wide)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: Prettier (check only)
+        run: npx prettier --check "**/*.{js,ts,tsx,json,md,yml,yaml}"
+
+  web:
+    name: web — typecheck, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # web's build is `eslint . && vite build`; eslint is a ROOT devDependency,
+      # reachable only via the ancestor node_modules/.bin.
+      - name: Install root deps (eslint)
+        working-directory: .
+        run: npm ci
+      - run: npm ci
+      - name: Type-check
+        run: npm run checkTs
+      - name: Test (coverage)
+        run: npm run test:coverage
+      - name: Build
+        run: npm run build
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: web-coverage
+          path: web/coverage
+          if-no-files-found: ignore
+
+  server:
+    name: server — typecheck, test, synth
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    # The *.int.test.ts suites self-skip when :4566 is closed (helpers.ts
+    # `isDynamoReachable`), which silently hid ~90 tests — every bracket
+    # seed/advance, DNF-ordering, referential-409 and harness-parity assertion —
+    # behind a green run. Standing the container up here is what makes the skip
+    # mechanism a Docker convenience rather than a coverage hole.
+    #
+    # Deliberately no `db:init`: the suites provision their own tables (helpers.ts
+    # creates them idempotently) in the region env.setup.ts pins, `AWS_REGION=local`.
+    # `db:init` defaults to eu-central-1 and LocalStack partitions data by region,
+    # so running it here would fill a partition the tests never read.
+    services:
+      localstack:
+        # Same image + services as docker/docker-compose.yml — see the pin
+        # rationale there (the :3 line boots tokenless; 2026.x demands a licence).
+        image: localstack/localstack:3
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: dynamodb,s3
+          DEBUG: '0'
+        options: >-
+          --health-cmd "curl -sf http://localhost:4566/_localstack/health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+          --health-start-period 10s
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Type-check
+        run: npm run checkTs
+      # Assert the endpoint answers BEFORE the suites collect. `skipIf` means an
+      # unreachable container degrades to a silent green rather than a failure,
+      # so without this step a broken service container would quietly restore the
+      # coverage hole it was added to close.
+      - name: Assert LocalStack is reachable
+        run: curl -sf --retry 12 --retry-delay 5 --retry-connrefused http://localhost:4566/_localstack/health
+      - name: Test (coverage)
+        run: npm run test:coverage
+      # cdk synth is the deploy-path gate: it runs the real infra/app.ts
+      # entrypoint through the CDK CLI (feature flags from cdk.json, all three
+      # stacks), catching a stack error here instead of at `cdk deploy`. The CLI
+      # is the aws-cdk devDependency installed by `npm ci` above. (server `build`
+      # is an alias for `cdk synth`; this step names the gate for what it is.)
+      # billingAlertEmail is deploy config the repo doesn't carry (BillingStack
+      # throws without it); a placeholder is enough to build the template.
+      - name: Synth (cdk)
+        run: npm run synth -- -c billingAlertEmail=billing-alerts@example.org

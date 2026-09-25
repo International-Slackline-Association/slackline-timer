@@ -1,0 +1,1568 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TELEMETRY — Slackline Timer Design System</title>
+    <!--
+      DELIBERATE EXEMPTION from DESIGN_SYSTEM §4's "every family is self-hosted"
+      rule. That rule exists because captured /stream/* overlays run with external
+      hosts blocked; this reference page is never captured — it is opened by a
+      human on a normal network. Self-hosting it would point 18 <link>s at the
+      git-ignored web/node_modules/@fontsource, so a fresh clone would render the
+      whole type spec in fallback faces. The app itself loads NO font <link>.
+      Weights below must mirror the app's @fontsource imports (web/src/app/index.tsx).
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Oswald:wght@300;400;500;600;700&family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@300;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /*
+        MIRROR, NOT SOURCE. web/src/app/theme/tokens.css is the single source of
+        truth for every token value; these vars are a HAND-KEPT copy under
+        DIFFERENT names (--tl-base vs --tl-bg-base, --tl-r-md vs --tl-radius-md,
+        --tl-ink-on vs --tl-ink-on-brand) plus two — --tl-shadow/-lg — that exist
+        nowhere else. tokens.parity.test.ts guards tokens.ts ↔ tokens.css and does
+        NOT see this file, so a token change here is silent drift: re-check against
+        tokens.css whenever you touch it.
+      */
+      :root {
+        /* surfaces — ISA light */
+        --tl-void: #333c4e; /* slate: deep contrast / projector ground */
+        --tl-canvas: #f5f7f8; /* page */
+        --tl-base: #ffffff;
+        --tl-panel: #ffffff;
+        --tl-muted: #edf1f2;
+        --tl-line: #e1e6e8;
+        --tl-line-strong: #c7d0d3;
+        /* ink */
+        --tl-ink-hi: #333c4e;
+        --tl-ink-mid: #5b6776;
+        --tl-ink-low: #8a939d;
+        --tl-ink-faint: #b7bfc6;
+        --tl-ink-on: #ffffff;
+        /* brand — ISA */
+        --tl-teal: #13a89e;
+        --tl-teal-dark: #0e837b;
+        --tl-teal-tint: rgba(19, 168, 158, 0.12);
+        --tl-orange: #f04e34;
+        --tl-orange-dark: #c73a23;
+        /* race states (*-dim = on-light numerals; *-text = on-light words; *-bright = on dark grounds) */
+        --tl-running: #13a89e;
+        --tl-running-bright: #45e5d8;
+        --tl-running-text: #0b6b65;
+        --tl-go: #65bc7b;
+        --tl-go-dim: #2e8f50;
+        --tl-go-text: #1f7a40;
+        --tl-set: #f2a93b;
+        --tl-set-dim: #b0741a;
+        --tl-set-text: #8f5e12;
+        --tl-set-bright: #ffc75e;
+        --tl-stop: #f04e34;
+        --tl-stop-dim: #c2391f;
+        --tl-stop-bright: #ff9b82;
+        --tl-idle: #8a939d;
+        /* type */
+        --tl-font-numerals: 'JetBrains Mono', ui-monospace, monospace;
+        --tl-font-display: 'Oswald', 'Saira Condensed', system-ui, sans-serif;
+        --tl-font-body: 'Saira', system-ui, sans-serif;
+        /* overlay — LAAX plate language */
+        --tl-overlay-plate: rgba(255, 255, 255, 0.3);
+        --tl-overlay-stroke: #ffffff;
+        --tl-overlay-stroke-width: 6px; /* at the art's 1920×1080 reference frame */
+        --tl-overlay-heading-tracking: -0.02em;
+        --tl-overlay-backdrop: rgba(35, 31, 32, 0.6);
+        /* radii */
+        --tl-r-sm: 4px;
+        --tl-r-md: 8px;
+        --tl-r-lg: 14px;
+        --tl-r-track: 14px 4px 14px 4px;
+        /* shadows */
+        --tl-shadow: 0 1px 2px rgba(51, 60, 78, 0.06), 0 2px 12px rgba(51, 60, 78, 0.05);
+        --tl-shadow-lg: 0 8px 30px rgba(51, 60, 78, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        background:
+          radial-gradient(1100px 560px at 88% -8%, rgba(19, 168, 158, 0.1), transparent 60%),
+          radial-gradient(820px 460px at -8% 14%, rgba(240, 78, 52, 0.07), transparent 55%),
+          var(--tl-canvas);
+        color: var(--tl-ink-hi);
+        font-family: var(--tl-font-body);
+        font-size: 16px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        padding-bottom: 8rem;
+      }
+
+      .numerals {
+        font-family: var(--tl-font-numerals);
+        font-variant-numeric: tabular-nums;
+      }
+      .tnum {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .wrap {
+        position: relative;
+        z-index: 1;
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      /* ── ISA peak mark ────────────────────────────────── */
+      .peak {
+        display: inline-block;
+        vertical-align: middle;
+      }
+
+      /* ── HERO ─────────────────────────────────────────── */
+      header.hero {
+        padding: 84px 0 52px;
+        border-bottom: 1px solid var(--tl-line);
+        margin-bottom: 60px;
+      }
+      .kicker {
+        text-transform: uppercase;
+        letter-spacing: 0.32em;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--tl-teal);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 22px;
+      }
+      .kicker::before {
+        content: '';
+        width: 42px;
+        height: 2px;
+        background: var(--tl-teal);
+        display: inline-block;
+      }
+      h1.title {
+        font-family: var(--tl-font-display);
+        font-weight: 700;
+        font-size: clamp(3.4rem, 11vw, 8.5rem);
+        line-height: 0.9;
+        letter-spacing: -0.01em;
+        text-transform: uppercase;
+        color: var(--tl-ink-hi);
+      }
+      h1.title em {
+        font-style: normal;
+        color: var(--tl-teal);
+      }
+      .lede {
+        max-width: 660px;
+        margin-top: 26px;
+        color: var(--tl-ink-mid);
+        font-size: 1.12rem;
+      }
+      .lede b {
+        color: var(--tl-ink-hi);
+        font-weight: 600;
+      }
+      .lede .tl {
+        color: var(--tl-teal-dark);
+        font-weight: 600;
+      }
+      .lede .or {
+        color: var(--tl-orange-dark);
+        font-weight: 600;
+      }
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 30px;
+      }
+      .chip {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 600;
+        padding: 6px 12px;
+        border: 1px solid var(--tl-line-strong);
+        border-radius: var(--tl-r-sm);
+        color: var(--tl-ink-mid);
+        background: var(--tl-base);
+      }
+
+      /* ── SECTION SCAFFOLD ─────────────────────────────── */
+      section {
+        margin-bottom: 70px;
+        scroll-margin-top: 70px;
+      }
+      .sec-head {
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        margin-bottom: 26px;
+      }
+      .sec-num {
+        font-family: var(--tl-font-numerals);
+        font-weight: 500;
+        font-size: 0.85rem;
+        color: var(--tl-teal);
+      }
+      h2.sec-title {
+        font-family: var(--tl-font-display);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        font-size: 1.6rem;
+        color: var(--tl-ink-hi);
+      }
+      .sec-sub {
+        color: var(--tl-ink-low);
+        font-size: 0.95rem;
+        margin-left: auto;
+        max-width: 360px;
+        text-align: right;
+      }
+
+      .panel {
+        background: var(--tl-panel);
+        border: 1px solid var(--tl-line);
+        border-radius: var(--tl-r-lg);
+        padding: 32px;
+        box-shadow: var(--tl-shadow);
+      }
+      .label {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--tl-ink-low);
+      }
+
+      /* ── COLOR SWATCHES ───────────────────────────────── */
+      .swatch-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+      }
+      .swatch {
+        border: 1px solid var(--tl-line);
+        border-radius: var(--tl-r-md);
+        overflow: hidden;
+        background: var(--tl-base);
+        box-shadow: var(--tl-shadow);
+      }
+      .swatch .chipfill {
+        height: 76px;
+        display: flex;
+        align-items: flex-end;
+        padding: 8px;
+      }
+      .swatch .body {
+        padding: 10px 12px;
+      }
+      .swatch .nm {
+        font-weight: 600;
+        font-size: 0.86rem;
+      }
+      .swatch .use {
+        font-size: 0.72rem;
+        color: var(--tl-ink-low);
+        margin-top: 2px;
+      }
+      .grp-label {
+        margin: 26px 0 12px;
+      }
+      /* Overlay-token chips composite the (often translucent) token over a slate
+         video stand-in; plate chips carry the white plate stroke. */
+      .chipfill.chip-composite {
+        position: relative;
+        background: var(--tl-void);
+      }
+      .chip-composite .chip-layer {
+        position: absolute;
+        inset: 0;
+      }
+      .chip-composite .chip-layer.chip-plate {
+        inset: 8px;
+        /* stroke token is 6px @1080p; the chip is scaled up for the swatch */
+        border: 5px solid var(--tl-overlay-stroke);
+      }
+      .chip-composite span {
+        position: relative;
+      }
+      /* keep the value label inside the plate fill, off the white stroke */
+      .chip-composite .chip-plate + span {
+        margin: 0 0 9px 9px;
+      }
+
+      /* ── TYPE SPECIMENS ───────────────────────────────── */
+      .type-row {
+        display: flex;
+        align-items: baseline;
+        gap: 20px;
+        padding: 18px 0;
+        border-bottom: 1px solid var(--tl-line);
+      }
+      .type-row:last-child {
+        border-bottom: 0;
+      }
+      .type-meta {
+        width: 150px;
+        flex: none;
+      }
+      .type-meta .nm {
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+      .type-meta .det {
+        font-size: 0.74rem;
+        color: var(--tl-ink-low);
+        font-family: var(--tl-font-numerals);
+      }
+      .spec-disp {
+        font-family: var(--tl-font-display);
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+      .spec-body {
+        font-family: var(--tl-font-body);
+      }
+      .spec-num {
+        font-family: var(--tl-font-numerals);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── RACE-STATE LANGUAGE ──────────────────────────── */
+      .states {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+      }
+      .state-card {
+        border: 1px solid var(--tl-line);
+        border-radius: var(--tl-r-md);
+        padding: 18px;
+        background: var(--tl-base);
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--tl-shadow);
+      }
+      .state-card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: var(--c);
+      }
+      .state-card .dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--c);
+        box-shadow: 0 0 12px 0 var(--c);
+        margin-bottom: 12px;
+      }
+      .state-card .st {
+        font-family: var(--tl-font-display);
+        text-transform: uppercase;
+        font-weight: 600;
+        font-size: 1.05rem;
+      }
+      .state-card .where {
+        font-size: 0.8rem;
+        color: var(--tl-ink-mid);
+        margin-top: 6px;
+      }
+
+      /* ── BIG TIMER + DUAL LANE ────────────────────────── */
+      .race-stage {
+        background:
+          radial-gradient(680px 300px at 50% 120%, rgba(19, 168, 158, 0.08), transparent 70%),
+          var(--tl-base);
+        border: 1px solid var(--tl-line);
+        border-radius: var(--tl-r-lg);
+        padding: 40px;
+        overflow: hidden;
+        box-shadow: var(--tl-shadow);
+      }
+      .lanes {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 24px;
+        align-items: center;
+      }
+      .lane {
+        padding: 24px;
+        border-radius: var(--tl-r-md);
+        border: 1px solid var(--tl-line);
+        background: var(--tl-base);
+        position: relative;
+        transition: all 0.35s ease;
+      }
+      .lane .laneid {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .lane .laneid .who {
+        font-family: var(--tl-font-display);
+        text-transform: uppercase;
+        font-weight: 600;
+        font-size: 1.15rem;
+        color: var(--tl-ink-hi);
+      }
+      .lane .laneid .num {
+        font-family: var(--tl-font-numerals);
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: var(--tl-ink-low);
+        border: 1px solid var(--tl-line-strong);
+        border-radius: var(--tl-r-sm);
+        padding: 2px 8px;
+      }
+      .lane .big {
+        font-family: var(--tl-font-numerals);
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        font-size: clamp(2.6rem, 7vw, 4.6rem);
+        line-height: 1;
+        letter-spacing: -0.02em;
+        color: var(--tl-ink-hi);
+        transition: color 0.3s;
+      }
+      .lane .big .ms {
+        font-size: 0.5em;
+        color: var(--tl-ink-low);
+      }
+      .lane.running {
+        border-color: var(--tl-running);
+        box-shadow: inset 0 0 0 1px var(--tl-running);
+      }
+      .lane.running .big {
+        color: var(--tl-running);
+      }
+      .lane.win {
+        border-color: var(--tl-go);
+        box-shadow:
+          0 0 0 1px var(--tl-go),
+          0 8px 26px -10px var(--tl-go);
+      }
+      .lane.win .big {
+        color: var(--tl-go-dim);
+      }
+      .lane.win .who {
+        color: var(--tl-go-dim);
+      }
+      .lane.lose {
+        border-color: var(--tl-stop);
+      }
+      .lane.lose .big,
+      .lane.lose .who {
+        color: var(--tl-stop);
+      }
+      .lane .verdict {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        font-family: var(--tl-font-display);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      .lane.win .verdict {
+        opacity: 1;
+        color: var(--tl-go-dim);
+      }
+      .lane.lose .verdict {
+        opacity: 1;
+        color: var(--tl-stop);
+      }
+
+      /* start-light tree */
+      .tree {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        padding: 0 8px;
+      }
+      .light {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: var(--tl-muted);
+        border: 1px solid var(--tl-line-strong);
+        transition: all 0.25s ease;
+      }
+      .light.set {
+        background: var(--tl-set);
+        border-color: var(--tl-set);
+        box-shadow: 0 0 24px 1px rgba(242, 169, 59, 0.7);
+      }
+      .light.go {
+        background: var(--tl-go);
+        border-color: var(--tl-go);
+        box-shadow: 0 0 28px 2px rgba(101, 188, 123, 0.85);
+      }
+      .light.stop {
+        background: var(--tl-stop);
+        border-color: var(--tl-stop);
+        box-shadow: 0 0 28px 2px rgba(240, 78, 52, 0.85);
+        animation: flash 0.5s steps(1) infinite;
+      }
+      @keyframes flash {
+        50% {
+          opacity: 0.25;
+          box-shadow: none;
+        }
+      }
+      .phase-readout {
+        text-align: center;
+        margin-top: 18px;
+        font-family: var(--tl-font-numerals);
+        font-size: 0.8rem;
+        letter-spacing: 0.05em;
+        color: var(--tl-ink-mid);
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-top: 22px;
+        flex-wrap: wrap;
+      }
+
+      /* ── BUTTONS ──────────────────────────────────────── */
+      .btn {
+        font-family: var(--tl-font-body);
+        font-weight: 600;
+        font-size: 0.92rem;
+        padding: 10px 20px;
+        border-radius: var(--tl-r-md);
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .btn-primary {
+        background: var(--tl-teal);
+        color: #fff;
+      }
+      .btn-primary:hover {
+        background: var(--tl-teal-dark);
+        box-shadow: 0 2px 14px rgba(19, 168, 158, 0.35);
+      }
+      .btn-go {
+        background: var(--tl-go);
+        color: #14361f;
+      }
+      .btn-go:hover {
+        box-shadow: 0 2px 14px rgba(101, 188, 123, 0.45);
+      }
+      .btn-ghost {
+        background: var(--tl-base);
+        border-color: var(--tl-line-strong);
+        color: var(--tl-ink-hi);
+      }
+      .btn-ghost:hover {
+        border-color: var(--tl-teal);
+        color: var(--tl-teal-dark);
+      }
+      .btn-danger {
+        background: var(--tl-base);
+        border-color: var(--tl-stop);
+        color: var(--tl-stop);
+      }
+      .btn-danger:hover {
+        background: rgba(240, 78, 52, 0.08);
+      }
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .demo-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+      }
+      @media (max-width: 820px) {
+        .demo-grid {
+          grid-template-columns: 1fr;
+        }
+        .lanes {
+          grid-template-columns: 1fr;
+        }
+        .tree {
+          flex-direction: row;
+        }
+      }
+
+      /* ── INPUTS ───────────────────────────────────────── */
+      .field {
+        margin-bottom: 16px;
+      }
+      .field label {
+        display: block;
+        margin-bottom: 7px;
+      }
+      .input,
+      .select {
+        width: 100%;
+        font-family: var(--tl-font-body);
+        font-size: 0.95rem;
+        color: var(--tl-ink-hi);
+        background: var(--tl-muted);
+        border: 1px solid var(--tl-line);
+        border-radius: var(--tl-r-md);
+        padding: 11px 14px;
+        outline: none;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+      .input:focus,
+      .select:focus {
+        border-color: var(--tl-teal);
+        box-shadow: 0 0 0 3px rgba(19, 168, 158, 0.18);
+        background: var(--tl-base);
+      }
+      .input::placeholder {
+        color: var(--tl-ink-faint);
+      }
+
+      /* ── LEADERBOARD ──────────────────────────────────── */
+      .board {
+        border: 1px solid var(--tl-line);
+        border-radius: var(--tl-r-md);
+        overflow: hidden;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 56px 1fr auto;
+        align-items: center;
+        gap: 14px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--tl-line);
+        transition: background 0.2s;
+      }
+      .row:last-child {
+        border-bottom: 0;
+      }
+      .row:hover {
+        background: var(--tl-muted);
+      }
+      .row.lead {
+        background: linear-gradient(90deg, var(--tl-teal-tint), transparent 60%);
+      }
+      .rank {
+        font-family: var(--tl-font-numerals);
+        font-weight: 700;
+        font-size: 1.15rem;
+        color: var(--tl-ink-low);
+        text-align: center;
+      }
+      .row.lead .rank {
+        color: var(--tl-go-dim);
+      }
+      .ath {
+        font-family: var(--tl-font-display);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 1.05rem;
+        color: var(--tl-ink-hi);
+      }
+      .flagcc {
+        font-family: var(--tl-font-numerals);
+        font-size: 0.72rem;
+        color: var(--tl-ink-low);
+        margin-right: 8px;
+      }
+      .bt {
+        font-family: var(--tl-font-numerals);
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: var(--tl-ink-hi);
+      }
+      .row.lead .bt {
+        color: var(--tl-go-dim);
+      }
+      .dnf-badge {
+        font-family: var(--tl-font-display);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        color: var(--tl-stop);
+        border: 1px solid var(--tl-stop);
+        border-radius: var(--tl-r-sm);
+        padding: 3px 9px;
+      }
+
+      /* ── VS CARD + BRACKET SLOT ───────────────────────── */
+      .vs {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 16px;
+        align-items: stretch;
+      }
+      .vs .side {
+        border: 1px solid var(--tl-line);
+        border-radius: var(--tl-r-track);
+        padding: 20px;
+        background: var(--tl-base);
+        text-align: center;
+      }
+      .vs .side.win {
+        border-color: var(--tl-go);
+        box-shadow:
+          inset 0 0 0 1px var(--tl-go),
+          0 8px 26px -12px var(--tl-go);
+      }
+      .vs .side .nm {
+        font-family: var(--tl-font-display);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 1.2rem;
+        color: var(--tl-ink-hi);
+      }
+      .vs .side .tm {
+        font-family: var(--tl-font-numerals);
+        font-variant-numeric: tabular-nums;
+        font-size: 1.5rem;
+        margin-top: 8px;
+        color: var(--tl-ink-hi);
+      }
+      .vs .side.win .nm,
+      .vs .side.win .tm {
+        color: var(--tl-go-dim);
+      }
+      .vs .mid {
+        display: flex;
+        align-items: center;
+        font-family: var(--tl-font-display);
+        font-weight: 700;
+        color: var(--tl-orange);
+        font-size: 1.3rem;
+      }
+
+      .slot {
+        width: 220px;
+        border: 1px solid var(--tl-line);
+        border-radius: var(--tl-r-md);
+        padding: 12px;
+        background: var(--tl-base);
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        box-shadow: var(--tl-shadow);
+      }
+      .slot.win {
+        box-shadow: inset 0 0 0 3px var(--tl-go);
+      }
+      .slot .av {
+        width: 44px;
+        height: 44px;
+        border-radius: var(--tl-r-sm);
+        background: var(--tl-muted);
+        flex: none;
+        display: grid;
+        place-items: center;
+        color: var(--tl-ink-low);
+        font-family: var(--tl-font-display);
+        font-weight: 700;
+      }
+      .slot .sn {
+        font-family: var(--tl-font-display);
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--tl-ink-hi);
+      }
+      .slot.win .sn {
+        color: var(--tl-go-dim);
+      }
+      .slot .cc {
+        font-family: var(--tl-font-numerals);
+        font-size: 0.7rem;
+        color: var(--tl-ink-low);
+      }
+
+      /* ── OVERLAY DEMO ─────────────────────────────────── */
+      .video-frame {
+        position: relative;
+        border-radius: var(--tl-r-lg);
+        overflow: hidden;
+        border: 1px solid var(--tl-line);
+        aspect-ratio: 16 / 7;
+        box-shadow: var(--tl-shadow);
+        background:
+          repeating-linear-gradient(120deg, #1b3a2e 0 40px, #173228 40px 80px),
+          radial-gradient(circle at 30% 40%, #2e5a45, #0f221a);
+      }
+      .video-frame .footage-note {
+        position: absolute;
+        top: 12px;
+        left: 14px;
+        font-size: 0.7rem;
+        color: rgba(255, 255, 255, 0.35);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+      .titlesafe {
+        position: absolute;
+        inset: 5%;
+        border: 1px dashed rgba(255, 255, 255, 0.18);
+        border-radius: 4px;
+        pointer-events: none;
+      }
+      .overlay-backdrop {
+        position: absolute;
+        inset: 0;
+        background: var(--tl-overlay-backdrop);
+      }
+      .ovr-heading {
+        position: absolute;
+        top: 9%;
+        right: 6%;
+        font-family: var(--tl-font-display);
+        font-weight: 700;
+        font-size: 1.7rem;
+        text-transform: uppercase;
+        letter-spacing: var(--tl-overlay-heading-tracking);
+        color: var(--tl-ink-on);
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      }
+      .vs-demo {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 40px;
+      }
+      .vs-demo .frame {
+        height: 56%;
+        aspect-ratio: 299 / 498; /* the art's 298.81×498.02 VS panels */
+        background: var(--tl-overlay-plate);
+        /* stroke token is 6px @1080p; the demo frame is ~0.6× that scale */
+        border: calc(var(--tl-overlay-stroke-width) * 0.6) solid var(--tl-overlay-stroke);
+      }
+      .vs-demo .vs-glyph {
+        font-family: var(--tl-font-display);
+        font-weight: 700;
+        font-size: 2.6rem;
+        letter-spacing: var(--tl-overlay-heading-tracking);
+        color: var(--tl-ink-on);
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      }
+      .overlay-lower {
+        position: absolute;
+        left: 5%;
+        bottom: 8%;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 14px 22px;
+        border-radius: var(--tl-r-track);
+        background: linear-gradient(90deg, rgba(51, 60, 78, 0.94), rgba(51, 60, 78, 0.62));
+        border-left: 3px solid var(--tl-teal);
+        backdrop-filter: blur(3px);
+      }
+      .overlay-lower .ovr-name {
+        font-family: var(--tl-font-display);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 1.3rem;
+        color: #fff;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+      }
+      .overlay-lower .ovr-sub {
+        font-size: 0.72rem;
+        color: rgba(255, 255, 255, 0.78);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .overlay-lower .ovr-time {
+        font-family: var(--tl-font-numerals);
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        font-size: 2rem;
+        color: var(--tl-go);
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+        margin-left: 8px;
+      }
+
+      /* nav */
+      nav.toc {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: rgba(245, 247, 248, 0.86);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--tl-line);
+      }
+      nav.toc .inner {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 12px 24px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      nav.toc .brand {
+        font-family: var(--tl-font-numerals);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        font-size: 0.85rem;
+        color: var(--tl-teal-dark);
+        margin-right: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      nav.toc a {
+        color: var(--tl-ink-mid);
+        text-decoration: none;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 5px 10px;
+        border-radius: var(--tl-r-sm);
+      }
+      nav.toc a:hover {
+        color: var(--tl-teal-dark);
+        background: var(--tl-teal-tint);
+      }
+
+      .twocol {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+      }
+      @media (max-width: 820px) {
+        .twocol {
+          grid-template-columns: 1fr;
+        }
+      }
+      footer {
+        border-top: 1px solid var(--tl-line);
+        padding-top: 28px;
+        color: var(--tl-ink-low);
+        font-size: 0.85rem;
+      }
+      footer code {
+        font-family: var(--tl-font-numerals);
+        color: var(--tl-ink-mid);
+      }
+      footer a {
+        color: var(--tl-teal-dark);
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="toc">
+      <div class="inner">
+        <span class="brand">
+          <svg class="peak" width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
+            <path d="M7 16 L12 0 L14 6 L16 2 L20 16 Z" fill="#13A89E" />
+            <path d="M0 16 L6 2 L11 16 Z" fill="#F04E34" />
+          </svg>
+          TELEMETRY
+        </span>
+        <a href="#states">Race states</a>
+        <a href="#color">Color</a>
+        <a href="#type">Type</a>
+        <a href="#timer">Timer</a>
+        <a href="#components">Components</a>
+        <a href="#overlay">Overlay</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div class="wrap">
+        <div class="kicker">Design System · Slackline Timer · ISA</div>
+        <h1 class="title">Tele<em>metry</em></h1>
+        <p class="lede">
+          A broadcast-grade visual language for head-to-head speed racing, built on the
+          <span class="tl">International Slackline Association</span> brand —
+          <span class="tl">teal</span>, slate, and a warm <span class="or">orange-red</span> accent
+          on clean, light surfaces. Carries a strict
+          <b>green / amber / orange-red race-state language</b> from IFSC speed climbing, with
+          monumental tabular numerals as the hero of every screen.
+        </p>
+        <div class="meta-row">
+          <span class="chip">ISA teal #13A89E</span>
+          <span class="chip">Orange-red #F04E34</span>
+          <span class="chip">Slate ink #333C4E</span>
+          <span class="chip">JetBrains Mono · numerals</span>
+          <span class="chip">Saira · UI</span>
+          <span class="chip">Light · WCAG AA+</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <!-- RACE STATE LANGUAGE -->
+      <section id="states">
+        <div class="sec-head">
+          <span class="sec-num">01</span>
+          <h2 class="sec-title">Race-state language</h2>
+          <p class="sec-sub">
+            One color contract, mapped identically across the timer, lanes, light tree and
+            leaderboard.
+          </p>
+        </div>
+        <div class="states">
+          <div class="state-card" style="--c: var(--tl-idle)">
+            <div class="dot"></div>
+            <div class="st">Idle</div>
+            <div class="where">Not started · empty lane · neutral chrome</div>
+          </div>
+          <div class="state-card" style="--c: var(--tl-set)">
+            <div class="dot"></div>
+            <div class="st">Set / Armed</div>
+            <div class="where">Start-light tree warming · get-ready</div>
+          </div>
+          <div class="state-card" style="--c: var(--tl-running)">
+            <div class="dot"></div>
+            <div class="st">Running</div>
+            <div class="where">Lane live &amp; timing — ISA teal</div>
+          </div>
+          <div class="state-card" style="--c: var(--tl-go)">
+            <div class="dot"></div>
+            <div class="st">Go / Winner</div>
+            <div class="where">GO light · faster lane · advances</div>
+          </div>
+          <div class="state-card" style="--c: var(--tl-stop)">
+            <div class="dot"></div>
+            <div class="st">Fault</div>
+            <div class="where">False start · DNF · slower lane</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- COLOR -->
+      <section id="color">
+        <div class="sec-head">
+          <span class="sec-num">02</span>
+          <h2 class="sec-title">Color tokens</h2>
+          <p class="sec-sub">
+            ISA's light, teal-forward palette. Slate is the deepest tone — reserved for projector
+            grounds &amp; overlays.
+          </p>
+        </div>
+
+        <div class="label grp-label">Surfaces</div>
+        <div class="swatch-grid" id="sw-surfaces"></div>
+
+        <div class="label grp-label">Ink</div>
+        <div class="swatch-grid" id="sw-ink"></div>
+
+        <div class="label grp-label">Brand (ISA) &amp; race states</div>
+        <div class="swatch-grid" id="sw-accent"></div>
+
+        <div class="label grp-label">
+          Overlay plates — composited over slate, the video stand-in
+        </div>
+        <div class="swatch-grid" id="sw-overlay"></div>
+      </section>
+
+      <!-- TYPE -->
+      <section id="type">
+        <div class="sec-head">
+          <span class="sec-num">03</span>
+          <h2 class="sec-title">Typography</h2>
+          <p class="sec-sub">
+            Numerals always tabular. Oswald (condensed display) for names &amp; headings. Saira
+            carries UI text.
+          </p>
+        </div>
+        <div class="panel">
+          <div class="type-row">
+            <div class="type-meta">
+              <div class="nm">Numerals</div>
+              <div class="det">JetBrains Mono · tnum</div>
+            </div>
+            <div
+              class="spec-num"
+              style="
+                font-size: 3.4rem;
+                font-weight: 600;
+                letter-spacing: -0.02em;
+                color: var(--tl-teal-dark);
+              "
+            >
+              07:42.318
+            </div>
+          </div>
+          <div class="type-row">
+            <div class="type-meta">
+              <div class="nm">Display 1</div>
+              <div class="det">Oswald · 700 · 3rem</div>
+            </div>
+            <div class="spec-disp" style="font-size: 3rem">Women's Final</div>
+          </div>
+          <div class="type-row">
+            <div class="type-meta">
+              <div class="nm">Heading 2</div>
+              <div class="det">Oswald · 600 · 1.5rem</div>
+            </div>
+            <div class="spec-disp" style="font-size: 1.5rem">Quarterfinal · Lane Assignment</div>
+          </div>
+          <div class="type-row">
+            <div class="type-meta">
+              <div class="nm">Body</div>
+              <div class="det">Saira · 400 · 1rem</div>
+            </div>
+            <div class="spec-body" style="max-width: 520px; color: var(--tl-ink-mid)">
+              The operator drives the control page; spectators and projectors watch the synchronized
+              preview. Body copy stays calm and legible.
+            </div>
+          </div>
+          <div class="type-row">
+            <div class="type-meta">
+              <div class="nm">Label</div>
+              <div class="det">Saira · 600 · .75rem · caps</div>
+            </div>
+            <div class="label" style="font-size: 0.75rem">Best Time · Round · Reaction</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TIMER + LANES + LIGHT TREE -->
+      <section id="timer">
+        <div class="sec-head">
+          <span class="sec-num">04</span>
+          <h2 class="sec-title">The race stage</h2>
+          <p class="sec-sub">
+            The hero. Dual-lane stopwatch, live start-light tree, teal-while-running, winner-green /
+            loser-orange.
+          </p>
+        </div>
+        <div class="race-stage">
+          <div class="lanes">
+            <div class="lane" id="laneA">
+              <div class="laneid"><span class="who">Köstner</span><span class="num">L1</span></div>
+              <div class="big" id="timeA">0<span class="ms">.000</span></div>
+              <div class="verdict">Win</div>
+            </div>
+            <div class="tree">
+              <div class="light" id="lt1"></div>
+              <div class="light" id="lt2"></div>
+              <div class="light" id="lt3"></div>
+            </div>
+            <div class="lane" id="laneB">
+              <div class="laneid"><span class="who">Marković</span><span class="num">L2</span></div>
+              <div class="big" id="timeB">0<span class="ms">.000</span></div>
+              <div class="verdict">Win</div>
+            </div>
+          </div>
+          <div class="phase-readout" id="phase">PHASE · IDLE — press START SEQUENCE</div>
+          <div class="controls">
+            <button class="btn btn-go" id="btnStart">Start sequence</button>
+            <button class="btn btn-ghost" id="btnStop">Stop lanes</button>
+            <button class="btn btn-danger" id="btnFalse">False start</button>
+            <button class="btn btn-ghost" id="btnReset">Reset</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- COMPONENTS -->
+      <section id="components">
+        <div class="sec-head">
+          <span class="sec-num">05</span>
+          <h2 class="sec-title">Components</h2>
+          <p class="sec-sub">
+            Buttons, inputs, leaderboard, head-to-head and bracket slots — all wired to the same
+            tokens.
+          </p>
+        </div>
+
+        <div class="demo-grid">
+          <div class="panel">
+            <div class="label" style="margin-bottom: 16px">Buttons</div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap">
+              <button class="btn btn-primary">Primary</button>
+              <button class="btn btn-go">Start</button>
+              <button class="btn btn-ghost">Secondary</button>
+              <button class="btn btn-danger">DNF</button>
+              <button class="btn btn-ghost" disabled>Disabled</button>
+            </div>
+            <div class="label" style="margin: 26px 0 16px">Inputs</div>
+            <div class="field">
+              <label class="label">Athlete name</label>
+              <input class="input" placeholder="e.g. Köstner" />
+            </div>
+            <div class="field">
+              <label class="label">Round</label>
+              <select class="select">
+                <option>Qualification</option>
+                <option>Quarterfinal</option>
+                <option>Semifinal</option>
+                <option>Final</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="label" style="margin-bottom: 16px">Rankings — final, women</div>
+            <div class="board">
+              <div class="row lead">
+                <div class="rank">1</div>
+                <div class="ath"><span class="flagcc">ITA</span>Köstner</div>
+                <div class="bt">6.842</div>
+              </div>
+              <div class="row">
+                <div class="rank">2</div>
+                <div class="ath"><span class="flagcc">SRB</span>Marković</div>
+                <div class="bt">7.114</div>
+              </div>
+              <div class="row">
+                <div class="rank">3</div>
+                <div class="ath"><span class="flagcc">FRA</span>Dubois</div>
+                <div class="bt">7.355</div>
+              </div>
+              <div class="row">
+                <div class="rank">—</div>
+                <div class="ath"><span class="flagcc">GER</span>Wagner</div>
+                <div class="dnf-badge">DNF</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="twocol" style="margin-top: 22px">
+          <div class="panel">
+            <div class="label" style="margin-bottom: 16px">Head-to-head card (VS overlay)</div>
+            <div class="vs">
+              <div class="side win">
+                <div class="nm">Köstner</div>
+                <div class="tm">6.842</div>
+              </div>
+              <div class="mid">VS</div>
+              <div class="side">
+                <div class="nm">Marković</div>
+                <div class="tm">7.114</div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="label" style="margin-bottom: 16px">Bracket slots</div>
+            <div style="display: flex; flex-direction: column; gap: 10px; align-items: center">
+              <div class="slot win">
+                <div class="av">KÖ</div>
+                <div>
+                  <div class="sn">Köstner</div>
+                  <div class="cc">ITA · advances</div>
+                </div>
+              </div>
+              <div class="slot">
+                <div class="av">MA</div>
+                <div>
+                  <div class="sn">Marković</div>
+                  <div class="cc">SRB</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OVERLAY -->
+      <section id="overlay">
+        <div class="sec-head">
+          <span class="sec-num">06</span>
+          <h2 class="sec-title">Broadcast overlays</h2>
+          <p class="sec-sub">
+            Transparent canvas, LAAX plate language: full-bleed backdrop dim, white-stroked
+            translucent plates, tight condensed caps — survives over any live footage.
+          </p>
+        </div>
+        <div class="video-frame">
+          <span class="footage-note">Simulated live footage</span>
+          <div class="overlay-backdrop"></div>
+          <div class="titlesafe"></div>
+          <div class="ovr-heading">Women's Speed</div>
+          <div class="vs-demo">
+            <div class="frame"></div>
+            <div class="vs-glyph">VS</div>
+            <div class="frame"></div>
+          </div>
+          <div class="overlay-lower">
+            <div>
+              <div class="ovr-sub">Women's Final · Lane 1</div>
+              <div class="ovr-name">Köstner · ITA</div>
+            </div>
+            <div class="ovr-time">6.842</div>
+          </div>
+        </div>
+        <p style="color: var(--tl-ink-low); font-size: 0.88rem; margin-top: 14px; max-width: 760px">
+          The LAAX plate treatment: an optional full-bleed <code>--tl-overlay-backdrop</code> dim
+          (#231f20 at 60%) behind the composition, VS/photo panels as
+          <code>--tl-overlay-plate</code> (30% white; empty name bars use
+          <code>--tl-overlay-plate-name</code>, the names art's 35%) with a solid
+          <code>--tl-overlay-stroke-width</code> (6px @1080p) white stroke, and display caps tracked
+          tight (<code>--tl-overlay-heading-tracking</code>). White structural text keeps a per-text
+          shadow; numerals read green-for-leader regardless of footage. The dashed rectangle marks
+          the ~5% title-safe margin. Motion is state-driven only — slide-in on appear, win-flash on
+          resolution.
+        </p>
+      </section>
+
+      <footer>
+        <p>
+          <strong>TELEMETRY</strong> — palette derived from the
+          <a href="https://www.slacklineinternational.org">International Slackline Association</a>
+          brand. Implementation lives in <code>web/src/app/theme/</code>: <code>tokens.ts</code> (TS
+          source of truth), <code>tokens.css</code> (<code>--tl-*</code> custom properties for
+          overlays &amp; previews), <code>theme.ts</code> (<code>telemetryTheme</code>, light MUI
+          theme). Full spec in <code>doc/dev/design-system/design-system.md</code>. Every value
+          above is a real token.
+        </p>
+      </footer>
+    </main>
+
+    <script>
+      // ── Color swatch rendering ──────────────────────────
+      const surfaces = [
+        ['Slate / Void', '#333C4E', 'Deep contrast · overlays'],
+        ['Canvas', '#F5F7F8', 'Page background'],
+        ['Base / Panel', '#FFFFFF', 'Cards, surfaces'],
+        ['Muted', '#EDF1F2', 'Input fills, wells'],
+        ['Line', '#E1E6E8', 'Borders, dividers'],
+        ['Line strong', '#C7D0D3', 'Emphasis borders'],
+      ];
+      const ink = [
+        ['Ink hi', '#333C4E', 'Headlines, numerals'],
+        ['Ink mid', '#5B6776', 'Body, secondary'],
+        ['Ink low', '#8A939D', 'Meta, captions'],
+        ['Ink faint', '#B7BFC6', 'Disabled, hints'],
+      ];
+      const accent = [
+        ['ISA Teal', '#13A89E', 'Primary · running · links'],
+        ['Teal dark', '#0E837B', 'Hover · text on light'],
+        ['Orange-red', '#F04E34', 'Accent · false start · DNF'],
+        ['Orange dark', '#C73A23', 'Pressed accent'],
+        ['Go (green)', '#65BC7B', 'GO light · winner fill'],
+        ['Go dim', '#2E8F50', 'Winner numerals on light'],
+        ['Set (amber)', '#F2A93B', 'Armed · SET light'],
+        ['Stop', '#F04E34', 'Loser · fault'],
+        ['Idle', '#8A939D', 'Not started'],
+        ['Running bright', '#45E5D8', 'Running on dark grounds (athlete display)'],
+        ['Set bright', '#FFC75E', 'Break / armed on dark grounds'],
+        ['Stop bright', '#FF9B82', 'Expiry / fault on dark grounds'],
+        ['Running text', '#0B6B65', 'RUNNING word / digits on light (4.5:1 tier)'],
+        ['Go text', '#1F7A40', 'Go-state words on light (4.5:1 tier)'],
+        ['Set text', '#8F5E12', 'BREAK / CHANGEOVER words on light (4.5:1 tier)'],
+      ];
+      // Same literals as tokens.css --tl-overlay-* (DESIGN_SYSTEM §3 plate table).
+      const overlay = [
+        ['Plate', 'rgba(255, 255, 255, 0.3)', 'Empty profile box · VS frame'],
+        ['Plate name', 'rgba(255, 255, 255, 0.35)', 'Empty name bar · TBD plate'],
+        ['Plate filled', '#FFFFFF', 'Filled named plate · dark name ink'],
+        ['Stroke', '#FFFFFF', 'Plate border · connectors (6px @1080p)'],
+        ['Name ink', '#231F20', 'Name on a filled plate · the card masters' ink'],
+        ['Label', '#FFFFFF', 'Structural / section labels'],
+        ['Scrim', 'rgba(51, 60, 78, 0.9)', 'Per-text slate backing for captions'],
+        ['Backdrop', 'rgba(35, 31, 32, 0.6)', 'Full-bleed frame dim (LAAX 60% black)'],
+      ];
+      function parseColor(v) {
+        if (v.startsWith('#')) {
+          const n = parseInt(v.slice(1), 16);
+          return { r: n >> 16, g: (n >> 8) & 255, b: n & 255, a: 1 };
+        }
+        const [r, g, b, a = 1] = v.match(/[\d.]+/g).map(Number);
+        return { r, g, b, a };
+      }
+      function blend(fg, bg) {
+        const mix = (f, b) => Math.round(f * fg.a + b * (1 - fg.a));
+        return { r: mix(fg.r, bg.r), g: mix(fg.g, bg.g), b: mix(fg.b, bg.b), a: 1 };
+      }
+      function hexOf({ r, g, b }) {
+        return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+      }
+      function lum({ r, g, b }) {
+        const f = (c) =>
+          c / 255 <= 0.03928 ? c / 255 / 12.92 : Math.pow((c / 255 + 0.055) / 1.055, 2.4);
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      }
+      // `over`: opaque color the chips composite onto (the slate video stand-in
+      // for the overlay tokens). rgba values are flattened over it before the
+      // lum() ink pick, so translucent chips still get a readable value label.
+      function render(id, arr, over) {
+        const bg = over && parseColor(over);
+        const el = document.getElementById(id);
+        el.innerHTML = arr
+          .map(([nm, value, use]) => {
+            const c = parseColor(value);
+            const txt = lum(bg ? blend(c, bg) : c) > 0.4 ? '#333C4E' : '#FFFFFF';
+            const shown = c.a < 1 ? `${hexOf(c)} ${Math.round(c.a * 100)}%` : value;
+            const layer = bg
+              ? `<div class="chip-layer${/^plate/i.test(nm) ? ' chip-plate' : ''}" style="background:${value}"></div>`
+              : '';
+            return `<div class="swatch">
+        <div class="chipfill${bg ? ' chip-composite' : ''}" style="${bg ? '' : `background:${value};`}color:${txt}">${layer}<span style="font-family:var(--tl-font-numerals);font-size:.7rem;font-weight:600">${shown}</span></div>
+        <div class="body"><div class="nm">${nm}</div><div class="use">${use}</div></div>
+      </div>`;
+          })
+          .join('');
+      }
+      render('sw-surfaces', surfaces);
+      render('sw-ink', ink);
+      render('sw-accent', accent);
+      render('sw-overlay', overlay, '#333C4E');
+
+      // ── Live race simulation: light tree + dual timer ───
+      const lts = [
+        document.getElementById('lt1'),
+        document.getElementById('lt2'),
+        document.getElementById('lt3'),
+      ];
+      const phaseEl = document.getElementById('phase');
+      const laneA = document.getElementById('laneA'),
+        laneB = document.getElementById('laneB');
+      const timeA = document.getElementById('timeA'),
+        timeB = document.getElementById('timeB');
+      let raf = null,
+        t0 = 0,
+        runningA = false,
+        runningB = false,
+        finishA = null,
+        finishB = null,
+        seq = [];
+
+      function fmt(ms) {
+        const s = Math.floor(ms / 1000),
+          m = Math.floor(s / 60),
+          cs = ms % 1000;
+        const sec = (s % 60).toString().padStart(2, '0');
+        const main = m > 0 ? `${m}:${sec}` : (s % 60).toString();
+        return `${main}<span class="ms">.${cs.toString().padStart(3, '0')}</span>`;
+      }
+      function clearLights() {
+        lts.forEach((l) => (l.className = 'light'));
+      }
+      function clearSeq() {
+        seq.forEach(clearTimeout);
+        seq = [];
+      }
+
+      function tick(now) {
+        if (runningA) timeA.innerHTML = fmt(Math.floor(now - t0));
+        if (runningB) timeB.innerHTML = fmt(Math.floor(now - t0));
+        if (runningA || runningB) raf = requestAnimationFrame(tick);
+      }
+
+      function reset() {
+        clearSeq();
+        cancelAnimationFrame(raf);
+        runningA = runningB = false;
+        finishA = finishB = null;
+        clearLights();
+        laneA.className = 'lane';
+        laneB.className = 'lane';
+        timeA.innerHTML = '0<span class="ms">.000</span>';
+        timeB.innerHTML = '0<span class="ms">.000</span>';
+        phaseEl.textContent = 'PHASE · IDLE — press START SEQUENCE';
+      }
+
+      function resolve() {
+        if (finishA == null || finishB == null) return;
+        const aWins = finishA <= finishB;
+        laneA.className = 'lane ' + (aWins ? 'win' : 'lose');
+        laneB.className = 'lane ' + (aWins ? 'lose' : 'win');
+        phaseEl.textContent = 'PHASE · RESULT — ' + (aWins ? 'LANE 1' : 'LANE 2') + ' WINS';
+      }
+
+      document.getElementById('btnStart').onclick = () => {
+        reset();
+        phaseEl.textContent = 'PHASE 1 · ARMED';
+        lts[0].className = 'light set';
+        seq.push(
+          setTimeout(() => {
+            lts[1].className = 'light set';
+            phaseEl.textContent = 'PHASE 2 · SET';
+          }, 900),
+        );
+        seq.push(
+          setTimeout(() => {
+            clearLights();
+            lts[2].className = 'light go';
+            phaseEl.textContent = 'PHASE 3 · GO';
+            t0 = performance.now();
+            runningA = runningB = true;
+            laneA.className = 'lane running';
+            laneB.className = 'lane running';
+            raf = requestAnimationFrame(tick);
+          }, 1800),
+        );
+        seq.push(
+          setTimeout(() => {
+            lts[2].className = 'light';
+          }, 2500),
+        );
+        // auto finish for demo flavor
+        seq.push(
+          setTimeout(() => {
+            if (runningA) {
+              runningA = false;
+              finishA = Math.floor(performance.now() - t0);
+              resolve();
+            }
+          }, 6842),
+        );
+        seq.push(
+          setTimeout(() => {
+            if (runningB) {
+              runningB = false;
+              finishB = Math.floor(performance.now() - t0);
+              resolve();
+            }
+          }, 7114),
+        );
+      };
+      document.getElementById('btnStop').onclick = () => {
+        const now = performance.now();
+        if (runningA) {
+          runningA = false;
+          finishA = Math.floor(now - t0);
+        }
+        if (runningB) {
+          runningB = false;
+          finishB = Math.floor(now - t0);
+        }
+        resolve();
+      };
+      document.getElementById('btnFalse').onclick = () => {
+        clearSeq();
+        cancelAnimationFrame(raf);
+        runningA = runningB = false;
+        clearLights();
+        lts.forEach((l) => (l.className = 'light stop'));
+        laneA.className = 'lane lose';
+        laneB.className = 'lane lose';
+        phaseEl.textContent = 'PHASE · FALSE START — recall';
+      };
+      document.getElementById('btnReset').onclick = reset;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,43 @@
+# Local development infrastructure for Slackline Timer.
+#
+# Paths are relative to this file (docker/). Managed from the repo root via
+# `npm run db:up` / `npm run db:down`. See doc/dev/local-dev.md.
+#
+# One LocalStack container emulates the AWS data services the offline backend
+# needs — DynamoDB (competition + relay tables) and S3 (athlete photos) — on the
+# single edge port :4566. The relay + data-plane Lambdas themselves run on the
+# host via the in-process harnesses (scripts/localWsHarness.mjs +
+# localHttpHarness.mjs), not inside LocalStack: WebSocket + Lambda-asset
+# emulation needs LocalStack Pro (ADR 0023, phase 2). The app's S3/DynamoDB
+# clients point here under IS_OFFLINE (core/aws/clients.ts); create the tables +
+# photo bucket with `npm run db:init`.
+
+services:
+  localstack:
+    # Community edition (free, tokenless): DynamoDB + S3 are fully supported.
+    # Pinned to the :3 line on purpose — :latest / the 2026.x builds refuse to
+    # boot without a LOCALSTACK_AUTH_TOKEN (exit 55, "License activation failed"),
+    # even for community services. Phase 2 (LocalStack Pro) revisits image + token.
+    image: localstack/localstack:3
+    container_name: slackline-localstack
+    ports:
+      - '4566:4566'
+    environment:
+      # Only the services the offline backend uses (faster start, less noise).
+      SERVICES: dynamodb,s3
+      AWS_DEFAULT_REGION: eu-central-1
+      DEBUG: '0'
+    volumes:
+      # Community edition does not persist across restarts (PERSISTENCE is a Pro
+      # feature); the volume is harmless and `npm run db:init` re-provisions.
+      - localstack-data:/var/lib/localstack
+    restart: unless-stopped
+    networks:
+      - slackline-network
+
+networks:
+  slackline-network:
+    driver: bridge
+
+volumes:
+  localstack-data:

@@ -1,0 +1,152 @@
+/*
+ * TELEMETRY design tokens as CSS custom properties.
+ *
+ * Palette derived from the International Slackline Association (ISA) brand
+ * (teal #13A89E, orange-red #F04E34, slate #333C4E, green #65BC7B on light
+ * off-white) — see slacklineinternational.org. Mirror of `app/theme/tokens.ts`
+ * for the non-MUI surfaces (stream overlays, preview pages). Keep the two in sync.
+ */
+
+:root {
+  /* Surfaces */
+  --tl-bg-void: #333c4e; /* ISA slate — deep contrast / projector ground / footer */
+  --tl-bg-canvas: #f5f7f8; /* page background */
+  --tl-bg-base: #ffffff;
+  --tl-bg-panel: #ffffff;
+  --tl-bg-raised: #ffffff;
+  --tl-bg-muted: #edf1f2;
+  --tl-line: #e1e6e8;
+  --tl-line-strong: #c7d0d3;
+
+  /* Ink */
+  --tl-ink-hi: #333c4e;
+  --tl-ink-mid: #5b6776;
+  --tl-ink-low: #8a939d;
+  --tl-ink-faint: #b7bfc6;
+  --tl-ink-on-brand: #ffffff;
+
+  /* Brand / accent (ISA) */
+  --tl-teal: #13a89e;
+  --tl-teal-dark: #0e837b;
+  --tl-teal-tint: rgba(19, 168, 158, 0.12);
+  --tl-orange: #f04e34;
+  --tl-orange-dark: #c73a23;
+
+  /* Race states (*-dim = numerals on light; *-text = words on light; *-bright = on dark grounds) */
+  --tl-running: #13a89e;
+  --tl-running-bright: #45e5d8;
+  --tl-running-text: #0b6b65;
+  --tl-go: #65bc7b;
+  --tl-go-dim: #2e8f50;
+  --tl-go-text: #1f7a40;
+  --tl-set: #f2a93b;
+  --tl-set-dim: #b0741a;
+  --tl-set-text: #8f5e12;
+  --tl-set-bright: #ffc75e;
+  --tl-stop: #f04e34;
+  --tl-stop-dim: #c2391f;
+  --tl-stop-bright: #ff9b82;
+  --tl-idle: #8a939d;
+
+  /* Streaming overlays — two-tier colour language (DESIGN_SYSTEM §3 overlay plates & chroma key):
+     STRUCTURAL marks (section labels, connectors, empty slots) are white;
+     FILLED name plates flip to solid white with near-black name text. */
+  --tl-overlay-plate: rgba(
+    255,
+    255,
+    255,
+    0.3
+  ); /* empty PROFILE-box fill — VS frame / portrait card / profile bracket (art: 30% white) */
+  --tl-overlay-plate-name: rgba(
+    255,
+    255,
+    255,
+    0.35
+  ); /* empty NAME-bar fill — name-bracket TBD plate (art: 35% white) */
+  --tl-overlay-plate-strip: rgba(
+    255,
+    255,
+    255,
+    0.48
+  ); /* row backing band behind a stat label — VS speed/freestyle tables (art cls-8/cls-16: 48% white) */
+  --tl-overlay-plate-filled: #ffffff; /* solid fill for a FILLED named plate */
+  --tl-overlay-stroke: #ffffff; /* plate border + bracket connectors (width below) */
+  --tl-overlay-name-ink: #231f20; /* near-black name text on a filled plate (= the card masters' #231f20) */
+  --tl-overlay-label: #ffffff; /* structural / section labels (= ink-on-brand) */
+  --tl-overlay-scrim: rgba(
+    51,
+    60,
+    78,
+    0.9
+  ); /* slate legibility backing for white overlay text/captions */
+  --tl-overlay-backdrop: rgba(
+    35,
+    31,
+    32,
+    0.6
+  ); /* full-bleed frame dim behind an overlay composition (LAAX 60%-black layer) */
+
+  /* LAAX overlay art metrics — measured on the art's 1920×1080 frame; scale off
+     a 1080p baseline, don't hard-pin. */
+  --tl-overlay-stroke-width: 6px; /* VS-box / plate border + bracket connectors */
+  --tl-overlay-heading-tracking: -0.02em; /* tight display-caps tracking (art: −.01…−.03em) */
+
+  /* Chroma-key fill for ALL overlay surfaces — MAGENTA not green; rationale at
+     `chromaKey` in tokens.ts (the canonical copy). Retune both together. */
+  --tl-chroma-key: #ff00ff;
+
+  /* Fonts */
+  --tl-font-numerals: 'JetBrains Mono', ui-monospace, monospace;
+  --tl-font-display: 'Oswald', 'Saira Condensed', system-ui, sans-serif;
+  --tl-font-body: 'Saira', system-ui, sans-serif;
+
+  /* Radii */
+  --tl-radius-sm: 4px;
+  --tl-radius-md: 8px;
+  --tl-radius-lg: 14px;
+  --tl-radius-pill: 999px;
+  --tl-radius-track-curve: 14px 4px 14px 4px;
+
+  /* Spacing base unit */
+  --tl-space-unit: 8px;
+
+  /* Type scale */
+  --tl-type-display1: 3rem;
+  --tl-type-display2: 2.25rem;
+  --tl-type-h1: 1.875rem;
+  --tl-type-h2: 1.5rem;
+  --tl-type-h3: 1.25rem;
+  --tl-type-body: 1rem;
+  --tl-type-small: 0.875rem;
+  --tl-type-label: 0.75rem;
+  --tl-label-letter-spacing: 0.08em;
+}
+
+/* Colour-adaptation mode (`?bg=h2r`, class set by `app/pages/Stream/overlayBg.ts`):
+   the transparent overlay is flattened onto a chroma ground UPSTREAM of the
+   keyer (an H2R Graphics chain keyed at pink #ec008c) and the chain shifts
+   colours on the way. Measured (2026-07-24 rig): intended #13a89e aired as
+   #48bbb2 — per channel a uniform ~21.6% white lift (hue intact), i.e. white
+   contamination in the chain, not a keyer hue shift. Each override is the
+   lift's inverse, (orig − 0.216·255)/0.784 per channel, with channels below
+   the ~55 white floor clamping at 0 (those targets are only approachable):
+   - --tl-running  #13a89e → #009083 (R clamps; airs ≈ #37a89e)
+   - --tl-stop-dim #c2391f → #b10200 (B clamps; airs ≈ #c23937; un-adapted it
+     would air ≈ #cf644f, predicted from the same measured lift)
+   If the chain is fixed (the lift disappears), DELETE these overrides — the
+   un-lifted inverses air too dark. */
+body.tl-key-composite {
+  --tl-running: #009083;
+  --tl-stop-dim: #b10200;
+}
+
+/* Tabular numerals — keeps timer/score digits from jittering. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hero/numeric type — monospace numerals with tabular figures. */
+.numerals {
+  font-family: var(--tl-font-numerals);
+  font-variant-numeric: tabular-nums;
+}

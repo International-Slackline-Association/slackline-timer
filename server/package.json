@@ -1,0 +1,54 @@
+{
+  "name": "slackline-timer-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AWS backend for Slackline Timer: the WebSocket relay and the competition data plane",
+  "scripts": {
+    "checkTs": "tsc --noEmit",
+    "synth": "cdk synth",
+    "build": "cdk synth",
+    "diff": "cdk diff",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "db:init": "node scripts/createLocalTables.mjs && node scripts/createLocalBucket.mjs",
+    "dev:api": "node scripts/devApi.mjs",
+    "seed": "node scripts/seedRemote.mjs",
+    "deploy": "cdk deploy",
+    "deploy:guided": "cdk bootstrap && cdk deploy",
+    "deploy:local": "cdklocal deploy",
+    "watch": "cdk watch --hotswap"
+  },
+  "engines": {
+    "node": ">=24",
+    "npm": ">=10"
+  },
+  "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "3.1101.0",
+    "@aws-sdk/client-cognito-identity-provider": "3.1101.0",
+    "@aws-sdk/client-dynamodb": "3.1101.0",
+    "@aws-sdk/client-s3": "3.1101.0",
+    "@aws-sdk/client-ssm": "3.1101.0",
+    "@aws-sdk/cloudfront-signer": "3.1098.0",
+    "@aws-sdk/lib-dynamodb": "3.1101.0",
+    "@aws-sdk/s3-presigned-post": "3.1101.0",
+    "aws-jwt-verify": "5.2.1"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "8.10.162",
+    "@types/node": "24.13.3",
+    "@types/ws": "8.18.1",
+    "@vitest/coverage-v8": "4.1.10",
+    "aws-cdk": "2.1135.0",
+    "aws-cdk-lib": "2.263.0",
+    "aws-cdk-local": "3.0.4",
+    "constructs": "10.8.1",
+    "esbuild": "0.28.1",
+    "tsx": "4.23.5",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10",
+    "ws": "8.21.1"
+  },
+  "author": "Can Sahin, Simon Hiller",
+  "license": "GPL-3.0-or-later"
+}

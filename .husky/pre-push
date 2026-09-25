@@ -1,0 +1,4 @@
+# Fast safety net before sharing: type-check and run the test suites.
+# Heavier/slower than pre-commit on purpose — runs once per push, not per commit.
+npm run typecheck
+npm test

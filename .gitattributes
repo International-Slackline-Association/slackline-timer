@@ -1,0 +1,13 @@
+# Normalize line endings: LF in the repo and in every working tree (incl.
+# Windows), so Prettier/ESLint behave identically locally and in CI.
+* text=auto eol=lf
+
+# Binary assets — never touch.
+*.mp3 binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

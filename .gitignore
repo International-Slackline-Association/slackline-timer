@@ -1,0 +1,35 @@
+node_modules
+cdk.out
+.DS_Store
+.env
+# Deployment config (AWS profile, cost-alert address) — template: .env.deploy.example
+.env.deploy
+dist
+# `npm run test:coverage` output in both packages (CI uploads web/coverage as an
+# artifact). Unignored, a coverage run left ~300 files staged for accidental commit.
+coverage
+
+# Editor directories and files
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea
+*.DS_Store
+
+server/lib
+server/token-generator.sh
+.vscode/settings.json
+
+web/.env.development
+
+# Local Claude Code tooling (skills, drivers) — kept on disk, not in git
+.claude/
+.agents/
+
+# Private competition seed data (real athlete PII, source CSV, photos) — never
+# commit. Only `prod/` is private; other resources/seed/* datasets are shareable.
+resources/seed/prod/
+
+# Living project-management docs (backlog, per-item specs, parked owner tasks).
+# Working state, not published with the source.
+doc/@work/

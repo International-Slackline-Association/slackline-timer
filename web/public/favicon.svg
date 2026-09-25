@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!--
+    Slackline Timer brand mark. Path data is duplicated from
+    `src/app/components/BrandMark.tsx` — a favicon cannot import from the bundle —
+    and `BrandMark.test.tsx` fails if the two ever drift apart.
+
+    The sky is transparent, so the slate mass would disappear against a dark tab
+    strip. Browsers honour prefers-color-scheme inside an SVG favicon, so the dark
+    block below swaps in the inverted pair (white mass, Bright teal accent) — the
+    same two variants BrandMark ships.
+  -->
+  <style>
+    .mass { fill: #333c4e; stroke: #333c4e; }
+    .accent { fill: #13a89e; stroke: #13a89e; }
+    @media (prefers-color-scheme: dark) {
+      .mass { fill: #ffffff; stroke: #ffffff; }
+      .accent { fill: #45e5d8; stroke: #45e5d8; }
+    }
+    .no-fill { fill: none; }
+  </style>
+  <path class="accent" d="M27 18 L50.92 41.03 L76 33 L76 40.35 L49.08 48.97 L21.75 22.66 Z"/>
+  <path class="mass" d="M0 18 L27 18 L18 26 L28 50 L19 74 L34 100 L0 100 Z" stroke="none"/>
+  <path class="mass" d="M76 33 H100 V100 H76 Z M92 41 h10 v10 h-10 Z M82 59 h9 v9 h-9 Z" fill-rule="evenodd" stroke="none"/>
+  <rect class="mass" x="46" y="45" width="8" height="10" rx="2" stroke="none"/>
+  <circle class="mass no-fill" cx="50" cy="73" r="18" stroke-width="7"/>
+  <path class="accent no-fill" d="M50 73 L61.2 62.9" stroke-width="5" stroke-linecap="round"/>
+  <circle class="accent" cx="50" cy="73" r="3.2" stroke="none"/>
+</svg>

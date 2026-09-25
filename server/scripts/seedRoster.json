@@ -1,0 +1,22 @@
+{
+  "female": [
+    { "name": "Nina Brunner", "country": "SUI", "birthDate": "1996-03-14" },
+    { "name": "Elise Tremblay", "country": "CAN", "birthDate": "1999-07-21" },
+    { "name": "Camille Aubert", "country": "FRA", "birthDate": "1997-09-30" },
+    { "name": "Robin Lafleur", "country": "CAN", "birthDate": "2000-02-25" },
+    { "name": "Chloé Marchand", "country": "FRA", "birthDate": "1998-12-04" },
+    { "name": "Mia Andersen", "country": "DEN", "birthDate": "1995-10-08" },
+    { "name": "Yuki Sato", "country": "JPN", "birthDate": "2001-04-19" },
+    { "name": "Carla Bianchi", "country": "ITA", "birthDate": "1994-07-03", "dnf": true }
+  ],
+  "male": [
+    { "name": "Mateo Rossi", "country": "ITA", "birthDate": "1994-11-02" },
+    { "name": "Kenji Tanaka", "country": "JPN", "birthDate": "1992-01-09" },
+    { "name": "Noah Visser", "country": "NED", "birthDate": "1995-05-18" },
+    { "name": "Diego Fernández", "country": "ESP", "birthDate": "1991-06-27" },
+    { "name": "Liam O’Brien", "country": "IRL", "birthDate": "1996-09-12" },
+    { "name": "Felix Bauer", "country": "AUT", "birthDate": "1993-02-28" },
+    { "name": "Pavel Novák", "country": "CZE", "birthDate": "1997-12-15" },
+    { "name": "Lucas Meyer", "country": "SUI", "birthDate": "1993-08-11", "dnf": true }
+  ]
+}

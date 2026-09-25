@@ -1,0 +1,60 @@
+name: Bug report
+description: Something behaves incorrectly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security problem? Stop.** Do not file it here — follow
+        [SECURITY.md](https://github.com/International-Slackline-Association/slackline-timer/blob/main/SECURITY.md).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Speedline timer (control or preview)
+        - Freestyle timer / scoring
+        - Admin pages (competitions, athletes, times, scores, matches)
+        - Broadcast overlays (/stream/*)
+        - Backend / API / realtime sync
+        - Local development setup
+        - Other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Press …
+        3. Observe …
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Deployed (production)
+        - Local development (npm run dev)
+    validations:
+      required: true
+  - type: input
+    id: context
+    attributes:
+      label: Browser / OS, and during a live event?
+      placeholder: Chrome 140 on Windows 11 — during a competition
+  - type: textarea
+    id: extra
+    attributes:
+      label: Logs, screenshots, anything else
+      description: Browser console output is especially useful. Remove athlete
+        personal data before pasting.
