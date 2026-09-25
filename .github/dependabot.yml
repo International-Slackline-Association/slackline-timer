@@ -2,13 +2,19 @@
 # ecosystem entry. Minor/patch updates are grouped into one PR per package to
 # keep the noise down; majors arrive individually because they routinely need a
 # migration here (the toolchain has hard version ceilings, see doc/dev/decisions.md).
+# Monthly and capped at 3 open PRs per ecosystem: weekly checks against a busy
+# release week produce a double-digit batch, and every PR costs a CI run and a
+# notification thread. `@types/node` is held at the major the Lambda runtime
+# ships (Runtime.NODEJS_24_X, esbuild target node24) — typing against a newer
+# Node than the one executing the bundle is exactly the wrong direction, so its
+# majors are ignored rather than reopened and closed every month.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
     commit-message:
       prefix: chore
       include: scope
@@ -19,26 +25,32 @@ updates:
   - package-ecosystem: npm
     directory: /web
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
     commit-message:
       prefix: chore
       include: scope
     groups:
       web-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: npm
     directory: /server
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
     commit-message:
       prefix: chore
       include: scope
     groups:
       server-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
