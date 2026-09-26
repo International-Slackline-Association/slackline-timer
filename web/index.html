@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- SVG first (it carries its own prefers-color-scheme swap so the slate mass
+         does not vanish on a dark tab strip); the PNG is the raster fallback. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#FFFFFF" />
+    <!-- Keep token-bearing /stream URLs out of the Referer sent to any cross-origin subresource. -->
+    <meta name="referrer" content="same-origin" />
+
+    <!-- HTML Meta Tags -->
+    <title>Slackline Timer</title>
+    <meta name="description" content="" />
+
+    <!-- Meta Tags Generated via https://www.opengraph.xyz -->
+
+    <!-- No font <link> on purpose — every face is bundled self-hosted via
+         @fontsource, imported in `src/app/index.tsx`. -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

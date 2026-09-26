@@ -1,0 +1,112 @@
+{
+  "competition": {
+    "compId": "demo-cup",
+    "name": "Demo Cup",
+    "startDate": "2026-08-14",
+    "endDate": "2026-08-16",
+    "config": {
+      "freestyle": {
+        "breakMs": 120000
+      }
+    }
+  },
+  "athletes": [
+    {
+      "ref": "brunner",
+      "firstName": "Nina",
+      "lastName": "Brunner",
+      "shortName": "N. Brunner",
+      "birthDate": "1996-03-14",
+      "country": "SUI",
+      "gender": "female"
+    },
+    {
+      "ref": "tremblay",
+      "firstName": "Elise",
+      "lastName": "Tremblay",
+      "birthDate": "1999-07-21",
+      "country": "CAN",
+      "gender": "female",
+      "shortName": "E. Tremblay"
+    },
+    {
+      "ref": "aubert",
+      "firstName": "Camille",
+      "lastName": "Aubert",
+      "birthDate": "1997-09-30",
+      "country": "FRA",
+      "gender": "female",
+      "shortName": "C. Aubert"
+    },
+    {
+      "ref": "marchand",
+      "firstName": "Chloé",
+      "lastName": "Marchand",
+      "birthDate": "1998-12-04",
+      "country": "FRA",
+      "gender": "female",
+      "shortName": "C. Marchand"
+    }
+  ],
+  "times": [
+    {
+      "athlete": "brunner",
+      "round": "qualification",
+      "timeMs": 5320
+    },
+    {
+      "athlete": "tremblay",
+      "round": "qualification",
+      "timeMs": 5610
+    },
+    {
+      "athlete": "aubert",
+      "round": "qualification",
+      "timeMs": 5895
+    },
+    {
+      "athlete": "marchand",
+      "round": "qualification",
+      "dnf": true
+    }
+  ],
+  "scores": [
+    {
+      "athlete": "brunner",
+      "round": "qualification",
+      "difficulty": 8,
+      "combo": 7,
+      "style": 9,
+      "bestTrick": 8,
+      "controlPenalty": 1
+    },
+    {
+      "athlete": "tremblay",
+      "round": "qualification",
+      "difficulty": 7,
+      "combo": 8,
+      "style": 7,
+      "bestTrick": 9,
+      "controlPenalty": 0
+    }
+  ],
+  "matches": [
+    {
+      "discipline": "speed",
+      "round": "half",
+      "gender": "female",
+      "position": 0,
+      "athlete1": "brunner",
+      "athlete2": "tremblay",
+      "winner": "brunner"
+    },
+    {
+      "discipline": "speed",
+      "round": "half",
+      "gender": "female",
+      "position": 1,
+      "athlete1": "aubert",
+      "athlete2": "marchand"
+    }
+  ]
+}

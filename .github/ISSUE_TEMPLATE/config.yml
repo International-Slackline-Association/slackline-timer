@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/International-Slackline-Association/slackline-timer/security/advisories/new
+    about: Report privately — never as a public issue.
+  - name: Operator manual
+    url: https://github.com/International-Slackline-Association/slackline-timer/tree/main/doc/user
+    about: How to run a competition with the timer (also in the app at /help).
+  - name: International Slackline Association
+    url: https://www.slacklineinternational.org/
+    about: Questions about the sport, the rules or the ISA itself.

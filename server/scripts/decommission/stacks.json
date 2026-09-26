@@ -1,0 +1,160 @@
+{
+  "_readme": [
+    "Durable ledger of every CDK stack this repo has deployed — the record that",
+    "must NOT be lost when the code changes. When a stack is renamed or replaced,",
+    "the old entry stays here (status: retiring|retired) with the physical",
+    "resources that outlive `cdk destroy`, so it is always clear what the old",
+    "stack owns and how it gets removed. New entries are added the moment a stack",
+    "is (re)named in infra/app.ts.",
+    "",
+    "Why this exists: RemovalPolicy.RETAIN + deletionProtection resources (the",
+    "DynamoDB tables, the photos bucket) survive a stack delete as UNMANAGED",
+    "orphans, and standalone resources (hand-provisioned SSM params, old",
+    "CloudFront distributions, Lambda log groups) are never in the template at",
+    "all. Once the CDK code stops referencing an old stack there is no other",
+    "machine-readable trace of what it left behind. This file is that trace.",
+    "",
+    "Consumers:",
+    "  - decommissionStack.mjs --name <name>  reads the matching entry's `orphans`",
+    "    and idempotently sweeps them after `cdk destroy`.",
+    "  - verifyDecommission.mjs --name <name>  reads it for the read-only checks.",
+    "  - ../commission/commissionStack.mjs --name <name>  the inverse: deploys the",
+    "    stack with --import-existing-resources so surviving orphans are ADOPTED",
+    "    (not recreated) — bring a stack up over prior data with no loss.",
+    "  - ../commission/verifyCommission.mjs --name <name>  read-only: confirms each",
+    "    orphan is now a resource OF the stack (managed).",
+    "  - test/infra/stack-ledger.test.ts synthesizes the app and FAILS if any",
+    "    RETAIN resource in the template is missing from the live/planned entry's",
+    "    orphans (so you cannot add a retained resource, or rename a stack,",
+    "    without recording it here).",
+    "",
+    "status: live = deployed & current | planned = in code, not yet deployed |",
+    "retiring = superseded, decommission pending | retired = deleted & swept.",
+    "orphans list PHYSICAL names (region-scoped). ssmParams / cloudfrontDistributions",
+    "/ logGroupPrefixes are not stack resources — they are recorded by hand.",
+    "",
+    "The AWS account is deliberately NOT recorded here (this file is committed):",
+    "it comes from AWS_ACCOUNT_ID in the ignored repo-root `.env.deploy` — see",
+    "`.env.deploy.example` and lib/awsCli.mjs's resolveAccount()."
+  ],
+  "stacks": [
+    {
+      "name": "slackline-timer-v1",
+      "role": "backend",
+      "region": "eu-central-2",
+      "status": "live",
+      "description": "Backend: WS relay + HTTP competition data plane + photo CDN. Kebab-case stack-name rename of SlacklineTimerV1Stack.",
+      "supersedes": "SlacklineTimerV1Stack",
+      "orphans": {
+        "dynamodbTables": ["slackline-timer-v1-relay-prod", "slackline-timer-v1-competition-prod"],
+        "s3Buckets": ["slackline-timer-v1-photos-prod"],
+        "ssmParams": [
+          "/slackline-timer-v1/read-token-secret",
+          "/slackline-timer-v1/photo-private-key",
+          "/slackline-timer-v1/photo-public-key"
+        ],
+        "cloudfrontDistributions": [],
+        "logGroupPrefixes": ["/aws/lambda/slackline-timer-v1"]
+      },
+      "notes": "SSM params are hand-provisioned (ADR 0025), not stack-owned, so they survive independently — keep them across the rename (the physical names are unchanged); only delete on a true teardown."
+    },
+    {
+      "name": "slackline-timer-v1-web",
+      "role": "web",
+      "region": "eu-central-1",
+      "status": "live",
+      "description": "Web frontend: private S3 bucket + CloudFront (OAC). Kebab-case stack-name rename of SlacklineTimerV1WebStack.",
+      "supersedes": "SlacklineTimerV1WebStack",
+      "orphans": {
+        "dynamodbTables": [],
+        "s3Buckets": [],
+        "ssmParams": [],
+        "cloudfrontDistributions": [],
+        "logGroupPrefixes": []
+      },
+      "notes": "The UI bucket is RemovalPolicy.DESTROY + autoDeleteObjects and CloudFront is stack-owned, so `cdk destroy` removes everything — no orphan sweep needed. eu-central-1 CDKToolkit must stay (this stack needs it)."
+    },
+    {
+      "name": "slackline-timer-v1-billing",
+      "role": "billing",
+      "region": "us-east-1",
+      "status": "planned",
+      "description": "Cost backstop (ADR 0031 §1): monthly AWS Budget (€50) + a CloudWatch EstimatedCharges alarm → an SNS email topic. In us-east-1 because that is the only region publishing the AWS/Billing EstimatedCharges metric.",
+      "orphans": {
+        "dynamodbTables": [],
+        "s3Buckets": [],
+        "ssmParams": [],
+        "cloudfrontDistributions": [],
+        "logGroupPrefixes": []
+      },
+      "notes": "No RETAIN/standalone resources — the SNS topic, CfnBudget, CloudWatch alarm, and the default-OFF CLOUDFRONT WAF WebACL (ADR 0031 §5, gated on the WafEnabled parameter; CloudFront-scope WAF is us-east-1-only, hence it rides this stack) are all stack-owned and removed by `cdk destroy`. us-east-1 CDKToolkit must be bootstrapped for this stack. The email subscription (the `billingAlertEmail` CDK context value) must be confirmed once via the SNS confirmation link after the first deploy."
+    },
+    {
+      "name": "SlacklineTimerV1Stack",
+      "role": "backend",
+      "region": "eu-central-2",
+      "status": "retired",
+      "description": "Pre-rename backend stack (PascalCase name). Superseded by slackline-timer-v1. Decommissioned 2026-07-04.",
+      "supersededBy": "slackline-timer-v1",
+      "orphans": {
+        "dynamodbTables": ["slackline-timer-v1-relay-prod", "slackline-timer-v1-competition-prod"],
+        "s3Buckets": ["slackline-timer-v1-photos-prod"],
+        "ssmParams": [],
+        "cloudfrontDistributions": [],
+        "logGroupPrefixes": ["/aws/lambda/SlacklineTimerV1Stack"]
+      },
+      "notes": "Retired 2026-07-04 via the data-preserving rename: deleted with -StackOnly (RETAIN tables/bucket kept), then ADOPTED into slackline-timer-v1 via --import-existing-resources (Commission-Stack.ps1) — NOT swept, no data loss. The /slackline-timer-v1/* SSM params were kept (the live stack reuses them). Kept here as history."
+    },
+    {
+      "name": "SlacklineTimerV1WebStack",
+      "role": "web",
+      "region": "eu-central-1",
+      "status": "retired",
+      "description": "Pre-rename web stack (PascalCase name). Superseded by slackline-timer-v1-web. Decommissioned 2026-07-04.",
+      "supersededBy": "slackline-timer-v1-web",
+      "orphans": {
+        "dynamodbTables": [],
+        "s3Buckets": [],
+        "ssmParams": [],
+        "cloudfrontDistributions": [],
+        "logGroupPrefixes": []
+      },
+      "notes": "Bucket DESTROY + autoDelete, CloudFront stack-owned — `cdk destroy` was clean (no orphans). Replaced by slackline-timer-v1-web (new CloudFront domain d2ea6ot00po74u.cloudfront.net); the old callback/logout URL d1wn2smh1769k2.cloudfront.net was removed from the Cognito app client. Kept here as history."
+    },
+    {
+      "name": "SpeedlineStack",
+      "role": "backend",
+      "region": "eu-central-2",
+      "status": "retired",
+      "description": "Original pre-rename backend. Decommissioned 2026-07-03.",
+      "supersededBy": "SlacklineTimerV1Stack",
+      "orphans": {
+        "dynamodbTables": ["speedline-timer-prod", "speedline-competition-prod"],
+        "s3Buckets": ["speedline-timer-photos-prod"],
+        "ssmParams": [
+          "/speedline-timer/read-token-secret",
+          "/speedline-timer/photo-private-key",
+          "/speedline-timer/photo-public-key"
+        ],
+        "cloudfrontDistributions": [],
+        "logGroupPrefixes": []
+      },
+      "notes": "Fully swept 2026-07-03 (legacy speedline decommission). Kept here as history."
+    },
+    {
+      "name": "speedline-timer-prod",
+      "role": "web",
+      "region": "eu-central-1",
+      "status": "retired",
+      "description": "Legacy pre-CDK Serverless app (old WS relay + its own table + web bucket + IAM). Decommissioned 2026-07-03.",
+      "orphans": {
+        "dynamodbTables": [],
+        "s3Buckets": [],
+        "ssmParams": ["/speedline_timer-ws-api-key"],
+        "cloudfrontDistributions": ["E4GA3LNGDFWGF"],
+        "logGroupPrefixes": ["/aws/lambda/speedline-timer-prod"]
+      },
+      "notes": "Fully swept 2026-07-03 (legacy speedline decommission; E4GA3LNGDFWGF was a standalone old-frontend distribution, not stack-owned). Kept here as history."
+    }
+  ]
+}
