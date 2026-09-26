@@ -13,6 +13,10 @@ vi.mock('@aws-sdk/client-cognito-identity-provider', () => ({
 
 import { resolveUserByEmail } from 'core/cognitoUsers';
 
+// The pool region is required config, not a default — the CDK sets it on every
+// Lambda, so the suite has to supply it too.
+process.env.COGNITO_REGION = 'eu-central-1';
+
 const userWith = (email: string, sub: string) => ({
   Attributes: [
     { Name: 'sub', Value: sub },
@@ -93,5 +97,26 @@ describe('resolveUserByEmail', () => {
     await resolveUserByEmail('pool-1', 'a"b@isa.org');
 
     expect(sendMock.mock.calls[0][0].input.Filter).toBe('email = "ab@isa.org"');
+  });
+
+  // Regression guard for the removed `?? 'eu-central-1'` fallback: a guessed
+  // region builds a client against the *backend's* region, where ListUsers
+  // matches nothing — indistinguishable from "user not found", so every grant
+  // is silently refused.
+  it('refuses to guess the pool region when COGNITO_REGION is unset', async () => {
+    const saved = process.env.COGNITO_REGION;
+    delete process.env.COGNITO_REGION;
+    // Fresh module instance: the client is memoized after the first real lookup.
+    vi.resetModules();
+    try {
+      const fresh = await import('core/cognitoUsers');
+      await expect(fresh.resolveUserByEmail('pool-1', 'rider@isa.org')).rejects.toThrow(
+        /COGNITO_REGION/,
+      );
+      expect(sendMock).not.toHaveBeenCalled();
+    } finally {
+      process.env.COGNITO_REGION = saved;
+      vi.resetModules();
+    }
   });
 });

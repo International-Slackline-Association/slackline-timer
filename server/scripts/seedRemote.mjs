@@ -11,7 +11,7 @@
 // `db_update` live-refresh broadcast — exactly as the admin UI does.
 //
 // Auth / target:
-//   API_URL     base URL of the HTTP API      (default: prod, see DEFAULT_API)
+//   API_URL     base URL of the HTTP API      (default: the local harness)
 //   AUTH_TOKEN  admin Cognito IdToken          (raw or "Bearer …"; required for
 //               any non-local API_URL — get one by logging into the admin UI as
 //               a `timeradmin` user and copying the IdToken, or via an
@@ -19,7 +19,7 @@
 // Against the local harness (npm run dev) AUTH_TOKEN falls back to the `local-dev`
 // dummy the offline authorizer accepts.
 //
-//   API_URL=https://16e1mgulu0.execute-api.eu-central-2.amazonaws.com/prod \
+//   API_URL=<HttpApiUrl output of the backend stack> \
 //   AUTH_TOKEN=<idToken> \
 //   node server/scripts/seedRemote.mjs resources/seed/prod/laax-2026.seed.json --yes
 //
@@ -55,7 +55,11 @@ import { existsSync } from 'node:fs';
 import { makeCall, seedDataset, validateDataset } from './lib/seedClient.mjs';
 import { isLocalApi, seedTableHint } from './lib/seedPreflight.mjs';
 
-const DEFAULT_API = 'https://16e1mgulu0.execute-api.eu-central-2.amazonaws.com/prod';
+// The same local harness seedLocal.mjs writes to. Not a deployed stage: that
+// URL is a CloudFormation output (HttpApiUrl), and a default reaching
+// production inverts every guard below (--yes, AUTH_TOKEN) by making the
+// dangerous target the free one.
+const DEFAULT_API = 'http://127.0.0.1:3002';
 
 const argv = process.argv.slice(2);
 const flags = new Set(argv.filter((a) => a.startsWith('--')));

@@ -59,8 +59,18 @@ jobs:
         run: npm run checkTs
       - name: Test (coverage)
         run: npm run test:coverage
+      # The build refuses to emit a bundle with any endpoint unset. Unreachable
+      # placeholders: this artifact is a compile check, never a deployable —
+      # `npm run deploy` resolves the real values (doc/dev/deploy.md).
       - name: Build
         run: npm run build
+        env:
+          VITE_APP_WS_URL: wss://ci.invalid/prod
+          VITE_APP_API_URL: https://ci.invalid/prod
+          VITE_APP_COGNITO_USER_POOL_ID: ci-placeholder_000000000
+          VITE_APP_COGNITO_CLIENT_ID: ciplaceholderclientid000
+          VITE_APP_COGNITO_DOMAIN: ci.invalid
+          VITE_APP_COGNITO_TIMER_GROUP: ci-placeholder-group
       - uses: actions/upload-artifact@v7
         if: always()
         with:

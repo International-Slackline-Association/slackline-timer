@@ -10,7 +10,7 @@ The app deploys in **two halves that must ship together**:
 
 | Half          | Tooling              | Command (from the package dir)          | AWS resources                                                                                                                                       |
 | ------------- | -------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`web/`**    | Vite build + S3 sync | `npm run deploy`                        | `slackline-timer-v1-web` (eu-central-1): S3 `slackline-timer-v1-ui-prod` + CloudFront `E26TGYRA112XLM`                                              |
+| **`web/`**    | Vite build + S3 sync | `npm run deploy`                        | `slackline-timer-v1-web` (eu-central-1): S3 + CloudFront, both resolved from the stack's `WebBucketName` / `WebDistributionId` outputs              |
 | **`server/`** | AWS CDK (TypeScript) | `npm run deploy`                        | `slackline-timer-v1` (eu-central-2): WS relay (3 Lambdas), HTTP API, 2 DynamoDB tables, photo S3 bucket, photo CloudFront, IAM                      |
 | **billing**   | AWS CDK (TypeScript) | `cdk deploy slackline-timer-v1-billing` | `slackline-timer-v1-billing` (**us-east-1**): monthly Budget + `EstimatedCharges` alarm → SNS email; the CloudFront-scoped WAF WebACL (default-OFF) |
 
@@ -55,7 +55,7 @@ differ by resource accordingly.
 
 Do these once per AWS account before the very first `server` deploy.
 
-### 0.1 Cognito (shared ISA pool `eu-central-1_iGaYGKeyJ`)
+### 0.1 Cognito (the shared ISA pool)
 
 The pool + Hosted UI are ISA-owned and hand-provisioned (not in any CDK stack);
 the timer only references the pool/client IDs. Operator + app-client management
@@ -68,11 +68,13 @@ runs through the Node scripts in [`server/scripts/cognito/`](../../server/script
   `node scripts/cognito/addToGroup.mjs <email>` / `getGroupMembers.mjs` /
   `removeFromGroup.mjs` / `findUser.mjs`.
 - **Provision the Hosted-UI app client** — public SPA, no secret: auth-code
-  flow, scopes `openid email`, shared domain `auth.slacklineinternational.org`,
-  and **every app origin registered as both a callback and sign-out URL**
-  (`http://localhost:5173` for dev + the prod CloudFront URL). The client ID
-  must match `COGNITO_CLIENT_ID` in `web/src/app/constants.ts` and the `COGNITO`
-  block in `server/infra/slackline-stack.ts`.
+  flow, scopes `openid email`, the shared ISA Hosted-UI domain, and **every app
+  origin registered as both a callback and sign-out URL** (`http://localhost:5173`
+  for dev + the deployment's CloudFront URL). The pool, client, domain, region
+  and operator group are then recorded once in `.env.deploy` (`COGNITO_*`, see
+  [`.env.deploy.example`](../../.env.deploy.example)); the CDK stack, the web
+  build and the Cognito scripts all read them from there rather than each
+  carrying their own copy (ADR 0048).
 - **Harden the app client to least privilege** — ✅ **done 2026-07-07**
   (`hardenAppClient.mjs --apply`, `verifyAppClient.mjs` clean). The SPA only reads `email` and
   requests `openid email`, so it needs no `aws.cognito.signin.user.admin` scope
@@ -142,11 +144,15 @@ AWS_PROFILE=… npm run deploy:guided     # cdk bootstrap && cdk deploy
 AWS_PROFILE=… npm run deploy            # cdk deploy
 ```
 
-Note the stack outputs — if the API IDs changed, rebake them into `constants.ts`:
+The stack's outputs are what the web deploy reads, so nothing here has to be
+copied anywhere by hand (ADR 0048):
 
-- `HttpApiUrl` — the competition-data HTTP API base URL (hardcoded in `constants.ts`)
-- `WebsocketUrl` — the relay WS endpoint (hardcoded in `constants.ts`)
+- `HttpApiUrl` — the competition-data HTTP API base URL
+- `WebsocketUrl` — the relay WS endpoint
 - `PhotoCdnDomain` — the photo CloudFront domain
+
+Replacing an API changes these values; step 3 picks the new ones up on its next
+run. There is no source edit to forget.
 
 For fast code-only iteration on a **dev** stack (never prod):
 `AWS_PROFILE=… npm run watch` (`cdk watch --hotswap`).
@@ -155,19 +161,36 @@ For fast code-only iteration on a **dev** stack (never prod):
 
 ## 3. Deploy the web (second)
 
-The prod WS + HTTP API URLs are both hardcoded in `web/src/app/constants.ts`
-(`WS_URL`, `HTTP_API_URL`). Only rebake them there if step 2's API IDs changed;
-otherwise a plain build picks them up. (`VITE_APP_WS_URL` / `VITE_APP_API_URL`
-still override at build time — used by local dev, not prod.)
+The bundle carries no endpoints of its own — `vite build` refuses to produce
+one unless all six `VITE_APP_*` values are supplied, and the deploy resolves
+them for you (ADR 0048). Run step 2 first: the URLs baked into the bundle come
+from the backend stack's outputs, so a web deploy against a stale backend is
+not possible.
 
 ```bash
 cd web
 AWS_PROFILE=… npm run deploy
 ```
 
-`npm run deploy` = `eslint . && vite build`, then `internals/deployToS3.mjs`:
-syncs `dist/` to S3 with `--delete` and a 1-day cache, forces `index.html` to
-`no-cache`, and invalidates CloudFront `/*`.
+`npm run deploy` = `internals/deployToS3.mjs`, which **resolves first, then
+builds**:
+
+1. Reads `.env.deploy` and the live stack per role from the decommission ledger
+   — so the two regions (`eu-central-2` backend, `eu-central-1` web) are not
+   restated here either.
+2. `describe-stacks` on each: `WebsocketUrl` + `HttpApiUrl` from the backend,
+   `WebBucketName` + `WebDistributionId` from the web stack. A missing output
+   names the stack, the region and what it _does_ publish.
+3. Confirms the resolved bucket is owned by `AWS_ACCOUNT_ID`
+   (`s3api head-bucket --expected-bucket-owner`) — before the build, not just
+   before the upload. The sync runs with `--delete`, so "this bucket name exists
+   and my credentials can reach it" is not good enough.
+4. Runs `npm run build` with the resolved `VITE_APP_*` env.
+5. Syncs `dist/` to the resolved bucket with `--delete` and a 1-day cache,
+   forces `index.html` to `no-cache`, and invalidates the resolved distribution.
+
+Any unresolved value aborts before the build, listing each one with where it was
+supposed to come from (a stack output, or a key in `.env.deploy`).
 
 > **Never** build web with `VITE_APP_LOCAL_DEV=true` — it ships a fake auth
 > token. The build refuses this flag, but don't set it.
@@ -210,7 +233,7 @@ first go-live pass is closed — the app then ran the 2026 championships live
   don't emit `X-Frame-Options`, so CloudFront sends none and `/stream/*` iframes
   fine in a browser source. Confirm:
   ```bash
-  curl -sI "https://d2ea6ot00po74u.cloudfront.net/stream/rankings/final/female" | grep -i x-frame-options
+  curl -sI "<WebUrl output>/stream/rankings/final/female" | grep -i x-frame-options
   ```
   The grep should print **nothing**. Only if a header _is_ present (it shouldn't
   be) add a `ResponseHeadersPolicy` to `web-stack.ts` and redeploy the web stack.
@@ -271,7 +294,7 @@ landed once a Service Quotas increase raised the pool to the standard 1000.
    `getCompetition`), confirm a share of `429`s:
    ```bash
    oha -z 20s -q 100 -c 20 -H "Authorization: <IdToken-or-read-token>" \
-     "https://16e1mgulu0.execute-api.eu-central-2.amazonaws.com/prod/competitions/<compId>/rankings/final?gender=men"
+     "<HttpApiUrl output>/competitions/<compId>/rankings/final?gender=men"
    ```
    (`oha -q` is overall QPS, not per-worker; `hey -z 20s -q 100 -c 20 -H …` is an
    equivalent fallback.)
@@ -282,7 +305,7 @@ landed once a Service Quotas increase raised the pool to the standard 1000.
    resize + fan-out retry did their job:
    ```bash
    for i in $(seq 1 30); do websocat -1 \
-     "wss://6v1p3rr8eb.execute-api.eu-central-2.amazonaws.com/prod?Authorization=<IdToken>&sessionId=<compId>" \
+     "<WebsocketUrl output>?Authorization=<IdToken>&sessionId=<compId>" \
      >/dev/null 2>&1 & done; wait
    ```
 

@@ -37,8 +37,12 @@ const ledger = JSON.parse(
 // slackline-stack.test.ts) — no assets built, no cdk.out written.
 const app = createApp({
   'aws:cdk:bundling-stacks': [],
-  // Deployment config, never committed — a fixture value keeps synth hermetic.
+  // Deployment config, never committed — fixture values keep synth hermetic.
   billingAlertEmail: 'billing-alerts@example.org',
+  cognitoUserPoolId: 'eu-central-1_testpool',
+  cognitoClientId: 'test-client-id',
+  cognitoTimerGroup: 'timeradmin',
+  cognitoRegion: 'eu-central-1',
 });
 const stacks = app.node.children.filter((c): c is Stack => c instanceof Stack);
 

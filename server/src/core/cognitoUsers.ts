@@ -10,11 +10,27 @@ import {
  * `cognito-idp:ListUsers` grant on the pool (see infra/slackline-stack.ts).
  */
 
-const REGION = process.env.COGNITO_REGION ?? 'eu-central-1';
+// One client per container, built on the first real lookup so the offline path
+// below needs no Cognito config. The pool lives in its own region even when the
+// backend runs elsewhere, so COGNITO_REGION (set on every Lambda by the CDK)
+// pins it rather than AWS_REGION — required, never defaulted: a wrong-region
+// client finds no users at all, which reads exactly like "no such ISA account"
+// and would silently refuse every manager grant.
+let client: CognitoIdentityProviderClient | undefined;
 
-// One client per container. The pool lives in eu-central-1 even when the backend
-// runs elsewhere, so the region is pinned rather than inherited from AWS_REGION.
-const client = new CognitoIdentityProviderClient({ region: REGION });
+const cognitoClient = (): CognitoIdentityProviderClient => {
+  if (!client) {
+    const region = process.env.COGNITO_REGION;
+    if (!region) {
+      throw new Error(
+        "Missing required env COGNITO_REGION (the Cognito pool's home region). " +
+          'The CDK sets it on every Lambda from .env.deploy — see server/infra/app.ts.',
+      );
+    }
+    client = new CognitoIdentityProviderClient({ region });
+  }
+  return client;
+};
 
 export interface ResolvedUser {
   sub: string;
@@ -49,7 +65,7 @@ export const resolveUserByEmail = async (
   // Quotes are the only character that could break out of the filter string;
   // emails never legitimately contain them, so strip rather than escape.
   const safe = normalized.replace(/"/g, '');
-  const res = await client.send(
+  const res = await cognitoClient().send(
     new ListUsersCommand({
       UserPoolId: poolId,
       Filter: `email = "${safe}"`,

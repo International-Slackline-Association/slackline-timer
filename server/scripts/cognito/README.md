@@ -1,28 +1,32 @@
 # Cognito operator-group helpers
 
 Thin AWS-CLI wrappers for managing timer operators — the members of the
-`timeradmin` group in the shared ISA Cognito pool (`eu-central-1_iGaYGKeyJ`). A
-user must be in `timeradmin` for the WebSocket `$connect` authorizer to accept
-them; without it, login succeeds but the timer shows "Not authorized".
+operator group (`$COGNITO_TIMER_GROUP`) in the shared ISA Cognito pool. A user
+must be in that group for the WebSocket `$connect` authorizer to accept them;
+without it, login succeeds but the timer shows "Not authorized".
 
 This folder also holds the **app-client hardening** scripts — see "Harden /
 verify the app client" below. Everything is a Node `.mjs` script that shells out
-to an authenticated AWS CLI v2; the shared glue (pool defaults, the CLI runner,
-user lookup) lives in `cognitoCommon.mjs`.
+to an authenticated AWS CLI v2; the shared glue (config resolution, the CLI
+runner, user lookup) lives in `cognitoCommon.mjs`.
 
 ## Prerequisites
 
 - **Node** (the repo's version) and **AWS CLI v2** on `PATH`, authenticated for
-  the shared ISA pool in **`eu-central-1`** (the pool lives there even though the
-  timer backend now runs in `eu-central-2`).
+  the account that owns the pool, in `$COGNITO_REGION` — the pool does not live
+  in the backend's region, which is why the two are configured separately.
 - The AWS profile comes from the repo-root `.env.deploy` (`AWS_PROFILE`, loaded
   automatically — see `.env.deploy.example`); an exported `$AWS_PROFILE` or a
   per-run `--profile` overrides it. When none is set, the AWS CLI's default
   credential resolution is used. If your SSO creds are expired:
   `aws sso login --profile <your-profile>`.
 
-Pool id, region, group, and profile are baked in but overridable per-run via
-`--pool-id` / `--region` / `--group` / `--profile`. Run any script with `--help`.
+Pool id, region, group and app-client id come from the repo-root `.env.deploy`
+(`COGNITO_USER_POOL_ID` / `COGNITO_REGION` / `COGNITO_TIMER_GROUP` /
+`COGNITO_CLIENT_ID` — see `.env.deploy.example`), each overridable per-run via
+`--pool-id` / `--region` / `--group` / `--client-id`. None has a committed
+fallback: with nothing to resolve, a script names the missing variable and stops
+rather than act on another deployment's users. Run any script with `--help`.
 
 ## Usage — operator group helpers
 
@@ -32,7 +36,7 @@ Pool id, region, group, and profile are baked in but overridable per-run via
 # Find a user by any substring of email/name (case-insensitive):
 node scripts/cognito/findUser.mjs smith
 
-# Add a user to timeradmin (resolves username by exact email, then verifies):
+# Add a user to the operator group (resolves username by exact email, then verifies):
 node scripts/cognito/addToGroup.mjs user@example.com
 
 # List current operators:
@@ -42,13 +46,13 @@ node scripts/cognito/getGroupMembers.mjs
 node scripts/cognito/removeFromGroup.mjs user@example.com
 
 # A different profile / group:
-node scripts/cognito/addToGroup.mjs user@example.com --group timeradmin --profile <your-profile>
+node scripts/cognito/addToGroup.mjs user@example.com --group <group> --profile <your-profile>
 ```
 
 ## Harden / verify the app client
 
-The timer's public SPA app client (`ds5av12gno4uf6vktmml11pll`) is ours to manage
-on ISA's behalf. It should be **read-only, least privilege** — the app only reads
+The timer's public SPA app client (`$COGNITO_CLIENT_ID`) is ours to manage on
+ISA's behalf. It should be **read-only, least privilege** — the app only reads
 the `email` claim + the auto-injected `cognito:groups` claim and requests
 `openid`+`email` over the auth-code flow (`web/src/main.tsx`); it never writes
 user attributes. The desired config (single-sourced in `appClientPolicy.mjs`):

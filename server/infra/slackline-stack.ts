@@ -50,18 +50,27 @@ const READ_TOKEN_SECRET_PARAM = '/slackline-timer-v1/read-token-secret';
 const PHOTO_PUBLIC_KEY_PARAM = '/slackline-timer-v1/photo-public-key';
 const PHOTO_PRIVATE_KEY_PARAM = '/slackline-timer-v1/photo-private-key';
 
-// Cognito (ISA shared user pool). Pool/client IDs are not secrets. These do NOT
-// vary with `stage` — a non-prod stage (e.g. a `cdk watch` dev stack) gets its
-// own tables/APIs/buckets but still authenticates against prod Cognito.
-// Introduce a per-stage config map here if that ever changes.
-const COGNITO = {
-  COGNITO_USER_POOL_ID: 'eu-central-1_iGaYGKeyJ',
-  COGNITO_CLIENT_ID: 'ds5av12gno4uf6vktmml11pll',
-  COGNITO_TIMER_GROUP: 'timeradmin',
-  // The pool's home region (the backend may run in another). The managers
-  // Lambda pins its Cognito client to this to resolve email→sub.
-  COGNITO_REGION: 'eu-central-1',
-};
+/**
+ * The Cognito user pool this backend authenticates against (the shared ISA
+ * pool). The ids are not secrets, but they name one account's pool, so they are
+ * deployment config resolved in infra/app.ts (CDK context → the ignored
+ * `.env.deploy` → hard fail) rather than committed literals (ADR 0048) — the
+ * principle the pool-ARN comment below already applies to the account id.
+ *
+ * They do NOT vary with `stage`: a non-prod stage (e.g. a `cdk watch` dev
+ * stack) gets its own tables/APIs/buckets but the same pool. Add a per-stage
+ * map in app.ts if that ever changes.
+ */
+export interface CognitoConfig {
+  userPoolId: string;
+  clientId: string;
+  timerGroup: string;
+  /**
+   * The pool's home region (the backend may run in another). The managers
+   * Lambda pins its Cognito client to this to resolve email→sub.
+   */
+  region: string;
+}
 
 // ARN of the shared ISA pool, for the managers Lambda's ListUsers grant. Pool
 // ids are account-scoped (see server/scripts/cognito/cognitoCommon.mjs), and the
@@ -70,11 +79,12 @@ const COGNITO = {
 // is sound only when the backend deploys INTO the pool's account (ADR 0045). A
 // pool in a foreign account needs an assumed cross-account role, not a
 // different literal here.
-const cognitoPoolArn = (scope: Construct): string =>
-  `arn:aws:cognito-idp:${COGNITO.COGNITO_REGION}:${Stack.of(scope).account}:userpool/${COGNITO.COGNITO_USER_POOL_ID}`;
+const cognitoPoolArn = (scope: Construct, cognito: CognitoConfig): string =>
+  `arn:aws:cognito-idp:${cognito.region}:${Stack.of(scope).account}:userpool/${cognito.userPoolId}`;
 
 export interface SlacklineTimerV1StackProps extends StackProps {
   stage: string;
+  cognito: CognitoConfig;
 }
 
 /**
@@ -88,11 +98,11 @@ export interface SlacklineTimerV1StackProps extends StackProps {
 export class SlacklineTimerV1Stack extends Stack {
   constructor(scope: Construct, id: string, props: SlacklineTimerV1StackProps) {
     super(scope, id, props);
-    const { stage } = props;
+    const { stage, cognito } = props;
 
     const tables = defineTables(this, stage);
     const photoCdn = definePhotoCdn(this, stage);
-    const fns = defineFunctions(this, stage, tables, photoCdn);
+    const fns = defineFunctions(this, stage, tables, photoCdn, cognito);
     const wsStage = defineWsRelay(this, stage, fns);
     const { httpApi, httpStage } = defineHttpApi(this, stage, fns);
     defineWaf(this, stage, wsStage, httpStage);
@@ -243,7 +253,13 @@ interface Fns {
   broadcasters: NodejsFunction[];
 }
 
-function defineFunctions(stack: Stack, stage: string, tables: Tables, photoCdn: PhotoCdn): Fns {
+function defineFunctions(
+  stack: Stack,
+  stage: string,
+  tables: Tables,
+  photoCdn: PhotoCdn,
+  cognito: CognitoConfig,
+): Fns {
   const readTokenSecretParam = StringParameter.fromSecureStringParameterAttributes(
     stack,
     'ReadTokenSecretParam',
@@ -258,7 +274,13 @@ function defineFunctions(stack: Stack, stage: string, tables: Tables, photoCdn: 
   // Base env applied to every function. WS_API_ENDPOINT is added once the WS
   // stage exists (defineWsRelay).
   const baseEnv: Record<string, string> = {
-    ...COGNITO,
+    // The COGNITO_* keys are the frozen runtime contract (src/types/environment.d.ts;
+    // read by the authorizers, the managers Lambda and core/cognitoUsers.ts); only
+    // the values are deployment config.
+    COGNITO_USER_POOL_ID: cognito.userPoolId,
+    COGNITO_CLIENT_ID: cognito.clientId,
+    COGNITO_TIMER_GROUP: cognito.timerGroup,
+    COGNITO_REGION: cognito.region,
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
     // Load the bundled .js.map (sourceMap: true below) so runtime stack traces
     // point at the TS source instead of bundle offsets.
@@ -417,7 +439,7 @@ function defineFunctions(stack: Stack, stage: string, tables: Tables, photoCdn: 
     new PolicyStatement({
       effect: Effect.ALLOW,
       actions: ['cognito-idp:ListUsers'],
-      resources: [cognitoPoolArn(managers)],
+      resources: [cognitoPoolArn(managers, cognito)],
     }),
   );
   // Only photoUpload signs presigned POSTs — no other function gets s3:PutObject.

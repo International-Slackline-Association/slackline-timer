@@ -73,14 +73,12 @@ if (existsSync(webEnv)) {
     warn(
       'web/.env.development: VITE_APP_LOCAL_DEV is not "true" — Cognito sign-in will be required',
     );
+  // No fallbacks (ADR 0048): an unset endpoint fails the app at startup instead
+  // of resolving to a deployed backend.
   if (!wsUrl)
-    warn(
-      'web/.env.development: VITE_APP_WS_URL is not a ws:// URL — the app will hit the prod backend',
-    );
+    warn('web/.env.development: VITE_APP_WS_URL is not a ws:// URL — the app will refuse to start');
   if (!apiUrl)
-    warn(
-      'web/.env.development: VITE_APP_API_URL is not set — the /admin and /stream pages will not work',
-    );
+    warn('web/.env.development: VITE_APP_API_URL is not set — the app will refuse to start');
 } else {
   warn('web/.env.development missing — copy web/.env.development.example to web/.env.development');
 }

@@ -1,4 +1,4 @@
-// Find users in the shared ISA Cognito pool by a substring of their
+// Find users in the configured Cognito pool by a substring of their
 // email/name (case-insensitive). Cognito's list-users API has no substring
 // filter, so this lists everyone and filters locally.
 //
@@ -8,7 +8,7 @@
 //   node scripts/cognito/findUser.mjs smith
 //   node scripts/cognito/findUser.mjs smith --profile <profile>
 
-import { attr, listUsers, parseArgs, runMain } from './cognitoCommon.mjs';
+import { attr, listUsers, parseArgs, requireConfig, runMain } from './cognitoCommon.mjs';
 
 const HELP = `find users by a substring of email/name (case-insensitive)
 
@@ -22,6 +22,7 @@ runMain(async () => {
     if (!term) process.exitCode = 2;
     return;
   }
+  requireConfig(opts, 'poolId', 'region');
 
   const wanted = term.toLowerCase();
   const rows = listUsers(opts)
