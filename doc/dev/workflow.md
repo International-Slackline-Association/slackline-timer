@@ -84,7 +84,11 @@ Installed by `npm ci` at the root (`prepare` → `husky`).
 | ------------ | ------------------------------------------------------- | ---------------------------- |
 | `pre-commit` | `lint-staged` → eslint --fix + prettier on staged files | keep noise out of diffs      |
 | `commit-msg` | `commitlint`                                            | enforce Conventional Commits |
-| `pre-push`   | `npm run typecheck && npm test`                         | never push a red tree        |
+
+There is no `pre-push` hook. CI's three required checks gate `main` and cover
+more than a local run can — LocalStack integration tests, the web build, and
+`cdk synth` — so run the gates yourself before pushing rather than relying on
+a hook to catch it.
 
 Bypass only in emergencies with `--no-verify`, and fix forward immediately.
 
@@ -113,16 +117,16 @@ test(web): cover DNF sentinel formatting
   ```bash
   git switch -c feat/athlete-crud main
   # …commit as you go; WIP commits are fine, the squash collapses them
-  git push -u origin feat/athlete-crud   # pre-push hook: typecheck + test
+  git push -u origin feat/athlete-crud
   gh pr create --base main
   ```
 
   Squash-merging keeps one clean Conventional Commit per change on `main` and
   keeps WIP commits off it. **Set the squash commit's subject to a Conventional
   Commit** — GitHub defaults it to the PR title, so title the PR that way and it
-  is correct by construction. The `commit-msg` hook lints local commits and
-  `pre-push` blocks a red tree, but neither runs on GitHub's squash: CI and the
-  PR title are the mainline's guard.
+  is correct by construction. The `commit-msg` hook lints local commits but
+  does not run on GitHub's squash; CI and the PR title are the mainline's
+  guard.
 
 - Keep branches small and single-purpose; rebase on `main` before merging.
 - CI (`.github/workflows/ci.yml`) runs on every PR targeting `main` and every
@@ -138,7 +142,8 @@ what to include in a PR — is [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 A change is done when:
 
 - [ ] Behaviour is covered by a test that failed before the change.
-- [ ] `npm run lint`, `npm run typecheck`, and `npm test` pass locally.
+- [ ] `npm run lint`, `npm run typecheck`, `npm test`, and `npm run format:check`
+      pass locally.
 - [ ] **The data path is verified by a headless driver; only the realtime
       fan-out is smoke-tested by hand.** Changes touching the judge consoles
       (Speedline/Freestyle recorders) or the `/stream/*` overlays run the
