@@ -43,9 +43,9 @@ local container. The full guide is [`doc/dev/local-dev.md`](./doc/dev/local-dev.
    npm test
    ```
 
-   The git hooks run these for you: `pre-commit` auto-fixes staged files,
-   `commit-msg` enforces Conventional Commits, `pre-push` runs typecheck +
-   tests.
+   The git hooks cover part of this: `pre-commit` auto-fixes staged files and
+   `commit-msg` enforces Conventional Commits. Typecheck and tests run in CI
+   on your PR, so run them locally first.
 
 5. Open a pull request against `main` and fill in the template.
 

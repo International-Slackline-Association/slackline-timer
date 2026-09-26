@@ -194,8 +194,9 @@ npm --prefix server test           # runs unit + integration suites
 
 They **self-skip** (not fail) when the container is unreachable — a `vitest`
 setup file points `core/aws/clients` at `localhost:4566`, and each suite probes
-the port at collection time. So CI and the `pre-push` hook stay green without
-Docker, while a developer with the container up gets full coverage. Each test
+the port at collection time. So a local run stays green without Docker (CI
+stands LocalStack up and asserts it is reachable), while a developer with the
+container up gets full coverage. Each test
 uses a throwaway `compId`/`sessionId` and cleans its partition, so the suites are
 safe to run repeatedly against the persistent volume.
 

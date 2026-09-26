@@ -65,9 +65,10 @@ the package, or with `npm --prefix <pkg>`.
   test is wrong, say so and fix it deliberately.
 - **Run the gates from the repo root before you call anything done:**
   `npm run lint`, `npm run typecheck`, `npm test`, `npm run format:check`.
-- **Commits follow Conventional Commits** (enforced by a `commit-msg` hook).
-  `pre-commit` auto-fixes staged files; `pre-push` runs typecheck and tests.
-  Never bypass a hook to get a commit through.
+- **Commits follow Conventional Commits.** `pre-commit` auto-fixes staged
+  files, `commit-msg` enforces Conventional Commits, and there is no push
+  hook: CI's required checks gate `main`, so run the gates yourself before
+  calling work done. Never bypass a hook to get a commit through.
 - **Match the surrounding code.** Comment density, naming and idiom are already
   established. Comments explain _why_ and record constraints — never narrate
   what the code plainly does.
