@@ -49,7 +49,7 @@
     "vite": "8.2.0",
     "vite-plugin-checker": "0.14.5",
     "vite-tsconfig-paths": "6.1.1",
-    "vitest": "4.1.10",
+    "vitest": "5.0.1",
     "world-countries": "5.1.0"
   },
   "author": {
