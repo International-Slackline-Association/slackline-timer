@@ -1,16 +1,23 @@
 // Resolve a user by EXACT email and REMOVE them from a group (default:
-// timeradmin) — revokes operator access. Takes effect on next login / token
-// refresh, not immediately.
+// $COGNITO_TIMER_GROUP) — revokes operator access. Takes effect on next login /
+// token refresh, not immediately.
 //
 // Auth is your AWS CLI v2 session — see README.md.
 //
 // Usage:
 //   node scripts/cognito/removeFromGroup.mjs user@example.com
-//   node scripts/cognito/removeFromGroup.mjs user@example.com --group timeradmin
+//   node scripts/cognito/removeFromGroup.mjs user@example.com --group <group>
 
-import { findUserByEmail, listUsers, parseArgs, runAws, runMain } from './cognitoCommon.mjs';
+import {
+  findUserByEmail,
+  listUsers,
+  parseArgs,
+  requireConfig,
+  runAws,
+  runMain,
+} from './cognitoCommon.mjs';
 
-const HELP = `remove a user (by exact email) from a group (default: timeradmin)
+const HELP = `remove a user (by exact email) from a group (default: $COGNITO_TIMER_GROUP)
 
   node scripts/cognito/removeFromGroup.mjs <email> [--group g] [--profile p] [--region r] [--pool-id id]`;
 
@@ -22,6 +29,7 @@ runMain(async () => {
     if (!email) process.exitCode = 2;
     return;
   }
+  requireConfig(opts, 'poolId', 'region', 'group');
 
   const user = findUserByEmail(listUsers(opts), email);
   if (!user) {

@@ -20,16 +20,34 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { App } from 'aws-cdk-lib';
 
 import { BillingStack } from './billing-stack';
-import { SlacklineTimerV1Stack } from './slackline-stack';
+import { CognitoConfig, SlacklineTimerV1Stack } from './slackline-stack';
 import { SlacklineTimerV1WebStack } from './web-stack';
 
-// Deployment config that must NOT live in a public repo — the AWS profile and
-// the cost-alert subscriber — is read from an ignored repo-root `.env.deploy`
-// (template: `.env.deploy.example`). Loaded here, before any stack is built, so
-// `cdk deploy` works without every operator exporting the vars by hand. Absent
-// file is fine: CI and the infra tests pass their values as CDK context.
+// Deployment config that must NOT live in a public repo — the AWS profile, the
+// cost-alert subscriber, and the Cognito pool this account owns — is read from
+// an ignored repo-root `.env.deploy` (template: `.env.deploy.example`). Loaded
+// here, before any stack is built, so `cdk deploy` works without every operator
+// exporting the vars by hand. Absent file is fine: CI and the infra tests pass
+// their values as CDK context.
 const DEPLOY_ENV = fileURLToPath(new URL('../../.env.deploy', import.meta.url));
 if (existsSync(DEPLOY_ENV)) process.loadEnvFile(DEPLOY_ENV);
+
+/**
+ * CDK context (`-c key=value`, what CI and the infra tests pass) → `.env.deploy`
+ * / the ambient environment → throw. Same precedence as the billing alert email
+ * (infra/billing-stack.ts); a default here would deploy Lambdas against the
+ * wrong Cognito pool and fail at auth time on a live event, not at synth.
+ */
+function requireDeployConfig(app: App, contextKey: string, envKey: string): string {
+  const value = (app.node.tryGetContext(contextKey) as string | undefined) ?? process.env[envKey];
+  if (!value) {
+    throw new Error(
+      `Missing required deployment config "${envKey}" — set it in the repo-root .env.deploy ` +
+        `(template: .env.deploy.example) or pass -c ${contextKey}=<value>. See doc/dev/deploy.md.`,
+    );
+  }
+  return value;
+}
 
 /**
  * Build the CDK app. Exported (rather than inlined at module scope) so the
@@ -54,8 +72,19 @@ export function createApp(context?: Record<string, unknown>): App {
     );
   }
 
+  // Resolved before any stack is constructed, so a missing key fails with one
+  // actionable message instead of a half-built app. COGNITO_DOMAIN is absent:
+  // the web build consumes it, no Lambda does.
+  const cognito: CognitoConfig = {
+    userPoolId: requireDeployConfig(app, 'cognitoUserPoolId', 'COGNITO_USER_POOL_ID'),
+    clientId: requireDeployConfig(app, 'cognitoClientId', 'COGNITO_CLIENT_ID'),
+    timerGroup: requireDeployConfig(app, 'cognitoTimerGroup', 'COGNITO_TIMER_GROUP'),
+    region: requireDeployConfig(app, 'cognitoRegion', 'COGNITO_REGION'),
+  };
+
   new SlacklineTimerV1Stack(app, 'slackline-timer-v1', {
     stage,
+    cognito,
     env: { region: 'eu-central-2', account },
     description: `slackline-timer-v1 backend (${stage}) — WS relay + competition data plane + photo CDN`,
   });

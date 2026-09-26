@@ -23,19 +23,19 @@
 // it can break IdP attribute-mapping updates on a shared pool, so we leave it
 // alone by default and only set an explicit list on opt-in (--write-attributes).
 
-import { POOL, runAws, runMain } from './cognitoCommon.mjs';
+import { POOL, requireConfig, runAws, runMain } from './cognitoCommon.mjs';
 
 // Re-export the shared CLI helpers so the app-client scripts import everything
 // from one module.
-export { runAws, runMain };
+export { requireConfig, runAws, runMain };
 
-// --- defaults: the timer's public SPA app client in the shared ISA pool -------
+// --- defaults: the timer's public SPA app client ------------------------------
 // Pool/region/profile come from cognitoCommon (shared with the group scripts);
-// clientId mirrors COGNITO_CLIENT_ID in web/src/app/constants.ts + the COGNITO
-// block in server/infra/slackline-stack.ts.
+// clientId is COGNITO_CLIENT_ID from the same `.env.deploy` the web build and
+// the CDK stack read. No fallbacks — see cognitoCommon's POOL.
 export const DEFAULTS = {
   poolId: POOL.poolId,
-  clientId: 'ds5av12gno4uf6vktmml11pll',
+  clientId: process.env.COGNITO_CLIENT_ID,
   region: POOL.region,
   profile: POOL.profile,
 };

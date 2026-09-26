@@ -9,15 +9,15 @@
 //   node scripts/cognito/verifyAppClient.mjs --client-id <id> --profile <profile>
 //   node scripts/cognito/verifyAppClient.mjs --json      # machine-readable
 
-import { describeClient, evaluate, parseArgs, runMain } from './appClientPolicy.mjs';
+import { describeClient, evaluate, parseArgs, requireConfig, runMain } from './appClientPolicy.mjs';
 
 const HELP = `audit the timer Cognito app client (read-only)
 
   node scripts/cognito/verifyAppClient.mjs [options]
 
-  --client-id <id>     app client id     (default: the timer SPA client)
-  --pool-id <id>       user pool id       (default: shared ISA pool)
-  --region <r>         AWS region         (default: eu-central-1)
+  --client-id <id>     app client id      (default: $COGNITO_CLIENT_ID)
+  --pool-id <id>       user pool id       (default: $COGNITO_USER_POOL_ID)
+  --region <r>         AWS region         (default: $COGNITO_REGION)
   --profile <p>        AWS CLI profile    (default: $AWS_PROFILE)
   --json               emit JSON instead of the table
   --help`;
@@ -28,6 +28,7 @@ async function main() {
     console.log(HELP);
     return;
   }
+  requireConfig(opts, 'poolId', 'clientId', 'region');
 
   const client = describeClient(opts);
   const { checks, ok } = evaluate(client);

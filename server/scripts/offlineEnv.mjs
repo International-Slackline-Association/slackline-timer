@@ -13,10 +13,22 @@ export const OFFLINE_ENV = {
   // Must match the deployed CloudFormation TableName (Stage=prod) / createLocalTables.
   SPEEDLINE_TIMER_TABLE: 'slackline-timer-v1-relay-prod',
   COMPETITION_TABLE: 'slackline-timer-v1-competition-prod',
-  // Cognito (non-secret IDs) — the same values the CDK stack sets (infra/slackline-stack.ts).
-  COGNITO_USER_POOL_ID: 'eu-central-1_iGaYGKeyJ',
-  COGNITO_CLIENT_ID: 'ds5av12gno4uf6vktmml11pll',
-  COGNITO_TIMER_GROUP: 'timeradmin',
+  // Placeholders: local dev bypasses Cognito entirely (the authorizers accept
+  // the web's `local-dev` dummy token under IS_OFFLINE), and a real pool id is
+  // account-scoped — a laptop carrying one is a stray AWS_PROFILE away from
+  // acting on real users.
+  //
+  // The pool id must still LOOK like one: the real httpAuthorizer/authorizer
+  // run in-process here and `CognitoJwtVerifier.create()` validates the
+  // `<region>_<id>` shape at module load, so a free-form string kills the
+  // harness at startup.
+  //
+  // An already-set value always wins, here and in applyOfflineEnv, so local can
+  // still point at a real pool (e.g. to replay a genuine IdToken):
+  // `node --env-file=../.env.deploy scripts/devApi.mjs`.
+  COGNITO_USER_POOL_ID: process.env.COGNITO_USER_POOL_ID ?? 'eu-central-1_LOCALDEVPOOL',
+  COGNITO_CLIENT_ID: process.env.COGNITO_CLIENT_ID ?? 'local-dev-app-client',
+  COGNITO_TIMER_GROUP: process.env.COGNITO_TIMER_GROUP ?? 'local-dev-operators',
   // db_update broadcast endpoint — the local WS harness management API on :3001 (IPv4).
   WS_API_ENDPOINT: 'http://127.0.0.1:3001',
   // Photos run against LocalStack S3 (ADR 0023 §2): the S3 client points here

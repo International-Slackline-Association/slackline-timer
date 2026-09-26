@@ -23,9 +23,9 @@ describe('seedPreflight (pure)', () => {
   it('recognizes local harness API bases only', () => {
     expect(isLocalApi('http://127.0.0.1:3002')).toBe(true);
     expect(isLocalApi('http://localhost:3002/competitions')).toBe(true);
-    expect(isLocalApi('https://16e1mgulu0.execute-api.eu-central-2.amazonaws.com/prod')).toBe(
-      false,
-    );
+    // Synthetic: a real api id is barred from the tree (test/repo/), and shape
+    // is all that matters — an execute-api host is never the local harness.
+    expect(isLocalApi('https://timer-api.execute-api.eu-central-2.amazonaws.com/prod')).toBe(false);
     expect(isLocalApi(undefined)).toBe(false);
     expect(isLocalApi('not a url')).toBe(false);
   });
@@ -54,6 +54,19 @@ describe('seed writers reuse the shared preflight', () => {
     // No hand-rolled local-detection regex assigned to isLocal — the shared
     // isLocalApi is the one check (a bespoke regex is exactly what drifted).
     expect(src).not.toMatch(/isLocal\s*=\s*\//);
+  });
+
+  // A seeder writes real competition data, and the --yes / AUTH_TOKEN guards
+  // only bite on a NON-local API — so an API_URL defaulting to a deployed stage
+  // inverts them by making the dangerous target the free one.
+  it.each(['seedRemote.mjs', 'seedLocal.mjs'])('%s defaults to the local harness', async (s) => {
+    const src = await readFile(new URL(`../../scripts/${s}`, import.meta.url), 'utf8');
+    const fallback = src.match(/process\.env\.API_URL\s*\?\?\s*([A-Z_]+|'[^']*')/)?.[1];
+    if (!fallback) throw new Error(`${s} does not fall back to a fixed API_URL`);
+    const api = fallback.startsWith("'")
+      ? fallback.slice(1, -1)
+      : src.match(new RegExp(`const ${fallback} = '([^']*)'`))?.[1];
+    expect(isLocalApi(api)).toBe(true);
   });
 });
 

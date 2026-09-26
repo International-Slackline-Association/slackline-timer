@@ -59,8 +59,18 @@ jobs:
         run: npm run checkTs
       - name: Test (coverage)
         run: npm run test:coverage
+      # The build refuses to emit a bundle with any endpoint unset. Unreachable
+      # placeholders: this artifact is a compile check, never a deployable —
+      # `npm run deploy` resolves the real values (doc/dev/deploy.md).
       - name: Build
         run: npm run build
+        env:
+          VITE_APP_WS_URL: wss://ci.invalid/prod
+          VITE_APP_API_URL: https://ci.invalid/prod
+          VITE_APP_COGNITO_USER_POOL_ID: ci-placeholder_000000000
+          VITE_APP_COGNITO_CLIENT_ID: ciplaceholderclientid000
+          VITE_APP_COGNITO_DOMAIN: ci.invalid
+          VITE_APP_COGNITO_TIMER_GROUP: ci-placeholder-group
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -123,7 +133,16 @@ jobs:
       # stacks), catching a stack error here instead of at `cdk deploy`. The CLI
       # is the aws-cdk devDependency installed by `npm ci` above. (server `build`
       # is an alias for `cdk synth`; this step names the gate for what it is.)
-      # billingAlertEmail is deploy config the repo doesn't carry (BillingStack
-      # throws without it); a placeholder is enough to build the template.
+      # billingAlertEmail and the cognito* keys are deploy config the repo
+      # doesn't carry (BillingStack / the backend stack's Cognito wiring throw
+      # without them); placeholders are enough to build the template, matching
+      # the ones the infra tests already use (slackline-stack.test.ts,
+      # stack-ledger.test.ts).
       - name: Synth (cdk)
-        run: npm run synth -- -c billingAlertEmail=billing-alerts@example.org
+        run: |
+          npm run synth -- \
+            -c billingAlertEmail=billing-alerts@example.org \
+            -c cognitoUserPoolId=eu-central-1_testpool \
+            -c cognitoClientId=test-client-id \
+            -c cognitoTimerGroup=timeradmin \
+            -c cognitoRegion=eu-central-1

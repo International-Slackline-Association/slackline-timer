@@ -36,14 +36,8 @@ afterEach(() => {
 });
 
 describe('apiFetch', () => {
-  it('fails fast when no API URL is configured', async () => {
-    // HTTP_API_URL now defaults to the deployed eu-central-2 URL, so exercise the
-    // guard via an explicit blank override ('' is kept by ??, unlike undefined).
-    const { apiFetch, ApiError } = await loadClient({ VITE_APP_API_URL: '' });
-    await expect(apiFetch('/competitions')).rejects.toThrow(ApiError);
-    await expect(apiFetch('/competitions')).rejects.toThrow(/not configured/);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
+  // An unconfigured API URL never reaches this client: app/constants throws at
+  // module load, before anything can call apiFetch (test/app/constants.test.ts).
 
   it('sends the dummy token in LOCAL_DEV and parses the JSON response', async () => {
     const { apiFetch } = await loadClient({

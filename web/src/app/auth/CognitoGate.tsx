@@ -24,10 +24,9 @@ const isStreamOverlay = (pathname: string, search: string): boolean =>
   pathname.startsWith('/stream/') && new URLSearchParams(search).has('token');
 
 /**
- * Signs the operator in through the shared ISA Cognito Hosted UI
- * (auth.slacklineinternational.org) — the same login isa-users uses — then
- * admits any signed-in ISA user via RequireSignedIn (per-competition scope is
- * enforced server-side).
+ * Signs the operator in through the shared ISA Cognito Hosted UI — whichever
+ * domain `Amplify.configure` was given in main.tsx — then admits any signed-in
+ * ISA user via RequireSignedIn (per-competition scope is enforced server-side).
  *
  * Cognito only redirects back to the registered redirect URI (the app origin),
  * so the pre-redirect deep link (path + query, e.g. the control page with its

@@ -1,16 +1,23 @@
-// Resolve a user by EXACT email in the shared ISA Cognito pool and add them to a
-// group (default: timeradmin), then verify. Group membership is baked into the
-// IdToken at sign-in, so it only takes effect on the user's NEXT login.
+// Resolve a user by EXACT email in the configured Cognito pool and add them to a
+// group (default: $COGNITO_TIMER_GROUP), then verify. Group membership is baked
+// into the IdToken at sign-in, so it only takes effect on the user's NEXT login.
 //
 // Auth is your AWS CLI v2 session — see README.md.
 //
 // Usage:
 //   node scripts/cognito/addToGroup.mjs user@example.com
-//   node scripts/cognito/addToGroup.mjs user@example.com --group timeradmin
+//   node scripts/cognito/addToGroup.mjs user@example.com --group <group>
 
-import { findUserByEmail, listUsers, parseArgs, runAws, runMain } from './cognitoCommon.mjs';
+import {
+  findUserByEmail,
+  listUsers,
+  parseArgs,
+  requireConfig,
+  runAws,
+  runMain,
+} from './cognitoCommon.mjs';
 
-const HELP = `add a user (by exact email) to a group (default: timeradmin)
+const HELP = `add a user (by exact email) to a group (default: $COGNITO_TIMER_GROUP)
 
   node scripts/cognito/addToGroup.mjs <email> [--group g] [--profile p] [--region r] [--pool-id id]`;
 
@@ -22,6 +29,7 @@ runMain(async () => {
     if (!email) process.exitCode = 2;
     return;
   }
+  requireConfig(opts, 'poolId', 'region', 'group');
 
   console.log(`Looking up ${email} ...`);
   const user = findUserByEmail(listUsers(opts), email);

@@ -48,10 +48,6 @@ export interface ApiRequestOptions {
  * the server's message + validation details.
  */
 export const apiFetch = async <T>(path: string, options: ApiRequestOptions = {}): Promise<T> => {
-  if (!HTTP_API_URL) {
-    throw new ApiError(0, 'HTTP_API_URL is not configured (set VITE_APP_API_URL for local dev)');
-  }
-
   const token = await resolveToken(options.readToken);
   const response = await fetch(`${HTTP_API_URL}${path}`, {
     method: options.method ?? 'GET',

@@ -116,13 +116,17 @@ would be lost if the tab died between write and send, leaving overlays stale.
 
 **Accepted · 2026-06-12** · the group's _meaning_ is narrowed by 0045 (the
 Hosted-UI sign-in stands; `timeradmin` now marks a global **superadmin**, not
-the admission bar — any verified ISA login is a comp-scoped manager)
+the admission bar — any verified ISA login is a comp-scoped manager) · the
+**mechanism** clause — pool id, app client id and group name as committed
+`constants.ts` literals — is **superseded by 0048** (they are deployment
+configuration now: `.env.deploy` inputs, no fallbacks); the choice of the shared
+ISA Hosted UI and of `timeradmin` as the name is unchanged
 
 **Context.** Operators already have ISA logins (`isa-users`); maintaining a second
 embedded auth form is redundant.
 
 **Decision.** Sign in via the shared ISA Cognito Hosted UI
-(`signInWithRedirect`, `auth.slacklineinternational.org`) instead of an embedded
+(`signInWithRedirect`, the shared ISA Hosted-UI domain) instead of an embedded
 `<Authenticator>`; the operator group is **`timeradmin`** (renamed from the
 earlier `organizers`).
 
@@ -167,10 +171,13 @@ server-side recompute drift.
 
 ## 0011 — Timer state recovery is peer-to-peer; the relay stays stateless
 
-**Accepted · 2026-06-22** · single-owner premise revised by 0038 (the
-request/reply flow stands; any control panel may now answer as an owner) ·
-extended by 0047 for the **solo** panel, where no peer exists to answer (a
-browser-local copy of the panel's own snapshot; relay statelessness untouched)
+**Accepted · 2026-06-22** · the clock-skew sync model its consequences noted is
+**dropped by 0021** (that handshake was inert; `SpeedlineSnapshot` epochs now
+apply directly — the request/reply recovery itself is untouched) · single-owner
+premise revised by 0038 (the request/reply flow stands; any control panel may now
+answer as an owner) · extended by 0047 for the **solo** panel, where no peer
+exists to answer (a browser-local copy of the panel's own snapshot; relay
+statelessness untouched)
 
 **Context.** The relay persists nothing (the "server holds no timer
 logic" invariant — the former ADR 0008, now carried by 0023), so a preview/overlay that connects _after_ an operator
@@ -691,7 +698,11 @@ through the CDK port (0023 §1) and has since served a live event.
 
 ## 0023 — Backend IaC: Serverless Framework v3 → AWS CDK (TypeScript) + LocalStack
 
-**Accepted · 2026-07-01**
+**Accepted · 2026-07-01** · §1's secrets sentence ("secrets stay per-function via
+`StringParameter.valueForStringParameter`", i.e. plain SSM `String` resolved at
+synth into Lambda env) is **superseded by 0025** — the two real secrets are
+SecureString params fetched at runtime; the rest of the port, including the
+absorbed former 0008/0020 rules, stands
 
 **Context.** The backend's IaC + deploy tooling was Serverless Framework v3
 (`serverless.ts` + `infrastructure/*.ts` + `serverless-esbuild` /
@@ -2113,3 +2124,71 @@ manual's reload guidance changes accordingly. Trade-off: a restored board is one
 save-window (≤ 250 ms) behind the crash, and storage that is unavailable
 (private mode, full quota) simply leaves the panel where it stood before this
 existed.
+
+## 0048 — Deployment identity is configuration: stack-owned values come from stack outputs, externally-owned ones from `.env.deploy`
+
+**Accepted · 2026-09-26**
+
+**Context.** The endpoints and identifiers of one particular deployment were
+committed. `constants.ts` read `import.meta.env.VITE_APP_WS_URL ?? '<the prod
+wss:// URL>'`, so the env var was an _override_ and a build with no environment
+silently shipped production — which for a fork means shipping someone else's
+production. The same values were then re-typed by hand elsewhere: the Cognito
+pool id appeared in five files and the app client id in four (the web bundle,
+the CDK stack, two Cognito scripts, the offline harness), kept in step by
+comments that said "must match". `deployToS3.mjs` ran `aws s3 sync --delete`
+against a hardcoded bucket name with no guard, and `deploy.md` documented
+"rebake them into `constants.ts`" as a step an operator performs by hand after
+every API replacement.
+
+None of this is secret — a pool id and a public SPA client id are visible in
+every sign-in redirect, and ADR 0025 already put the actual secrets in
+SecureString SSM. It is _deployment identity_, and the repo already held the
+right principle without applying it evenly: `slackline-stack.ts` argues, three
+lines below the hardcoded pool id, that the account id "is deliberately not
+committed — it is taken from the account being deployed to".
+
+The decisive fact: every stack-owned value was **already published**.
+`HttpApiUrl`, `WebsocketUrl`, `PhotoCdnDomain`, `WebBucketName`,
+`WebDistributionId` and `WebUrl` are `CfnOutput`s that nothing consumed. The
+truth was declared, then duplicated by hand.
+
+**Decision.** Two classes of value, two mechanisms, no third.
+
+1. **Stack-owned → read from the stack.** Anything a stack creates is resolved
+   from its CloudFormation outputs at deploy time. The web deploy resolves the
+   API URLs, the UI bucket and the distribution id before it builds, and syncs
+   only to a bucket name that came from the stack. Note the region split: the
+   backend outputs live in `eu-central-2`, the web stack's in `eu-central-1`.
+2. **Externally-owned → `.env.deploy`.** The ISA Cognito pool is hand-provisioned
+   and owned outside this repo, so no stack can publish it. Its five values
+   (`COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `COGNITO_DOMAIN`,
+   `COGNITO_REGION`, `COGNITO_TIMER_GROUP`) are deploy _inputs_, in the file
+   that already carried `AWS_PROFILE` / `AWS_ACCOUNT_ID` /
+   `BILLING_ALERT_EMAIL`. CDK context (`-c cognitoUserPoolId=…`) still wins per
+   run, matching the precedence `billingAlertEmail` established.
+3. **No fallbacks anywhere.** A missing value fails, loudly, at the earliest
+   boundary that can see it: `vite build` refuses to emit a bundle, `cdk synth`
+   throws before a stack is constructed, the ops scripts exit. A default that
+   silently points at production is the defect being removed, so reintroducing
+   one as a convenience would undo this.
+4. **Enforced by a test, not by review.** `test/repo/no-committed-endpoints.test.ts`
+   walks every tracked file and fails on an API Gateway host, a pool id, a
+   distribution id or a distribution domain, and — when an operator's real
+   `.env.deploy` is present — on any value it sets. Same shape as the ADR 0025
+   guard that pins secrets out of the Lambda env blocks: the rule survives only
+   because reinstating the old form turns a suite red.
+
+**Consequences.** A deploy now requires a populated `.env.deploy`; the previous
+build worked with an empty environment by shipping prod defaults, which is
+exactly the behaviour being retired. CI has no AWS access and so passes explicit
+unreachable placeholders (`ci.invalid`) to its build — its artifact was never
+deployable and is now visibly so. The manual "rebake" step disappears: replacing
+an API no longer needs a source edit. Local dev is unaffected —
+`VITE_APP_LOCAL_DEV` already supplies the two URLs and bypasses Cognito, so the
+Cognito values are not required when it is on, and the offline harness stops
+embedding live pool identifiers. Cost: one `describe-stacks` call per region on
+the web deploy path, and a fork must now supply its own config before it can
+build — which is the point. Supersedes the mechanism clause of ADR 0007 (the
+pool, client and group as `constants.ts` literals); 0007's decision to use the
+shared ISA Hosted UI and the `timeradmin` group is unchanged.

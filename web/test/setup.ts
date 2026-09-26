@@ -5,6 +5,25 @@ import { afterEach } from 'vitest';
 
 import { ASYNC_UTIL_TIMEOUT_MS } from './timeouts';
 
+// `src/app/constants.ts` throws at module load on a missing VITE_APP_* value,
+// and Vite loads no .env file for mode "test", so without a baseline every
+// suite that transitively imports it (anything touching app/auth) fails on
+// import. Unroutable junk: a test that means to reach the network has to say
+// so. The suites exercising the rule stub their own env
+// (test/app/constants.test.ts).
+const BASELINE_ENV: Record<string, string> = {
+  VITE_APP_WS_URL: 'ws://test.invalid/ws',
+  VITE_APP_API_URL: 'http://test.invalid/api',
+  VITE_APP_COGNITO_USER_POOL_ID: 'test-region_testpool',
+  VITE_APP_COGNITO_CLIENT_ID: 'test-client-id',
+  VITE_APP_COGNITO_DOMAIN: 'auth.test.invalid',
+  VITE_APP_COGNITO_TIMER_GROUP: 'timeradmin',
+};
+
+for (const [key, value] of Object.entries(BASELINE_ENV)) {
+  process.env[key] ??= value;
+}
+
 // Testing Library polices `findBy`/`waitFor` with its own ceiling, so raise it
 // here for every suite rather than per call site (see ./timeouts.ts).
 configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS });

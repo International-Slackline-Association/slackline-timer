@@ -198,7 +198,8 @@ room key, but the data plane only accepts `compId`s that exist as a
 Both the HTTP API and the WS `$connect` are guarded by a single small custom
 Lambda authorizer (reusing the relay's `aws-jwt-verify` code) accepting:
 
-1. **Cognito IdToken** (operator) — verified against pool `eu-central-1_iGaYGKeyJ`.
+1. **Cognito IdToken** (operator) — verified against the configured ISA pool
+   (`COGNITO_USER_POOL_ID`, ADR 0048).
    Carries `timeradmin` in `cognito:groups` → role `admin` (global read+write,
    `compId: '*'`). Any other valid ISA login → role `manager` (read+write scoped
    to the competitions granted to them — the per-competition ACL, ADR 0045). The

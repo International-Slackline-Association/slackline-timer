@@ -34,6 +34,7 @@ import {
   describeClient,
   evaluate,
   parseArgs,
+  requireConfig,
   runAws,
   runMain,
 } from './appClientPolicy.mjs';
@@ -46,9 +47,9 @@ const HELP = `harden the timer Cognito app client (read-only, least privilege)
   --write-attributes a,b     also narrow the writable attributes to this explicit
                              set (default: leave unchanged; the removed admin
                              scope is the real write-lock — empty == all-writable)
-  --client-id <id>           app client id   (default: the timer SPA client)
-  --pool-id <id>             user pool id     (default: shared ISA pool)
-  --region <r>               AWS region       (default: eu-central-1)
+  --client-id <id>           app client id    (default: $COGNITO_CLIENT_ID)
+  --pool-id <id>             user pool id     (default: $COGNITO_USER_POOL_ID)
+  --region <r>               AWS region       (default: $COGNITO_REGION)
   --profile <p>              AWS CLI profile  (default: $AWS_PROFILE)
   --help`;
 
@@ -65,6 +66,7 @@ async function main() {
     console.log(HELP);
     return;
   }
+  requireConfig(opts, 'poolId', 'clientId', 'region');
 
   console.log(`== harden app client ${opts.clientId} (pool ${opts.poolId}, ${opts.region}) ==`);
   console.log(`   profile=${opts.profile}  mode=${opts.apply ? 'APPLY' : 'dry-run'}\n`);

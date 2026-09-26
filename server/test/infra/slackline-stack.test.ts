@@ -2,16 +2,28 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 
-import { SlacklineTimerV1Stack } from '../../infra/slackline-stack';
+import { createApp } from '../../infra/app';
+import { CognitoConfig, SlacklineTimerV1Stack } from '../../infra/slackline-stack';
 
 // Machine-checked documentation of what the stack synthesizes: the invariants
 // asserted here (retention, public access, grants, authorizer cache keys, the
 // route surface) are the ones a refactor must not move. Synthesized once —
 // the bundling-stacks context short-circuits NodejsFunction's esbuild step, so
 // this runs on the template alone, no assets built.
+// Cognito is deployment config, not source (see infra/app.ts) — fixture values
+// keep synth hermetic and let the assertions below prove the props reach the
+// Lambda env, which committed literals could not.
+const COGNITO: CognitoConfig = {
+  userPoolId: 'eu-central-1_testpool',
+  clientId: 'test-client-id',
+  timerGroup: 'timeradmin',
+  region: 'eu-central-1',
+};
+
 const app = new App({ context: { 'aws:cdk:bundling-stacks': [] } });
 const stack = new SlacklineTimerV1Stack(app, 'slackline-timer-v1', {
   stage: 'prod',
+  cognito: COGNITO,
   env: { region: 'eu-central-2', account: '111111111111' },
 });
 const template = Template.fromStack(stack);
@@ -461,5 +473,96 @@ describe('outputs', () => {
     template.hasOutput('HttpApiUrl', Match.anyValue());
     template.hasOutput('WebsocketUrl', Match.anyValue());
     template.hasOutput('PhotoCdnDomain', Match.anyValue());
+  });
+});
+
+// Assert-the-rule (same shape as the ADR 0025 "no secret values in env" test
+// above): the Cognito pool identity enters through stack props, and a missing
+// key must stop `cdk synth` rather than fall back to a literal. A re-hardcoded
+// pool id would still satisfy the value assertions, so the fail-fast half is
+// what pins the rule — keep both.
+describe('Cognito identity is deployment config, never a committed literal', () => {
+  const CONTEXT_KEYS = {
+    COGNITO_USER_POOL_ID: 'cognitoUserPoolId',
+    COGNITO_CLIENT_ID: 'cognitoClientId',
+    COGNITO_TIMER_GROUP: 'cognitoTimerGroup',
+    COGNITO_REGION: 'cognitoRegion',
+  } as const;
+  type CognitoEnvKey = keyof typeof CONTEXT_KEYS;
+  const ENV_KEYS = Object.keys(CONTEXT_KEYS) as CognitoEnvKey[];
+
+  const FIXTURES: Record<CognitoEnvKey, string> = {
+    COGNITO_USER_POOL_ID: COGNITO.userPoolId,
+    COGNITO_CLIENT_ID: COGNITO.clientId,
+    COGNITO_TIMER_GROUP: COGNITO.timerGroup,
+    COGNITO_REGION: COGNITO.region,
+  };
+
+  it('injects the resolved values into every function env under the frozen key names', () => {
+    const fns = template.findResources('AWS::Lambda::Function');
+    expect(Object.keys(fns)).toHaveLength(LAMBDA_COUNT);
+    for (const [id, fn] of Object.entries(fns)) {
+      const vars = fn.Properties.Environment.Variables as Record<string, string>;
+      for (const key of ENV_KEYS) {
+        expect(vars[key], `${id}.${key}`).toBe(FIXTURES[key]);
+      }
+    }
+  });
+
+  // COGNITO_DOMAIN is the web build's business (the hosted-UI redirect);
+  // carrying it here would grow the Lambda contract for nothing.
+  it('does not leak the web-only hosted-UI domain into the Lambda contract', () => {
+    for (const [id, fn] of Object.entries(template.findResources('AWS::Lambda::Function'))) {
+      expect(fn.Properties.Environment.Variables, id).not.toHaveProperty('COGNITO_DOMAIN');
+    }
+  });
+
+  it('scopes the managers ListUsers grant to the resolved pool, in the deploy account', () => {
+    expect(fnPolicy('ManagersFunction')).toContain(
+      `arn:aws:cognito-idp:${COGNITO.region}:111111111111:userpool/${COGNITO.userPoolId}`,
+    );
+  });
+
+  // The real app (createApp), not a hand-built stack: the resolution lives in
+  // infra/app.ts. app.ts loads `.env.deploy` at import on an operator machine,
+  // so each case deletes the env keys rather than assume they are unset.
+  const synthApp = (context: Record<string, unknown>) =>
+    createApp({
+      'aws:cdk:bundling-stacks': [],
+      billingAlertEmail: 'billing-alerts@example.org',
+      ...context,
+    });
+
+  const cognitoContext = (omit?: CognitoEnvKey) =>
+    Object.fromEntries(
+      ENV_KEYS.filter((k) => k !== omit).map((k) => [CONTEXT_KEYS[k], FIXTURES[k]]),
+    );
+
+  it.each(ENV_KEYS)('fails synth with an actionable error when %s is absent', (missing) => {
+    const saved = ENV_KEYS.map((k) => [k, process.env[k]] as const);
+    for (const k of ENV_KEYS) delete process.env[k];
+    try {
+      expect(() => synthApp(cognitoContext(missing))).toThrow(
+        new RegExp(`Missing required deployment config "${missing}"[\\s\\S]*\\.env\\.deploy`),
+      );
+      expect(() => synthApp(cognitoContext(missing))).toThrow(
+        new RegExp(`-c ${CONTEXT_KEYS[missing]}=`),
+      );
+    } finally {
+      for (const [k, v] of saved) if (v !== undefined) process.env[k] = v;
+    }
+  });
+
+  it('accepts the values from CDK context, and from the environment as the fallback', () => {
+    const saved = ENV_KEYS.map((k) => [k, process.env[k]] as const);
+    for (const k of ENV_KEYS) delete process.env[k];
+    try {
+      expect(() => synthApp(cognitoContext())).not.toThrow();
+      for (const k of ENV_KEYS) process.env[k] = FIXTURES[k];
+      expect(() => synthApp({})).not.toThrow();
+    } finally {
+      for (const k of ENV_KEYS) delete process.env[k];
+      for (const [k, v] of saved) if (v !== undefined) process.env[k] = v;
+    }
   });
 });
