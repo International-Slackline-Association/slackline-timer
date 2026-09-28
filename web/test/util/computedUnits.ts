@@ -49,13 +49,12 @@ export const emPx = (authored: string, el: Element): number =>
  * The inner global jsdom resolves viewport units against. jsdom 30 keeps it
  * SEPARATE from the `window` a test sees, so assigning `window.innerWidth` moves
  * the helpers above but leaves `getComputedStyle` on the hard-coded 1024×768.
- * It is only reachable through a node's impl — the one seam jsdom leaves open.
+ * jsdom exposes it as the window's `_globalObject` (30.1 dropped the node-impl
+ * symbol this used to be reached through).
  */
 const viewportTargets = (): object[] => {
-  const node = document.documentElement as unknown as Record<symbol, unknown>;
-  const implKey = Object.getOwnPropertySymbols(node).find((s) => String(s) === 'Symbol(impl)');
-  const impl = implKey ? (node[implKey] as { _globalObject?: object }) : undefined;
-  return [window, impl?._globalObject].filter((target): target is object => target != null);
+  const inner = (window as unknown as { _globalObject?: object })._globalObject;
+  return [window, inner].filter((target): target is object => target != null);
 };
 
 /**
