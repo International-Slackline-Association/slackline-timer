@@ -14,6 +14,8 @@
  * 1024×768 keeps these correct if the jsdom viewport is ever configured.
  */
 
+import { createRequire } from 'node:module';
+
 /** The numeric px of a computed value, e.g. `'441.856px'` -> `441.856`. */
 export const px = (computed: string): number => parseFloat(computed);
 
@@ -49,12 +51,16 @@ export const emPx = (authored: string, el: Element): number =>
  * The inner global jsdom resolves viewport units against. jsdom 30 keeps it
  * SEPARATE from the `window` a test sees, so assigning `window.innerWidth` moves
  * the helpers above but leaves `getComputedStyle` on the hard-coded 1024×768.
- * It is only reachable through a node's impl — the one seam jsdom leaves open.
+ * It is only reachable through a node's impl. Since 30.1 that link is a
+ * `#private` field, readable only via jsdom's own `implForWrapper` — which must
+ * be the module instance the environment loaded, hence the CJS `require`.
  */
+const { implForWrapper } = createRequire(import.meta.url)('jsdom/lib/generated/idl/utils.js') as {
+  implForWrapper: (wrapper: unknown) => { _globalObject?: object } | null;
+};
+
 const viewportTargets = (): object[] => {
-  const node = document.documentElement as unknown as Record<symbol, unknown>;
-  const implKey = Object.getOwnPropertySymbols(node).find((s) => String(s) === 'Symbol(impl)');
-  const impl = implKey ? (node[implKey] as { _globalObject?: object }) : undefined;
+  const impl = implForWrapper(document.documentElement);
   return [window, impl?._globalObject].filter((target): target is object => target != null);
 };
 
