@@ -48,7 +48,6 @@
     "typescript": "7.0.2",
     "vite": "8.3.1",
     "vite-plugin-checker": "0.14.5",
-    "vite-tsconfig-paths": "6.1.1",
     "vitest": "5.0.1",
     "world-countries": "5.1.0"
   },

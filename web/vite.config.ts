@@ -1,7 +1,6 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 import checker from 'vite-plugin-checker';
-import tsconfigPaths from 'vite-tsconfig-paths';
 
 // src/app/constants.ts reads exactly these and has no fallbacks (ADR 0048), so
 // a build missing one only fails once a browser has been served the bundle.
@@ -42,6 +41,7 @@ export default defineConfig(({ command, mode }) => {
 
   return {
     assetsInclude: ['**/*.mp3'],
+    resolve: { tsconfigPaths: true },
     server: {
       fs: {
         // `app/manual` bundles the published user manual straight out of
@@ -53,7 +53,6 @@ export default defineConfig(({ command, mode }) => {
     },
     plugins: [
       react(),
-      tsconfigPaths(),
       checker({
         overlay: true,
         typescript: true,
