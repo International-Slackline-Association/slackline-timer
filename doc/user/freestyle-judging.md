@@ -38,15 +38,24 @@ or loses anything. The **state plate** stays pinned above the tabs no matter
 which one is open, so the press you are about to make is always on screen.
 Warm-up sits on the **Setup** tab, alongside the handset card.
 
+The loop between two athletes keeps each step on one tab. Once the run is
+over, **Score** holds the panel, its **Save** and the reset that re-arms the
+clock for the next athlete or match, all above the fold. Press **Save**, then
+that reset, and the board moves you to **Selection**. Pick the next athlete
+(or match) there and it moves on to **Run** — in a Battle once both Athlete 1
+and Athlete 2 are picked, so choosing Athlete 1 alone keeps you on
+**Selection**. If you save a score from **Score** without the clock ever having
+run, the board leaves you on **Score** so you can see it saved.
+
 ## 1 · Setup
 
 **Quali or Battle** is an explicit choice, and it is the _only_ format switch
 you need: picking a mode sets the board shape _and_ the championship timings.
 
-| Mode       | Board                   | Run budget | Warm-up |
-| ---------- | ----------------------- | ---------- | ------- |
-| **Quali**  | One athlete, one clock  | 2:00       | 5:00    |
-| **Battle** | Two players, two clocks | 2:30       | 7:00    |
+| Mode       | Board                    | Run budget | Warm-up |
+| ---------- | ------------------------ | ---------- | ------- |
+| **Quali**  | One athlete, one clock   | 2:00       | 5:00    |
+| **Battle** | Two athletes, two clocks | 2:30       | 7:00    |
 
 Both budgets can be overridden in this section if the event runs a different
 format — type the seconds into **Run (s)** and press **Set both lanes to n s**
@@ -58,15 +67,15 @@ comes back the way you left it. The mode you are in is on the header line at the
 top of the board — **QUALI** or **BATTLE**, beside the competition name — so you
 can check the format without scrolling back to this section.
 
-**Mode** and **Set both lanes** re-arm both players' clocks, so the board locks
+**Mode** and **Set both lanes** re-arm both athletes' clocks, so the board locks
 them whenever it is holding something you would lose: a run, a break, a
 changeover, a warm-up or best-trick try under way, an armed best-trick series,
-or a player who has already been up — whether their clock is still holding time
+or an athlete who has already been up — whether their clock is still holding time
 from a fall or has run all the way down. That last case is the one the board
 rests in between athletes: a spent clock reads 00:00 and is holding nothing, but
 it is the only record on the board that the turn happened, so it locks these two
 controls just as a held clock does. **Set both lanes** never reaches a clock
-that has been used, only the ones still untouched — **Reset** each player who
+that has been used, only the ones still untouched — **Reset** each athlete who
 has been up and both controls come back.
 
 A locked control prints its blocker right under it — _why: locked while Athlete 1
@@ -75,7 +84,7 @@ never have to hover to read it. **Run (s)** and **Warm-up (s)** do the same on
 their own help line, and both lock for anything that is _running_ — not only
 their own clock: _locked while Athlete 1 runs_, _locked while Athlete 1 is on
 break_, _locked during the changeover_, _locked while a try is open_, _locked
-during the warm-up_. A player merely holding time does not lock them — there
+during the warm-up_. An athlete merely holding time does not lock them — there
 is nothing ticking to disturb. Clear what it names and the control comes back. Neither format control
 ever asks a yes/no question: if you can press it, nothing is lost.
 
@@ -150,7 +159,7 @@ either way.
 
 Pick the **Round** and **Gender**, then who is competing:
 
-- In **Battle**, pick a **Match** — it fills both players and sets the match
+- In **Battle**, pick a **Match** — it fills both athlete slots and sets the match
   winner once both have scored.
 - In **Quali**, pick the single athlete.
 
@@ -159,7 +168,7 @@ In **Quali** the whole selection is one row — **Round**, **Gender**,
 assign.
 
 In **Battle** the row carries **Round**, **Gender**, the **Match**, and then the
-three assignment controls — **Athlete 1**, **Swap players**, **Athlete 2**.
+three assignment controls — **Athlete 1**, **Swap athletes**, **Athlete 2**.
 
 Those three stay together at every screen size: they wrap as one group, so on a
 wide desk they read left-to-right and on a narrow screen they stack in the same
@@ -181,28 +190,28 @@ marks which of the two goes next.
 The round list follows the mode: quali offers _Qualification_ (plus _Test_),
 battle offers _Quarter-finals_, _Semi-finals_, _Small final_ and _Final_.
 
-**Swap players** puts the two athletes on the other side of the board in one
+**Swap athletes** puts the two athletes on the other side of the board in one
 press, for a match that filled them the wrong way round; whatever is already
 typed into a score panel travels with its athlete. The clocks stay where they
 are — only the names on them move. It becomes available only once **both**
-player slots are filled; if one side is still _— not recording —_, clear or
+athlete slots are filled; if one side is still _— not recording —_, clear or
 pick that side directly instead of using the swap. Once both are picked, the
 board offers the swap only **before the pair goes on**: from the first Start
-until both players are Reset
+until both athletes are Reset
 it is locked, and prints why right under it — _why: locked while Athlete 1 runs_,
 _locked during the changeover_, _locked once Athlete 1 ran — Reset Athlete 1
 first_. A running **warm-up** is the one thing that does not take it away: that
 is the window you set the next pair up in.
 
-**Nobody selected is a valid setup.** A player left on _— not recording —_
-saves nothing, and the clocks still run: that is the right way to time a
-practice run. The board says so rather than letting you find out at **Save** —
-the header carries a red **Not recording (no athletes selected)** chip until at
-least one player has an athlete, and the plate's bottom line reads _select an
-athlete_.
+**Nobody selected is a valid setup.** An athlete slot left on
+_— not recording —_ saves nothing, and the clocks still run: that is the right
+way to time a practice run. The board says so rather than letting you find out
+at **Save** — the header carries a red **Not recording (no athletes selected)**
+chip until **Athlete 1** or **Athlete 2** has someone picked, and the plate's
+bottom line reads _select an athlete_.
 
 Changing the **Round** or the **Gender** while a match is selected asks first,
-and the question names what the change clears: the selected match, both player
+and the question names what the change clears: the selected match, both
 athletes and their scores. **Keep match** leaves all three as they are. Neither
 answer touches the clocks. A buzzer press while it stands answers **Keep match**,
 and the **Handsets** card names it for the change you asked for — `closed the
@@ -213,14 +222,14 @@ Change gender dialog (Keep match)`.
 
 ## 4 · Run
 
-Each player has a countdown clock with **Start / Stop / Reset**, plus one more
-control that sits in the same place in both modes: **Take break (n left)** in
-quali, **End turn** in battle. **End turn** is how a fall ends a turn — it stops
+Each athlete card — **Athlete 1**, **Athlete 2** — has a countdown clock with
+**Start / Stop / Reset**, plus one more control that sits in the same place in
+both modes: **Take break (n left)** in quali, **End turn** in battle. **End turn** is how a fall ends a turn — it stops
 the clock and hands over, leaving the rest of the budget on the card. One green
 handset button drives whichever of the two the mode is showing.
 
-**Reset** re-arms that player's clock to the budget it was last set to, and only
-that player's; it sits at the far end of the card's bottom row, behind a dashed
+**Reset** re-arms that athlete's clock to the budget it was last set to, and only
+that athlete's; it sits at the far end of the card's bottom row, behind a dashed
 line and across the card from **Stop**, so a hand reaching for Stop never lands
 on it.
 
@@ -229,14 +238,14 @@ on it.
   02:14 held_ once a fall has ended the turn, _FINISHED_ (and _TIME_ under the
   clock) once the budget is spent. The frame around the clock carries the same
   state — thick while it counts, broken once a turn has been taken off it — so
-  a player who has already gone never looks like one still waiting.
-- **The lit Start is the next one** — only the player the next ADVANCE press
+  an athlete who has already gone never looks like one still waiting.
+- **The lit Start is the next one** — only the athlete the next ADVANCE press
   would start has a filled green **Start**; the other is outlined. One green
   button on the board, and it is always the buzzer's.
 
 - **Reset asks first whenever a turn would have to be re-timed** — while the
   clock runs, on a break, or after a fall (the clock is holding the rest of the
-  budget). The question is headed for the player it stands over — **Reset Athlete
+  budget). The question is headed for the athlete it stands over — **Reset Athlete
   2?**, answered by **Keep timing** or **Reset Athlete 2** — and names what is on
   that clock and what a reset would re-arm it to. A clock that is untouched, or already down to _FINISHED_, has nothing
   left to lose and re-arms on the press — that is the press that clears the
@@ -251,34 +260,36 @@ on it.
 - **Breaks** — in quali an athlete may take up to **2 breaks** during their run.
   The board tracks the allowance and shows what is left.
 - **Changeover** — in a battle, ending a turn starts a count-up clock in the
-  **Changeover** gutter between the two players, so the handover is visible and
-  timed. The gutter is always there — it reads — while no changeover is running,
-  so the two players' cards never shift sideways. Whenever no clock is running
-  it also names who is up (_Next: Bianchi_) — the player the next ADVANCE press
+  **Changeover** gutter between the two athlete cards, so the handover is
+  visible and timed. The gutter is always there — it reads — while no changeover is running,
+  so the two athlete cards never shift sideways. Whenever no clock is running
+  it also names who is up (_Next: Bianchi_) — the athlete the next ADVANCE press
   would start. Once the opponent's budget is spent there is no handover left to
-  time: the same player comes back out, so the gutter counts the same gap under
+  time: the same athlete comes back out, so the gutter counts the same gap under
   the caption **Pause** instead, and the plate says _AGAIN_.
-- **One player at a time** — while one player's clock runs the board locks
+- **One athlete at a time** — while one athlete's clock runs the board locks
   everything that could disturb it, buttons and handset keys alike: the other
-  player's **Start**, **Stop**, **Reset** and **End turn**, **Begin best
+  athlete's **Start**, **Stop**, **Reset** and **End turn**, **Begin best
   trick**, and **Mode** / **Set both lanes** over in Setup. A key that is greyed
-  out on screen does nothing when you press it. The running player keeps
+  out on screen does nothing when you press it. The running athlete keeps
   **Stop**, **End turn** and **Reset** (Reset asks first).
 - **A locked control says why** — the blocker is printed on the board, not just
-  on hover: under the Start/Stop pair on each player card, and under each locked
+  on hover: under the Start/Stop pair on each athlete card, and under each locked
   control in **Setup**. Hovering names it too, in the same words everywhere:
   _locked while Athlete 2 runs_, _budget spent — Reset re-arms 02:30_, _no breaks
   left_, _locked during best trick — Leave best trick first_. Clear what it
   names and the control comes back.
-- **The state plate** — the wide coloured plate above the players is the board's
-  headline. Its left half says where the board is and carries every live number:
-  the clock, the breaks still allowed, and the run a paused player is holding
-  (_RUNNING · P1 BIANCHI · 02:14 left_, _BREAK · 00:22 · 1 left · 01:50 held_).
+- **The state plate** — the wide coloured plate above the athlete cards is the
+  board's headline. It shortens the two slots to **P1** and **P2** — Athlete 1
+  and Athlete 2 — followed by the athlete's name once one is picked
+  (_P1 BIANCHI_). Its left half says where the board is and carries every live
+  number: the clock, the breaks still allowed, and the run a paused athlete is
+  holding (_RUNNING · P1 BIANCHI · 02:14 left_, _BREAK · 00:22 · 1 left · 01:50 held_).
   Its right half says what the next ADVANCE press will do (_STOP · Athlete 1 ·
   C. Bianchi_), with the press after that on the line below — it names the press
   and never repeats a number the left half is already counting. That line
   answers in every state, the end of a match included: it says _again_ when the
-  same player takes another turn because their opponent's budget is spent, and
+  same athlete takes another turn because their opponent's budget is spent, and
   it warns you a press ahead when the one after next will have nothing left to
   do (_then: nothing to advance — Begin best trick or Reset a lane_). What it
   promises is what it then says: once that turn ends the left half reads
@@ -287,13 +298,13 @@ on it.
   colour is the colour of that next press: green to start something, red to end
   something, amber for a break, grey when there is nothing left to advance.
   Because that colour follows the press and not the board, a narrow stripe down
-  the plate's left edge carries the board's own state in the player cards'
+  the plate's left edge carries the board's own state in the athlete cards'
   colours — teal while someone is running, amber on a break or between turns,
   red once a budget is spent, grey when nothing is live. It is always in the
   same place, so one glance says whether the board is live whatever the next
   press happens to be. Its
   bottom line carries everything outside that cycle: the warm-up while it runs,
-  where each player's save stands once there is nothing left to advance, and
+  where each athlete's save stands once there is nothing left to advance, and
   the three warnings — _select an athlete_, the link (_preview not receiving_,
   or _not connected_ on a board that never reached the relay), and _audio
   locked_.
@@ -307,7 +318,7 @@ on it.
   alarm, greys the plate for a second and names what to do instead — and changes
   nothing. Stop and Reset stay deliberate manual acts, so a
   press can never end a run by accident.
-- **A locked handset key answers the same way** — press a player's red, yellow,
+- **A locked handset key answers the same way** — press an athlete's red, yellow,
   green or blue key, or the orange try key, while the board has it locked and
   you get that same pulsing alarm and a second of grey plate, carrying that key's
   own reason (_locked while Athlete 1 runs_, _locked during best trick — Leave
@@ -357,8 +368,8 @@ on it.
   [Troubleshooting](./troubleshooting.md#no-sound-audio-locked)). The fourth,
   **Sound on this panel**, is the horn switch above — click it to hand the
   tones to the other board at the desk.
-- **Save confirmations appear top right**, clear of the clocks and the player
-  buttons, and fade on their own.
+- **Save confirmations appear top right**, clear of the clocks and the athlete
+  cards, and fade on their own.
 
 ## 5 · Best trick (battles only)
 
@@ -374,13 +385,13 @@ every state: which attempt is next on the left (_BEST TRICK · P1 NEXT · try 2 
 3_), and who the next press acts on — nothing more — on the right (_START TRY ·
 C. Bianchi_).
 
-The panel reads like a player card. Each side shows its tally against the cap,
+The panel reads like an athlete card. Each side shows its tally against the cap,
 and **ON THE LINE** marks the athlete the board is waiting for. Above the try
 clock a word says where the series is — _NEXT · name_ between attempts,
 _TRY OPEN · name_ while a window runs, _SERIES COMPLETE_ once every try is spent
-— and the clock's frame lights and thickens while it counts, exactly like a
-player clock. A locked **Start try** prints its reason underneath, in the same
-words the player cards use.
+— and the clock's frame lights and thickens while it counts, exactly like an
+athlete card's clock. A locked **Start try** prints its reason underneath, in the same
+words the athlete cards use.
 
 While a window is open, **End try** is the only lit button on the panel: the
 press you need is the one you cannot miss.
@@ -397,7 +408,7 @@ in yet, both go through on the press.
 Best trick comes _after_ both turns, and the board enforces that:
 
 - **Begin best trick** is locked while either run clock is still going.
-- Once the series is armed, the whole run board is locked — both players'
+- Once the series is armed, the whole run board is locked — both athletes'
   **Start / Stop / End turn** _and_ **Reset**, buttons and handset keys alike,
   and **Reset lanes for the next match** at the foot of the score panel with
   them — so no press can restart or re-arm a turn behind the tries. **Mode** and
@@ -406,7 +417,7 @@ Best trick comes _after_ both turns, and the board enforces that:
   reads _locked during best trick — Leave best trick first_, and a locked handset
   key says the same in the **Handsets** card. **Leave best trick** unlocks the
   run board again — it asks first once a try has been taken. The two Setup
-  controls come back a step later: both players have been up by now, so they stay
+  controls come back a step later: both athletes have been up by now, so they stay
   locked on _that_ until the clocks are cleared, and **Reset lanes for the next
   match** is the one press that clears them.
 - While a try window is open the try controls are locked too — number of tries,
@@ -416,7 +427,7 @@ Best trick comes _after_ both turns, and the board enforces that:
 
 ## 6 · Score entry
 
-Each player gets the judged components, in the order of the table below and each
+Each athlete gets the judged components, in the order of the table below and each
 one showing its maximum (`/ 40`) — the control penalty is the one field with no
 ceiling, and reads _uncapped_ instead. Enter the numbers; the **Overall** is
 worked out for you as you type.
@@ -436,42 +447,48 @@ Notes:
 - **Best trick and control penalty do not exist in qualification.** The board
   hides both fields there, and stores them as zero.
 - **Over the maximum?** The field turns red and **Save** is blocked, so a typo
-  (400 instead of 40) can never flip a match.
-- **Overall can be overridden.** Type into the Overall box to set it by hand;
-  the field then reads _overridden_ instead of _computed_, and it stays
-  overridden while you keep editing the components. Press **use computed** next
-  to the box — or simply empty it — to hand it back to the components. Picking a
-  different athlete for that player starts a fresh, computed Overall.
+  (400 instead of 40) can never flip a match. The status line under the panel
+  says which field and what its maximum is — _Difficulty: Max 40_.
+- **Overall can be overridden.** Type into the Overall box to set it by hand.
+  The box then carries a **use computed** button, and it stays overridden while
+  you keep editing the components. Press **use computed** — or simply empty the
+  box — to hand it back to the components. Picking a different athlete for that
+  slot starts a fresh, computed Overall.
 - **The Overall has a ceiling too**: 100 in Quali, 120 in a Battle (the
   components' maxima added up). Above it the field turns red and **Save** is
   blocked — and a value over the ceiling is refused wherever it is entered, so a
   later correction cannot slip one past either. There is no floor — in a Battle a
   heavy control penalty may legitimately take the Overall below zero: type the
   minus first, the box keeps exactly what you type, and **Save** stays blocked
-  (the box reads _Enter a number_) until it is a number again.
-- **DNF** records a did-not-finish for that player.
+  (the status line reads _Overall: Enter a number_) until it is a number again.
+- **DNF** records a did-not-finish for that athlete.
 
-Press **Save** per player, or just press **Enter** — typing the numbers and
-pressing Enter records that player without your hand leaving the keyboard. Tab
+Press **Save** per athlete, or just press **Enter** — typing the numbers and
+pressing Enter records that athlete without your hand leaving the keyboard.
+**Save** stays grey, and Enter does nothing, until you have typed a number, so a
+stray Enter on an empty panel can never record a 0 and flip a match. An athlete
+who did not perform is a **DNF**, not a 0; a judged 0 is typed into the Overall
+box. Tab
 walks the components in order and steps from the Overall straight to **Save**;
 **use computed** sits inside the Overall box and is a click, not a stop on that
 run. In
 **Quali** only Athlete 1 records — one athlete at a time. In **Battle** both
-players score, and the winner is set once both scores are stored — a save that
+athletes score, and the winner is set once both scores are stored — a save that
 fails decides nothing until you retry it.
 
 ### Where each save stands
 
-Every player panel carries a status line that is always there, so you never have
+Every score panel carries a status line that is always there, so you never have
 to catch a message as it disappears:
 
-| It reads                        | It means                                            |
-| ------------------------------- | --------------------------------------------------- |
-| **not entered**                 | nothing has been saved for this player yet          |
-| **SAVING…**                     | the save is on its way to the server                |
-| **SAVED 26.00** / **SAVED DNF** | stored — that is the value this player is ranked on |
-| **SAVED 26.00 · _Jane Doe_**    | stored, but under the athlete named — see below     |
-| **NOT SAVED · _reason_**        | the save failed; the reason is what the server said |
+| It reads                        | It means                                                    |
+| ------------------------------- | ----------------------------------------------------------- |
+| **not entered**                 | nothing saved yet; **Save** is grey until you type a number |
+| _Difficulty: Max 40_ (red)      | **Save** is blocked until that field is fixed               |
+| **SAVING…**                     | the save is on its way to the server                        |
+| **SAVED 26.00** / **SAVED DNF** | stored — that is the value this athlete is ranked on        |
+| **SAVED 26.00 · _Jane Doe_**    | stored, but under the athlete named — see below             |
+| **NOT SAVED · _reason_**        | the save failed; the reason is what the server said         |
 
 A failed save stays on the panel until you deal with it. Your numbers are kept
 exactly as you typed them, the clocks are unaffected, and **Retry save** sends
@@ -479,11 +496,11 @@ them again (a failed DNF retries as a DNF). Nothing else on the board clears it.
 If it keeps failing, see
 [Troubleshooting](./troubleshooting.md#times-or-scores-are-not-saving).
 
-A saved player locks on the value it recorded. The fields stay fully readable —
+A saved panel locks on the value it recorded. The fields stay fully readable —
 they simply cannot be typed into any more, and each one carries a padlock.
 **Save** and **DNF** stay where they are, greyed out, so nothing below them
 moves when a save lands. The panel unlocks when you pick a different athlete for
-that player, which is how you move on to the next pair. There is no re-save from
+that slot, which is how you move on to the next pair. There is no re-save from
 the board: corrections after the fact are made on the **Scores** page, which the
 panel links to (it opens in a new tab, so the board keeps timing). The link
 takes its own athlete and round with it, so the page opens already filtered to
@@ -500,6 +517,13 @@ worked out again from where the scores now stand. Leave the button alone if the
 change of athlete was only the next one up — judge them and save as usual, and
 the earlier row stays exactly where it is. It is a live-board shortcut for the
 score you have just entered; anything older is a job for the **Scores** page.
+The button is only offered while the new athlete's panel is blank, because the
+move would replace whatever you had typed there. Type a number and it gives
+way to the Scores-page line, which opens on the stored row. Clear the fields
+and the button comes back. The board never offers a move onto an athlete who
+already has a score for the round. Their stored score comes back locked
+instead (below), because each athlete has one score per round. To replace a
+judged result, use the **Scores** page and edit the row there.
 
 Pick an athlete who already has a score for the round you are in and it comes
 straight back: the five fields fill with what was stored and the panel arrives
@@ -517,13 +541,19 @@ both scores are in it names the save it is waiting for. If storing the winner on
 the match fails, that line carries its own **Retry** — the scores themselves are
 already saved.
 
-Once both players are saved, **Reset lanes for the next match** re-arms both
-countdowns in one press. After two full turns there is nothing to lose, so it
-does exactly that; only a player still holding time on the clock makes it ask
+Once both athletes are saved, **Reset lanes for the next match** re-arms both
+countdowns in one press. On a wide **Score** tab it stands beside the two
+panels, under the winner line. In the narrow score column it sits below them. After two full turns there is nothing to lose, so it
+does exactly that; only an athlete still holding time on the clock makes it ask
 first, and the question names what each of them holds in the same words that
-player's own **Reset** uses. Saved scores are untouched. It is locked whenever
-the two per-player **Reset** buttons are — while a turn is running, and through
+athlete's own **Reset** uses. Saved scores are untouched. It is locked whenever
+the two per-athlete **Reset** buttons are — while a turn is running, and through
 best trick until you leave it — and says so under the button.
+
+In **Quali** the same reset is **Reset lane for the next athlete**, under the
+panel once Athlete 1 is saved. It re-arms the one clock, and asks first only
+while that clock still holds time, the way the lane's own **Reset** does. The
+board then moves to **Selection** for the next athlete.
 
 ## Two panels on one board
 
@@ -537,13 +567,13 @@ neither is the master.
 - While it waits, the big plate reads **AWAITING BOARD STATE…** instead of
   claiming a board it has not seen yet. Nothing is locked in the meantime: Start,
   Stop and ADVANCE all work as usual.
-- When the other panel starts or stops a clock, that player's card is marked
+- When the other panel starts or stops a clock, that athlete's card is marked
   **by other panel** for two seconds, and a selection it changes marks the
   selection row **changed by another panel** — a board that moves on its own
   always says who moved it.
 - A **Mode** switch on one panel carries the whole format to the other: it flips
   to the same board, its **Run (s)** and **Warm-up (s)** boxes take the new
-  format's seconds, and both players' clocks re-arm to the new run budget. Only
+  format's seconds, and both athletes' clocks re-arm to the new run budget. Only
   the panel that pressed it re-arms the board, so the two never hand each other
   different budgets.
 - The best-trick series is shared the same way: arming it raises the panel on
@@ -552,12 +582,12 @@ neither is the master.
   panel follows it rather than counting it again. Moving on to another match
   ends the series on both panels, not only on the one that picked it.
 - After a reload the board picks the turn order back up from the other panel:
-  the player who has not had their turn is still the one ADVANCE starts next.
+  the athlete who has not had their turn is still the one ADVANCE starts next.
 - The audience screens are not disturbed by a panel opening: a projector or
   stream already showing the match keeps it. Only a screen that has just been
   opened, or just reconnected, takes a fresh answer from the board.
 - A panel that joins late takes the **run budgets and the warm-up window the
-  board is already set to**, not the ones its own mode would pick. So a player
+  board is already set to**, not the ones its own mode would pick. So an athlete
   who has not been on the clock still reads _READY_ on the new panel rather than
   _TURN TAKEN_, a warm-up you already stopped part-way still reads
   **STOPPED · 04:59 LEFT** there rather than **ARMED**, **Mode** and **Set both

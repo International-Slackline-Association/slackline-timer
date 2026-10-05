@@ -19,15 +19,26 @@ timer and the results — no operator sits on them during the show.
    competition that works until the event ends.
 2. Set **Background** first (below) for your graphics pipeline.
 3. Copy the **live overlays first** (VS live, SVO, timer), then copy any
-   round-pinned links only when you intentionally need a fixed round.
+   round-pinned links only when you intentionally need a fixed round. A copied
+   link's label reads _— copied!_ for a few seconds; changing a picker rebuilds
+   the link and clears the mark, so copy it again. If the browser blocks the
+   clipboard (common when the app is opened over plain `http://` on a venue
+   network), the label reads _— copy failed, press Ctrl+C_ and the link is
+   selected for you: press **Ctrl+C** (**Cmd+C** on a Mac).
 
-The page mints a **Speed** set and a **Freestyle** set for the same competition.
+The page mints a **Speed** set and a **Freestyle** set for the same competition,
+side by side on a wide screen. Each set opens with its **Live** group (load once,
+follows the board), followed by its **Round-pinned** group.
 
-Round/gender selection is only for round-pinned overlays. Live overlays follow
-the control board selection and do not need per-round re-copying.
+The **Round** and **Gender** pickers build only the round-pinned links — plus
+the division the live VS link follows, which is why it takes the Gender. Live
+overlays follow the control board selection and do not need per-round
+re-copying.
 
 **Revoke all links** kills every outstanding link at once. Use it if a link
-leaks; generate a fresh one afterwards.
+leaks. The page asks first, because every source you pasted (OBS, H2R, a
+Companion button) stops working immediately; **Keep links** backs out. After
+revoking, generate a fresh set and paste it in again.
 
 > The links are read-only by design. Nothing behind them can change a result, so
 > they are safe to paste into a production rig, a Companion button or a shared
@@ -67,6 +78,11 @@ a name plate or a flag.
 If your keyer only offers green or blue, those are available too — but only use
 them if nothing green or blue is ever on screen.
 
+On a chroma-key background the see-through grey plates (empty slots, the VS stat
+bands) are drawn as solid grey instead: a keyed feed cannot carry
+transparency, and a solid band keys cleanly rather than half-disappearing.
+Transparent and H2R keep them see-through.
+
 ## What each overlay shows
 
 All of them are **blank when they have nothing to say**, so an overlay left up
@@ -79,24 +95,28 @@ rankings/bracket/standings overlays mainly between heats.
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | **Rankings**                    | The round's ranked field as name plates                                                                        |
 | **Rankings (top-4 profiles)**   | The same data as photo cards for the top four                                                                  |
-| **Final standings**             | The event's final order, each row tagged with the round its shown time/score came from                         |
+| **Final standings**             | The event's final order, each row tagged with its placing round; a result borrowed from qualification is grey  |
 | **Head-to-head (VS)**           | The two athletes of a match, for a fixed round                                                                 |
 | **Head-to-head (VS, live)**     | The same card, but following the board through every round — **set this one up once and never touch it again** |
 | **Match winner**                | The decided match's winner card                                                                                |
 | **Rounds summary** (speed)      | The best-of-3 tally, one card per won run                                                                      |
 | **SVO side 1 / side 2**         | A single-athlete card per lane, following whoever the board has selected                                       |
-| **Bracket (photos / names)**    | The playoff tree, in a photo or a name-plate layout                                                            |
+| **Bracket (photos / names)**    | The playoff tree, in a photo or a name-plate layout; a top-4 bracket shows semis onward                        |
 | **Score card** (freestyle)      | The judged table with the full component breakdown                                                             |
 | **Athlete display** (freestyle) | Full-screen athlete card(s): one hero in quali, split screen in battle                                         |
 
-There are also two **timer** pages — the speed race clock and the freestyle
-countdown — for putting the running clock on air.
+There are also two **timer** pages for putting the running clock on air:
+**Race timer (Speed)**, the speed race clock, and **Run clock (Freestyle)**, the
+freestyle run countdown. Both sit in their discipline's **Live** group. In a solo
+speed run (one lane with an athlete) the race timer shows only that lane's clock,
+in its own corner; with no athletes or a full pair it shows both.
 
 ### Prefer the "live" variants
 
 Several overlays come in a round-pinned and a **live** flavour. The live ones
 follow the control board's current selection, so you load them into OBS once at
 the start of the day and they stay right through quarters, semis and the final.
+The Overlays page lists them first, in each discipline's **Live** group.
 Round-pinned links are for when you deliberately want to show an earlier round.
 
 ## A workable OBS layout

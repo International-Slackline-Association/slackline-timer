@@ -34,9 +34,13 @@ for the current state on open, and a second operator's board (if any) answers.
 Working alone, the console falls back to its own copy of the run, kept on this
 computer: it comes back with the clocks where they were, the athletes and round
 you had chosen, and the line **recovered this panel's last run** in the header.
-So a reload during a run is survivable — the browser still warns you before it
-throws a live run away, and the recovery is this computer's own memory, so it
-only works in the same browser you were running on.
+This works even when the console cannot reach the server: the header reads
+**Not connected**, and a few seconds after the reload the run comes back all
+the same. Once the link comes up, a second operator's board (if any) still
+wins over this copy. So a reload during a run is survivable — the browser
+still warns you before it throws a live run away, and the recovery is this
+computer's own memory, so it only works in the same browser you were running
+on.
 
 ## Times or scores are not saving
 
@@ -47,15 +51,18 @@ panel, or a warning strip saying the time was not saved.
   screen is right.
 - **Read the reason** — it is what the server said — then send it again:
   **Retry save** on the Freestyle panel that failed (your numbers are kept
-  exactly as typed, and a failed DNF retries as a DNF). The status stays on the
-  panel until it succeeds, so there is no message to miss.
+  exactly as typed, and a failed DNF retries as a DNF), or **Retry save** under
+  the Speedline lane that failed (the same time, sent again). The status stays
+  on the panel or lane until it succeeds, so there is no message to miss.
 - If it will not go through, write the number down and enter it on the **Times**
-  page (or **Scores** for freestyle) once the connection is back.
+  page (or **Scores** for freestyle) once the connection is back. On the
+  Speedline console, **Times page ↗** beside the failed lane opens it in a new
+  tab, already filtered to that athlete and round.
 - If it keeps happening, check the machine's network. Everything else in the app
   will be struggling too.
 
 In a freestyle battle the winner is only decided once **both** scores are
-stored — a player still reading NOT SAVED decides nothing.
+stored — an athlete still reading NOT SAVED decides nothing.
 
 ## The buzzers do nothing
 
@@ -63,9 +70,10 @@ stored — a player still reading NOT SAVED decides nothing.
    game controllers until a button is pressed — nothing works before that.
 2. **Check the controller is selected.** The console has a controller picker;
    pick the buzzer dongle if more than one device is attached.
-3. **Press each button and read the mapping back.** On the freestyle board the
-   **Handsets** card names every press in its `last:` line, including a press
-   that was locked out; on the speed console, open the **Buzzer buttons** chip.
+3. **Press each button and read the mapping back.** Both consoles carry the
+   same **Handsets** card: its `last:` line names every press, including a
+   press that was locked out, and its **Open handset map** button lists what
+   each button does.
    Which physical handset the browser calls "1" can differ between machines —
    if the mapping is wrong, that is what you are looking at.
 4. **Re-plug the dongle**, then press a button again.
@@ -124,10 +132,18 @@ Check, in order:
 
 ## The wrong athlete got the time
 
-- **During the run** — press **Swap** to put the athletes on the correct lanes
-  _before_ the start. Swapping is locked while a run is live, because the
-  clocks are fixed to the lanes; the line under the button says so while it is.
-- **After the run** — **Void run** deletes what that run recorded, so you can
+A time recorded against the wrong name is re-filed, not deleted:
+
+- **On the board** — pick the right athlete for that lane. The chip under the
+  clock keeps naming the athlete the time is stored under —
+  **Saved 1:23.45 · Jane Doe** — and a **Move time to …** button appears beside
+  it. Press it and the same time moves to the athlete now on the lane; the clock
+  value does not change. Leave it alone if you were only looking ahead to the
+  next athlete.
+- **Before the start** — athletes on the wrong lanes? Press **Swap** to
+  exchange them. Swapping is locked while a run is live, because the clocks are
+  fixed to the lanes; the line under the button says so while it is.
+- **To run it again** — **Void run** deletes what that run recorded, so you can
   redo it. For anything older, edit it on the **Times** page.
 
 ## The wrong athlete got the score

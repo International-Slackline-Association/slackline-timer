@@ -104,7 +104,9 @@ broadcast graphics update themselves.
 - **Freestyle** ranks by the judged overall, with the component breakdown.
 - Athletes with no result for that round are left out.
 - **Final standings** merges the bracket outcomes with qualification into the
-  event's final order. Ranks still to be decided are dimmed.
+  event's final order. Ranks still to be decided are dimmed. **Source** is the
+  round that placed the athlete; when the shown result comes from another round
+  it is noted in grey, e.g. _Final (result: Qualification)_.
 - **Combined** averages an athlete's two overall placements across the
   disciplines. The discipline toggle is not used there.
 

@@ -110,10 +110,18 @@ describe('freestyle judging page', () => {
     'Re-arm',
     'NOT SAVED',
     'Retry save',
-    'Swap players',
+    'Swap athletes',
     'Not recording',
     'Keep match',
   ])('speaks the board word %s', (word) => expect(body).toContain(word));
+
+  // The plate abbreviates the slot (`tallyModel.ts`), so the page has to say
+  // what P1 means before it quotes a plate line that uses it.
+  it('defines P1/P2 before the first plate quote', () => {
+    const definition = body.indexOf('**P1**');
+    expect(definition).toBeGreaterThan(-1);
+    expect(definition).toBeLessThan(body.indexOf('P1 BIANCHI'));
+  });
 
   // Athlete n is the ATHLETE vocabulary — the two whole-board controls are named
   // for the pair of clocks they re-arm, on screen and here. Pinned because the
@@ -124,7 +132,7 @@ describe('freestyle judging page', () => {
     (label) => expect(body).toContain(label),
   );
 
-  it.each(['Break / end turn', 'Break-end turn', 'New entry', 'click that chip'])(
+  it.each(['Break / end turn', 'Break-end turn', 'New entry', 'click that chip', 'Swap players'])(
     'no longer describes the old board (%s)',
     (gone) => expect(body).not.toContain(gone),
   );
@@ -179,4 +187,21 @@ describe('speed highline timing page', () => {
 
   it('states the handset colour divergence the buzzer sheet shows', () =>
     expect(body).toContain(HANDSET_COLOUR_NOTE));
+});
+
+describe('troubleshooting page', () => {
+  const section = (heading: string): string => {
+    const body = read('troubleshooting.md');
+    const start = body.indexOf(`## ${heading}`);
+    return body.slice(start, body.indexOf('\n## ', start + 1));
+  };
+
+  // The non-destructive re-file comes first, as it does for the score below it;
+  // Swap and Void run are the fallbacks, not the fix.
+  it('leads the wrong-athlete time fix with Move time to', () => {
+    const entry = section('The wrong athlete got the time');
+    const order = ['Move time to', 'Swap', 'Void run'].map((word) => entry.indexOf(word));
+    expect(order).not.toContain(-1);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
 });

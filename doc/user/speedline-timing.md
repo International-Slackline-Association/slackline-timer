@@ -28,14 +28,15 @@ connection and audio chips — the console lays out in three columns:
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Left — setup**             | The **Preview** switch and the link that opens the projector screen, and the **Handsets** card (see [Buzzer buttons](#buzzer-buttons))                                                                                                                                                           |
 | **Centre — the race**        | **Lane 1**, the start strip, **Lane 2**. Each lane holds its clock, its **Stop**, who is on it, its false-start control, its DNF and the chip that says whether its time was saved. The strip between them holds the start light, **Start**, **Abort start** and, below a dashed line, **Reset** |
-| **Right — what is recorded** | Round, gender and match, **Swap**, the best-of-3 score, the false-start advice and **Void run**                                                                                                                                                                                                  |
+| **Right — what is recorded** | Round and gender — plus the **Match** in the playoff rounds — **Swap**, the best-of-3 score, the false-start advice and **Void run**                                                                                                                                                             |
 
 On a narrow screen the three columns stack in that order — setup, then the race,
 then what is recorded — so the clocks and their stop buttons still come first.
-Setup collapses to a **single strip** across the top rather than a column: the
-**Preview** switch and its link, whether a handset is connected, the line saying
-what the last press did, and **Open handset map** — the same controls, on one
-line, so the clocks and the stop buttons stay on screen without scrolling.
+Setup collapses to a **single strip** inside the status header, under the
+round and gender and beside the connection and audio chips: the **Preview**
+switch and its link, whether a handset is connected, the line saying what the
+last press did, and **Open handset map** — the same controls, on one line, so
+the clocks and the stop buttons stay on screen without scrolling.
 
 ## Before the first run
 
@@ -58,10 +59,13 @@ line, so the clocks and the stop buttons stay on screen without scrolling.
 
 ## Timing a run
 
-1. **Choose who is racing.** Either pick a **Match** in the right-hand column —
-   that fills both lanes automatically — or set _Lane 1 athlete_ and _Lane 2
-   athlete_ in the lane columns themselves. If the athletes are on the wrong
-   sides, press **Swap**.
+1. **Choose who is racing.** In the playoff rounds — quarter-finals to the
+   final, plus the _Test_ round for rehearsing them — pick a **Match** in the
+   right-hand column, which fills both lanes automatically. Qualification and
+   training have no matches, so the **Match** pick is not shown there: set
+   _Lane 1 athlete_ and _Lane 2 athlete_ in the lane columns themselves (which
+   works in a playoff round too). If the athletes are on the wrong sides, press
+   **Swap**.
 2. **Press Start.** The light sequence runs and the beeps sound; the clocks
    start on GO, together on every screen.
 3. **Stop each lane as its athlete finishes** — the lane's stop button, or that
@@ -78,13 +82,16 @@ _— not recording —_.
 ### Solo runs
 
 If only one lane has an athlete, only that lane's clock starts. The other stays
-dark. This is normal in qualification.
+dark. This is normal in qualification. The preview screen and the race-timer
+overlay drop the empty lane's clock altogether and keep the athlete's lane in
+its own corner.
 
 ## Aborting and resetting
 
 - **Abort start** — use this when someone jumps _during the light sequence_. It
   stops the sequence before GO, sounds the alert, and shows **START ABORTED** on
-  every screen. Then press **Reset** to re-arm.
+  every screen. Then press **Reset** to re-arm. Once GO has fired, Abort is
+  locked — flag the false start on the lane and press **Reset** to end the run.
 - **Reset** — clears both clocks and the display. While a run is live the app
   asks you to confirm first, so a stray press cannot wipe a running race.
 
@@ -92,11 +99,14 @@ A false start **after** GO does _not_ stop the run — see below.
 
 ### A dead button says why
 
-Every race control prints its blocker right under it — **Swap** in the
-right-hand column included, so you never have to
+Every race control prints its blocker right under it — **Swap**, **Void run**
+and **Void run & rerun** in the right-hand column included, so you never have to
 guess: _why: locked while the start sequence runs_, _why: locked while a lane
-runs_, _why: no start sequence to abort_, _why: Lane 2 is not running_,
-_why: Lane 1 is not stopped_. The two worth knowing before the event both mean
+runs_, _why: GO has fired — flag false starts per lane_ (under **Abort start**
+once the clocks are away), _why: no start sequence to abort_, _why: Lane 2 is
+not running_, _why: Lane 1 is not stopped_. **Void run** stays locked until both
+lanes have stopped or been marked DNF, so a void can never land on a run that is
+still timing. The two worth knowing before the event both mean
 "the lights have finished, press **Reset**": _why: start aborted — Reset to
 re-arm_ after an abort, and _why: sequence finished — Reset to re-arm_ after a
 clean run. Either way the board looks idle but **Start** stays
@@ -131,7 +141,9 @@ gives you the one button that carries it out:
 | Run still going                     | The run continues; video review decides | —                    |
 
 The advice is exactly that — advice. The head judge decides; the button is there
-so the decision is one tap, not a manual data fix.
+so the decision is one tap, not a manual data fix. If both lanes are flagged
+while the clocks are still running, the advice shows at once but **Void run &
+rerun** stays locked until both lanes have stopped or been marked DNF.
 
 A second false start on the same lane means the attempt fails and **no time is
 recorded** for it.
@@ -140,7 +152,11 @@ recorded** for it.
 
 - **Saved / Saving… / Not saved.** The chip under each lane is the truth. A
   _Not saved_ chip means the result did not reach the server — the timing itself
-  was unaffected, so re-enter the time on the **Times** page.
+  was unaffected. Under the lane's DNF button, **Retry save** sends the same
+  time again (a failed DNF retries as a DNF); it does not count the run a
+  second time. If it still will not go through, **Times page ↗** beside it
+  opens the **Times** page in a new tab, filtered to that athlete and round, so
+  you can enter the time there while the console keeps running.
 - **Correct a time on the spot.** Once a lane's time is saved, a
   **Correct time** box appears next to it. Type the hand-timed value as
   `M:SS.hh` and press Enter. Useful when the hand timer and the system clock
@@ -167,9 +183,11 @@ recorded** for it.
   being added, so the attempt still counts once.
 - **Void run.** Deletes the times this run just recorded — the clean undo for a
   run that should not have counted. It asks first and names each time it would
-  delete; **Keep times** leaves everything as it is.
+  delete; **Keep times** leaves everything as it is. It is locked while the
+  lights run or a lane is still timing.
 - Corrections to a **DNF**, or to anything from an earlier run, are made on the
-  **Times** page.
+  **Times** page. A lane holding a DNF links straight to its row — **Times
+  page ↗** under the **Correct time** box opens it in a new tab.
 
 ## Qualification attempts
 
@@ -179,14 +197,18 @@ be given back, delete the extra time on the **Times** page.
 
 ## Best-of-3 matches
 
-With a match selected, a **Best of 3** score line appears between the lanes and
-counts the runs each athlete has won. It also drives the rounds-summary
-graphic on the broadcast. **Reset series** clears the tally if you need to start
-the match over; with runs already won it asks before wiping them (**Keep
+Matches are raced in the playoff rounds, where the **Match** pick appears.
+With a match selected, a **Best of 3** score line appears in the right column
+and counts the runs each athlete has won. It also drives the rounds-summary
+graphic on the broadcast. **Reset series** clears the tally if you need to
+start the match over; with runs already won it asks before wiping them (**Keep
 series** leaves the score alone), and at 0–0 it simply applies. The recorded
 times are kept either way.
 
-Once both athletes have finished, the match winner is set automatically.
+The match winner is set automatically the moment a lane wins its second run —
+first to 2 of 3. Until then the line under **Void run** shows the series score
+and the run it is waiting for, for example _Winner: — series 1–0, awaiting run
+2_.
 
 ## Buzzer buttons
 
