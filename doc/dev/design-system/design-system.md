@@ -159,7 +159,8 @@ never falls back to an ISA `ink`/`common.white` default:
 
 1. **Structural marks are white** — section labels (`SEMI FINALS`, `FINALS`,
    `{GENDER}'S {DISCIPLINE}`, `WINNER`), the `VS` glyph, bracket connector lines, and
-   the **empty** slot plates (translucent fill + white stroke).
+   the **empty** slot plates (translucent fill + white stroke). Footage-borne
+   text inherits the `overlayTextShadow` halo from the `StreamLayout` root.
 2. **Filled athlete-name plates flip to solid white with near-black name text** —
    every name bar/band in the refs (`AMANDA MONTMINY`, `TAYLOR ST. GERMAIN`) is a
    white background with dark condensed caps, not white text.
@@ -174,20 +175,37 @@ carries white numerals. The penalty box is drawn solid in **both** homes even
 though one LAAX art washes it at ~28% alpha: legibility over bright footage wins
 over matching that one file.
 
+A **DNF** on any white plate — a names-cut row, a VS run cell, a profile or SVO
+card result — is a race-state word, not a value: it inks in `race.stopDim`
+(5.01:1 on `plateFilled`, the stop tier's words-on-white form; `resultInk` in
+`util/resultLabel.ts`), on the plate's own sharp corners rather than a pill. The
+near-black `TOTAL` box keeps its white `DNF`, since `stopDim` fails on that
+ground.
+
+The **stat label** on a VS table row sits on the 48% `plateStrip` band, not on
+footage, so it takes the filled-plate tier too: `nameInk`, footage shadow off
+(≈12:1 over bright footage, ≈4.6:1 over dark; 32px caps are large text). White
+caps there wash out to ≤1.9:1. The bandless `TOTAL` row keeps the white caps +
+footage shadow.
+
 | Token                        | Value                    | Use                                                                                                           |
 | ---------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | `overlay.plate`              | `rgba(255,255,255,0.3)`  | **Empty** profile-box fill — VS photo frame, portrait card, profile bracket box (the profile art's 30% white) |
 | `overlay.plateName`          | `rgba(255,255,255,0.35)` | **Empty** name-bar fill — the name bracket's TBD plate (the names art's 35% white)                            |
-| `overlay.plateStrip`         | `rgba(255,255,255,0.48)` | Row backing band behind a stat label — the VS speed/freestyle tables (the art's 48% white)                    |
+| `overlay.plateStrip`         | `rgba(255,255,255,0.48)` | Row backing band behind a VS stat label (the art's 48% white); the label on it inks `nameInk`, no shadow      |
 | `overlay.plateFilled`        | `#FFFFFF`                | **Filled** named-plate fill — solid white bar behind a dark athlete name                                      |
 | `overlay.stroke`             | `#FFFFFF`                | Plate border + thin bracket connector lines (width = `overlayArt.strokeWidth`)                                |
-| `overlay.nameInk`            | `#231f20`                | Athlete name text on a filled plate — the card masters' own near-black, **not** `ink.hi`                      |
+| `overlay.nameInk`            | `#231f20`                | Name/value ink on a filled plate, incl. the `/stream/timer` plate's idle/stopped digits; **not** `ink.hi`     |
+| `overlay.nameInkSubordinate` | `#737172`                | Subordinate words on a filled plate (source tag, `PTS`/`AVG`), 4.85:1 — a colour step, not `nameInk` + alpha  |
 | `overlay.label`              | `#FFFFFF`                | Structural / section labels (reuses `ink.onBrand`)                                                            |
 | `overlay.scrim`              | `rgba(51,60,78,0.9)`     | Slate legibility backing for white overlay text — caption gradient + per-text shadow                          |
 | `overlay.backdrop`           | `rgba(35,31,32,0.6)`     | Full-bleed frame dim behind an overlay composition — the LAAX "60% Black" layer (distinct from `scrim`)       |
 | `chromaKey`                  | `#FF00FF`                | Chroma-key body fill for ALL overlay surfaces, painted when `?bg=key`                                         |
+| `chromaKeyGreen` / `Blue`    | `#00B140` / `#0047BB`    | The `?bg=green` / `?bg=blue` grounds (keyer presets) — they erase our own greens/blues                        |
 | `overlayArt.strokeWidth`     | `6px`                    | Plate/VS-box border + connector weight, at the art's 1920×1080 reference frame                                |
 | `overlayArt.headingTracking` | `-0.02em`                | Tight display-caps letter-spacing on overlay headings (the art runs −.01…−.03em)                              |
+| `overlayArt.bannerTracking`  | `0.08em`                 | Open banner caps — the `WINNER` banner/tag, the best-of-3 caption and tally names                             |
+| `overlayArt.nameTracking`    | `0.01em`                 | Athlete names and initials on every plate and card                                                            |
 
 All three translucent-white alphas are measured in the art (the plate-opacity
 audit): every profile-language file (`Profile top 4`, `Profile Brackets`, `vs`)
@@ -195,10 +213,19 @@ fills its boxes at `opacity .3`, every names-language file (`Names top 4/8`,
 `Name Brackets`) at `.35`, and the VS stat-row bands at `.48` — so the split is
 the art's, not a drift.
 
+On a solid chroma ground (`?bg=key`/`magenta`/`green`/`blue`) the three
+translucent fills flatten to opaque neutrals — the same alpha over `surface.void`
+(`#707783` / `#7A808C` / `#959AA3`), so the keyer sees a fixed band instead of
+white blended into the key. The TS tokens resolve through their vars for this;
+the rule and the `tl-chroma-ground` class are owned by
+[`../broadcast-overlays.md`](../broadcast-overlays.md).
+
 CSS vars: `--tl-overlay-plate`, `--tl-overlay-plate-name`, `--tl-overlay-plate-strip`, `--tl-overlay-plate-filled`, `--tl-overlay-stroke`,
-`--tl-overlay-name-ink`, `--tl-overlay-label`, `--tl-overlay-scrim`,
-`--tl-overlay-backdrop`, `--tl-chroma-key`, `--tl-overlay-stroke-width`,
-`--tl-overlay-heading-tracking`.
+`--tl-overlay-name-ink`, `--tl-overlay-name-ink-subordinate`, `--tl-overlay-label`,
+`--tl-overlay-scrim`, `--tl-overlay-backdrop`, `--tl-chroma-key`,
+`--tl-chroma-key-green`, `--tl-chroma-key-blue`, `--tl-overlay-stroke-width`,
+`--tl-overlay-heading-tracking`, `--tl-overlay-banner-tracking`,
+`--tl-overlay-name-tracking`.
 
 **Name face & weights.** Names use `fonts.display` (`Oswald`, see §4) and pair a
 **bold** given name with a **lighter** family name — over the loaded `300–700`
@@ -315,6 +342,78 @@ Base unit **8px**. Use the scale; avoid arbitrary values.
 | `lg`   | `14px`  | Large cards, modals, hero panels         |
 | `pill` | `999px` | Tags, DNF badge, status pills, toggles   |
 
+### Strokes
+
+Console-chrome mark widths (`strokes` in `tokens.ts`); the overlay frame is `overlayArt.strokeWidth`.
+
+| Token     | Value | Use                                                           |
+| --------- | ----- | ------------------------------------------------------------- |
+| `keyline` | `2px` | Ground ring that keeps a state tier legible on any plate fill |
+| `rule`    | `4px` | Current-step gutter rule beside a desk caption                |
+
+### Desk rails
+
+The control boards' fixed columns at their wide gate (`deskRails` in `tokens.ts`, emitted as
+`deskColumns`); the live column takes the rest. One pair for Speedline and Freestyle.
+
+| Token    | Value   | Use                           |
+| -------- | ------- | ----------------------------- |
+| `setup`  | `248px` | Setup rail, left              |
+| `record` | `360px` | Recording / score rail, right |
+
+### Control targets
+
+Minimum press and field sizes (`controlTargets` in `tokens.ts`; §6 "Buttons", §9 "Responsive contract").
+
+| Token       | Value   | Use                                                                   |
+| ----------- | ------- | --------------------------------------------------------------------- |
+| `floor`     | `40px`  | General controls: admin nav tabs, chrome buttons                      |
+| `live`      | `44px`  | Every live-path press and field (MUI's `small` field is 40)           |
+| `race`      | `56px`  | Start / Stop / Start try / End try height                             |
+| `raceWidth` | `120px` | Start / Stop minimum width                                            |
+| `chip`      | `32px`  | Icon toggle sharing the health row (the control header's sound press) |
+
+### Field widths
+
+`minWidth` floors and `maxWidth` caps (`fieldWidths` in `tokens.ts`), never a fixed track width (§9). A floor used
+inside a desk rail must fit it. Px, not `ch`: a Select's label and value fonts differ, so a `ch` width drifts per
+field.
+
+| Token     | Value   | Use                                                                              |
+| --------- | ------- | -------------------------------------------------------------------------------- |
+| `compact` | `140px` | Short selects                                                                    |
+| `short`   | `160px` | Filter selects                                                                   |
+| `field`   | `200px` | Default admin select; the controller picker, which must fit the 248px setup rail |
+| `wide`    | `240px` | Wide selects; the manual's contents column                                       |
+| `card`    | `360px` | Card cap: the handset card                                                       |
+| `prose`   | `820px` | Reading measure: the manual article                                              |
+
+### Admin preview
+
+The athlete form's broadcast card preview (`adminPreview` in `tokens.ts`): a fixed height the card's container-query
+type scales off, its width following the card's 298.81 × 498.02 aspect.
+
+| Token        | Value   | Use                        |
+| ------------ | ------- | -------------------------- |
+| `cardHeight` | `240px` | The athlete card's preview |
+
+### Board geometry
+
+A board's measured floors, caps and reserved rows (`boardGeometry` in `tokens.ts`). They are not a scale: each value
+is a fold-budget measurement its brief signed off, so a change re-measures the board. The Freestyle set is
+tabulated in [`freestyle-board-ux.md`](./freestyle-board-ux.md) §6. Speedline holds two: the 880 px live-deck ceiling
+(`deckMax.speedline`, the Freestyle rule with the start strip between the lanes) and the start strip's 184 px floor
+(`speedline.startStrip`), the slot the race pair's why-line wraps in.
+
+### Marks
+
+Round indicator marks (`marks` in `tokens.ts`).
+
+| Token | Value  | Use                     |
+| ----- | ------ | ----------------------- |
+| `dot` | `10px` | Corner badge status dot |
+| `key` | `14px` | Handset map key swatch  |
+
 ### Signature: the track-curve card
 
 The identity radius. An **asymmetric** corner treatment evoking the sweep of a slackline / a race track:
@@ -358,7 +457,7 @@ Two stacked or side-by-side lanes, each its own track-curve panel:
 
 ### Start-light tree
 
-**Two** bulbs, not an IFSC-length tree (`Speedline/StartSignal.tsx`). Bulbs sit in `void` (slate) housings for maximum bulb contrast.
+**Two** bulbs, not an IFSC-length tree (`Speedline/StartSignal.tsx`). On the overlay and the projector preview the pair sits in one sharp-cornered `void` (slate) housing on the shared white plate stroke, for maximum bulb contrast over any ground; metrics in §7. The control page draws bare px bulbs with no housing.
 
 | Phase (wire value)                   | Left bulb        | Right bulb       |
 | ------------------------------------ | ---------------- | ---------------- |
@@ -368,7 +467,7 @@ Two stacked or side-by-side lanes, each its own track-curve panel:
 | **set 2** (`2`)                      | `set` `#F2A93B`  | `set` `#F2A93B`  |
 | **GO** (`3`)                         | `go` `#65BC7B`   | `go` `#65BC7B`   |
 
-`cleared` (`-1`) hides the housing entirely. Idle must **not** be red: red-red on air reads as a recording/error indicator and collides with the abort colour language (ADR 0041). There is no false-start state here — a flagged lane raises its own preview badge (ADR 0035). The GO transition is instantaneous — no fade — to preserve start-accuracy perception. The phase schedule and its delay budget live in [`../architecture.md`](../architecture.md) ("The race start is scheduled, not announced").
+`cleared` (`-1`) hides the housing entirely; the control page's bare bulbs go invisible but hold their slot, so Start / Abort / Reset under them never lift mid-run (and never paint idle grey after GO, which would read as re-armed). Idle must **not** be red: red-red on air reads as a recording/error indicator and collides with the abort colour language (ADR 0041). There is no false-start state here — a flagged lane raises its own preview badge (ADR 0035). The GO transition is instantaneous — no fade — to preserve start-accuracy perception. The phase schedule and its delay budget live in [`../architecture.md`](../architecture.md) ("The race start is scheduled, not announced").
 
 ### Buttons
 
@@ -379,7 +478,7 @@ Built on MUI `Button`, restyled by the theme.
 - **Secondary:** `base`/`panel` fill, `ink.hi` text, `line` border. Hover → `muted` / `tealTint`.
 - **Ghost / tertiary:** transparent, `ink.mid` text, hover → `muted`.
 - Labels in `Saira` (or `label` style — UPPERCASE — for compact controls).
-- Min touch target 40px; control-page race buttons larger (operator uses them under pressure, possibly via gamepad).
+- Target sizes come from `controlTargets` (§5): `floor` (40px) for general controls, `live` (44px) on the live path, `race` (56px tall, `raceWidth` 120px wide) for Start / Stop — the operator presses them under pressure, possibly via gamepad. `RaceButton` owns the live and race sizes.
 
 ### Inputs & forms (admin)
 
@@ -472,11 +571,12 @@ Overlays composite over **arbitrary live video** in OBS Studio (or similar). The
 > `overlay.backdrop` dim (the LAAX "60% Black" layer) instead of per-text scrims.
 > Plates have **sharp corners** (no radius) and rely on the white stroke +
 > per-text shadow for legibility, not a slate fill. Winner edge → `go`,
-> loser/DNF → `stop`.
+> loser/DNF → `stop` — the loser edge only on the decided VS head-to-head
+> (`Plate loser`); the bracket's eliminated boxes keep the white edge as their dim.
 
 > **The light-app / slate-overlay split (superseded — see the LAAX plate treatment above).** The app theme is **light** (white cards on a near-white canvas), but broadcast overlays **invert to the slate (`void` `#333C4E`) ground** — a light UI cannot sit legibly over live video. Overlays are the one place the deepest tone becomes the dominant surface. The recipe: **slate scrim + teal identity edge + white text (`ink.onBrand`) + per-text shadow + title-safe inset.** Do not reuse the light page surfaces here.
 
-1. **Background mode (`?bg=`).** The overlay root paints **no** background by default — only the graphic elements paint (the fail-safe-blank baseline), and the foreground layers are identical in every mode. The mode table, the chroma choice, and the capture pipeline are owned by [`../broadcast-overlays.md`](../broadcast-overlays.md).
+1. **Background mode (`?bg=`).** The overlay root paints **no** background by default — only the graphic elements paint (the fail-safe-blank baseline), and the foreground layers are identical in every mode except that a chroma ground flattens the translucent plates to opaque neutrals. The mode table, the chroma choice, and the capture pipeline are owned by [`../broadcast-overlays.md`](../broadcast-overlays.md).
 2. **Slate scrim, not light surfaces.** Each block sits on a `void`/slate semi-transparent scrim, **not** the light `panel`/`canvas` surfaces.
 3. **Teal identity edge.** A `teal` accent edge/keyline marks the graphic as ISA-branded over the slate scrim.
 4. **Per-text protection.** Every text/numeral element carries its **own** slate scrim backing **or** a text-shadow so it survives over bright, busy, or light video. Never rely on the global background.
@@ -488,9 +588,8 @@ Overlays composite over **arbitrary live video** in OBS Studio (or similar). The
 /* Text protection for overlays — white on slate, regardless of the light app theme */
 .tl-overlay-text {
   color: var(--tl-ink-on-brand); /* #FFFFFF */
-  text-shadow:
-    0 2px 6px var(--tl-overlay-scrim),
-    0 0 2px var(--tl-overlay-scrim);
+  /* text-shadow: the six-layer slate halo, `overlayTextShadow` (tokens.ts) —
+     the StreamLayout root default; filled plates cancel it with `none`. */
 }
 .tl-overlay-scrim {
   background: var(--tl-overlay-scrim); /* void / slate legibility backing */
@@ -546,6 +645,20 @@ pixel-for-pixel on the master; every other 16:9 resolution scales cleanly, and n
 overlay is pinned to a fixed canvas. Bracket trees additionally work in
 percentages of the 16:9 canvas (`artX`/`artY` in `bracket.ts`).
 
+**Reference-frame constants.** A number shared across overlays lives in
+`tokens.ts`: the type floor `OVERLAY_TYPE_FLOOR_PX`, the WINNER word
+`OVERLAY_WINNER_WORD_PX` / `OVERLAY_WINNER_GAP_PX`, the timer lower-thirds'
+`OVERLAY_LANE` (inset, name-to-clock gap, lane banner height, clock plate) and
+the name lower-third's native `OVERLAY_NAME_STRIP` (720 × 92). A number that
+belongs to one composition lives in its overlay's art table: `VS_ART`
+(`VsOverlay.tsx`), `SUMMARY_ART` (`RoundsSummaryOverlay.tsx`: the 24
+caption-tally-cards gap, the 16 tally gap, 32 / 40 / 64 caption / name /
+numeral) and `PROFILE_ART` (`RankingsOverlay.tsx`). Gaps and padding follow the
+same rule: an overlay body never uses MUI theme spacing (`spacing={3}`,
+`pt: 6`), which stays fixed device px at a 720p or 4K capture while the plates
+around it scale. `web/test/app/noRawColour.test.ts` enforces this for every
+`pages/Stream/*Overlay.tsx`.
+
 **Type substitution.** The masters set display caps in the commercial **Placard
 Next** and value numerals in **Montserrat Bold**; the app substitutes `Oswald`
 (500 ≈ PlacardNext-Medium, 700 ≈ the Black weight) and the house numeral face
@@ -574,7 +687,10 @@ Finals and winner centres are **derived**, not measured: each is the midpoint of
 the pair feeding it (matches the master to < 0.01%). `3RD PLACE` sits at the
 `WINNER` caption's exact offset below its own plate so the two result bars read
 as a pair. Name caps are `55cqh` of the plate height — the ranking plates' ratio,
-so both filled-plate families read at one size side by side.
+so both filled-plate families read at one size side by side. An undecided plate
+carries the shared `UnknownAthlete` mark at the plate's full inner height on its
+`tight` viewBox (the border is the inset, so the portrait card margin is
+cropped; ink ≈ 31.5 of the 34.9px inner bar at 1080p).
 
 #### Profile (photo) bracket — `bracket.ts` `profileTreeLayout`
 
@@ -602,7 +718,9 @@ edges, plus a separate stub into the next box's edge. Key x stations are
 207.57 → 271.96 → 326.36 (quarters → semis) and 452.35 → 516.57 → 570.83 (semis →
 finalists); the finalist cross-line runs y 661.65 from x 728.44 to 1194.9 with a
 stub rising at x 960 to y 608.11; the small-final pair joins at y 915.09 between
-x 912.53 and 1007.47.
+x 912.53 and 1007.47. Connectors and box edges share one **6** stroke, authored
+frame-relative (`refVh`) like the name tree's, so both variants' line systems
+scale identically away from 1080p.
 
 **Both trees are re-centred before render** (`recentreTree`). The masters were
 framed with an empty top quarter (an event-logo slot that no longer exists) and
@@ -630,6 +748,11 @@ The composition is a centred row:
 | Freestyle component box                 | 166.88 × 56.79; value 36.44, label 32, CONTROL PENALTY label 25 (the master shrinks it so the long label fits)                            |
 | Freestyle TOTAL box                     | 194.82 × 86.39, 10.59 below the last component row; value 40, label 62.61                                                                 |
 
+The rounds-summary pair reuses the frame at **half** the card gap (88.095,
+`VS_ART.vsGap / 2`) — no VS glyph between them, but enough ground for the 10px
+outset winner rim to clear the second card. Its caption, tally and cards stack
+24 apart, with 16 between the tally's names and digits (`SUMMARY_ART`).
+
 The table container matches the card height (498.02) so the shorter speed block
 centres against the card exactly as the master does. Values sit on the **outer**
 edge, labels on the **inner** edge, so the left table mirrors the right. The
@@ -655,6 +778,15 @@ in both files and goes **flat from row 5**: `[1, 0.9444, 0.8953, 0.8347,
 0.7779]`. The numeral column is laid out at the field's **widest** label, so
 every plate keeps one left edge and no numeral escapes the title-safe inset.
 
+The standings and combined cuts carry a right column the masters never
+budgeted (placing-round tag + result). Every row reserves it at the field's
+widest tag and widest result (hidden sizers, so a DNF or an em dash pads to a
+time), and the plate grows by the tag's share of it. The name slot then
+matches the round cut's, the taper stays monotonic, and an 8-row top-8 field
+still ends well inside the 1824 title-safe edge. Plain round cuts keep the
+art widths exactly. `SMALL FINAL` is never abbreviated to save room: the
+bracket overlays use the same label.
+
 #### Rankings, profile cards — `RankingsOverlay.tsx`
 
 Four uniformly tapering portrait cards sharing a **bottom edge at y = 816.92**;
@@ -669,7 +801,10 @@ the stroke stays a constant **9** across all four.
 
 Each numeral's baseline sits on the shared card foot. The residual between a
 numeral's right edge and its card runs ~5–12px in the master (glyph-width
-dependent, Oswald ≠ Placard) and is therefore held as a constant **10**.
+dependent, Oswald ≠ Placard) and is therefore held as a constant **10**. Each
+numeral sits right-aligned in a box reserving the field's **widest** label at
+the names cut's digit advance (35.79 / 72.68 of the numeral size), so a tie's
+`=` moves every card by one rule whichever row carries it.
 
 #### Freestyle score card — `ScoreCardOverlay.tsx`
 
@@ -708,6 +843,7 @@ frame and the tiny profile-bracket quarter boxes alike.
 | --------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | Foot flag band              | y ≈ 235 → 251 of 250                                                              | 6% of card height                                             |
 | Divider rule above the flag | y = 234.67, ~2px on the 250-tall card                                             | 93.9%, `0.8cqh`                                               |
+| Name block foot clearance   | not in the masters (they carry no caption under the name)                         | `1.5cqh` above the divider rule                               |
 | White plate top edge        | concave-upward arc — ~54% of the card at the sides, sagging to ~58% at the centre | radial-gradient mask, rx = 50%, ry = 10% of the 40%-tall band |
 | Name strip (lower third)    | 720 × 92                                                                          | `STRIP_HEIGHT = 92`                                           |
 | Name caps in the strip      | ≈ 0.63 of the strip height (caps do **not** fill the plate)                       | `0.63 / 0.72` cap-height factor                               |
@@ -717,6 +853,30 @@ the `overlay.backdrop` hue). Translucent fills likewise come from the masters:
 **30%** white for a profile box, **35%** for a name bar, **48%** for the stat-row
 backing band; the full-bleed dim is the masters' "60% Black" layer — `#231f20` at
 0.6.
+
+#### Lane clock plates — `TimerLaneBlock.tsx` (`OVERLAY_LANE` in `tokens.ts`)
+
+Both timer overlays draw one white time plate: **320** wide with **12**
+inner padding each side (the reference's `w-80 p-3`), the Speedline
+`M:SS.CC` and the Freestyle `mm:ss` alike. It stays fixed so the digits never
+reflow when the minutes gain a glyph. The time hugs its lane's **outer** edge
+(left lane left, right lane right; the Freestyle quali single lane and the
+warm-up slot follow their column: centred and left). That mirrors the name
+strip above it and the SVO cards composited over the same corner.
+
+#### Speedline start light — `StartSignal.tsx`, `SpeedlineTimerDisplay.tsx`
+
+Not from the masters (they carry no timer row); sized to sit on the lane clock
+plates' row. The control page's `small` light is outside this frame (30px
+bulbs, px).
+
+| Metric                | Reference px                                                                |
+| --------------------- | --------------------------------------------------------------------------- |
+| Bulb diameter         | 60                                                                          |
+| Bulb gap / inner pad  | 8 / 8                                                                       |
+| Housing edge          | 6 (`overlayArt.strokeWidth`, emitted `refVh` so it scales with the bulbs)   |
+| Housing (outer)       | 156 × 88, `surface.void` fill, `overlay.stroke` edge, no radius             |
+| Housing foot (bottom) | 139 — the clock plates' bottom edge (112 corner inset + the UNOFFICIAL row) |
 
 #### Deliberate deviations from the masters
 
@@ -735,6 +895,11 @@ Each of these is a measured value the code **knowingly** does not follow:
   matches the VS table — one penalty language across two surfaces.
 - **Both bracket trees are re-centred** rather than framed as measured (see
   above).
+- **A top-4 bracket drops the quarter column** (`seededFromSemis`: no quarter
+  match, ≥ 1 semi): its boxes, QUARTER FINALS label(s) and feed connectors go,
+  every other box keeps the master's x, and the recentre runs on what is left.
+  The name tree is also shifted horizontally onto the canvas centre (it would
+  otherwise hug the right edge); the mirrored profile tree is already centred.
 - **The `compact` bracket variant does not exist.** The delivered masters cover
   Profile and Name brackets only; the owner's condition for keeping a compact
   variant was that SVG source art exist for it, so it was removed rather than
@@ -762,7 +927,7 @@ Tokens have a single source of truth, exposed in two forms so both MUI and non-M
 | `web/src/app/theme/tokens.ts`              | TypeScript token objects — the canonical values (now **light / ISA-branded**). Imported by the MUI theme and any TS that needs raw tokens.                                                                                                        |
 | `web/src/app/theme/tokens.css`             | The same values as **CSS custom properties**, prefix **`--tl-`** (e.g. `--tl-teal`, `--tl-bg-panel`, `--tl-radius-lg`; surface colors carry a `--tl-bg-*` sub-prefix). Consumed by non-MUI surfaces.                                              |
 | `web/src/app/theme/theme.ts`               | `telemetryTheme` (MUI, now **`palette.mode: 'light'`**). Maps tokens onto MUI's palette/typography/shape/components: `primary` = teal, `secondary` = orange, `success` = go, `warning` = set, `error` = stop. MUI surfaces inherit automatically. |
-| `doc/dev/design-system/index.html`         | Live visual reference — renders the tokens and components for eyeballing. Keeps its **own** hand-mirrored `--tl-*` block (different names, outside the parity test) — see the warning in its `<head>`.                                            |
+| `doc/dev/design-system/index.html`         | Live visual reference — renders the tokens and components for eyeballing. Keeps its **own** hand-mirrored `--tl-*` subset under the tokens.css names (plus the `tl-chroma-ground` flatten), pinned value-for-value by `tokens.parity.test.ts`.    |
 | `doc/dev/design-system/component-layer.md` | Companion spec for the **component** layer ("micro templates") that renders this look — which recurring concepts get a shared component, and the rules governing them (ADR 0034).                                                                 |
 
 Guidelines:
@@ -770,7 +935,7 @@ Guidelines:
 - **MUI surfaces** (admin, controls, most app chrome) get styling for free via `telemetryTheme`. Reach for `theme.palette` / `sx`, not hardcoded hex.
 - **Non-MUI surfaces** (overlays, preview, the playoff bracket SVG/canvas) consume the `--tl-*` CSS variables so they share the exact same palette without importing the MUI theme.
 - Keep `tokens.ts` and `tokens.css` in lockstep — they must encode identical values. A parity test (`web/test/app/theme/tokens.parity.test.ts`, mirroring the round-enum guard) asserts every `colors.*`, `fonts.*`, and `overlayArt.*` token has a matching `--tl-*` var with an equal value; a new token is a deliberate addition to its mapping table.
-- Never inline a raw hex in a component. If a value isn't in the tokens, it doesn't exist yet — add it here first.
+- Never inline a raw colour (hex, `rgb()`/`rgba()`, `hsl()`/`hsla()`) anywhere under `web/src/app/` outside `app/theme/`, where the tokens are defined. If a value isn't in the tokens, it doesn't exist yet — add it here first. The one exemption is **real-world reference colours** that must match a physical object rather than the palette: the Buzz! handset swatches (`util/buzzer.ts`) and the national-flag art under `pages/Stream/flags/`. Tokenising them would let a palette retune drift them off the thing they depict. `web/test/app/noRawColour.test.ts` enforces both halves: any other file with a raw colour in code (comments are not scanned) fails, and an exempted file that no longer holds one fails as a stale exemption.
 
 ```css
 /* tokens.css excerpt — light / ISA-branded */
@@ -807,6 +972,36 @@ Guidelines:
   --tl-radius-pill: 999px;
 }
 ```
+
+### Responsive contract (operator surfaces)
+
+Every operator surface (the Speedline and Freestyle control boards and `/admin/*`) holds at four viewports. Overlays are outside it: they are authored on the 1920×1080 frame (§7).
+
+| Viewport  | Role                                           | MUI band | Control boards                                                           |
+| --------- | ---------------------------------------------- | -------- | ------------------------------------------------------------------------ |
+| 1440×900  | Laptop, the primary operator screen            | `lg`     | Both desks, every live control and both Saves above the fold             |
+| 1280×720  | Compact: a 720p laptop or a mirrored projector | `lg`     | Freestyle tabs (fails its desk gate on height); Speedline keeps its desk |
+| 1920×1080 | Wide, the venue monitor                        | `xl`     | Both desks; the live column caps its width instead of spreading          |
+| 1024×768  | Tablet, or a second operator's peer panel      | `md`     | Freestyle tabs; Speedline stacks with setup folded to one row            |
+
+Rules at all four:
+
+- No horizontal page scroll; no clipped or overlapping plates.
+- The live controls (lane transport, ADVANCE, the clocks, the TALLY plate) stay above the fold and keep ≥44 px targets, over §6's 40 px floor for general controls; Start/Stop are ≥56 px ([`freestyle-board-ux.md` §6](./freestyle-board-ux.md#6-tokens-type-sizes)).
+- Type scales with the container: `cqw` / `clamp()` or the MUI breakpoints.
+- Setup and score-entry chrome collapses before the live path does. Reflow never reorders: setup → live → rail at every width.
+- Layout switches on `theme.breakpoints` or container queries. Inside a desk nothing pins a track: the 248 | fill | 360 grid is the board brief's ([`freestyle-board-ux.md` §2](./freestyle-board-ux.md#2-the-desk--wireframes)), its `minmax(0, 1fr)` live column absorbs the viewport, and a component in a track sizes by flex, `ch` or `minWidth: 0`, never a pixel width.
+
+**Breakpoints.** `telemetryTheme` sets none, so MUI's defaults apply: `sm` 600, `md` 900, `lg` 1200, `xl` 1536. 1280 and 1440 both sit in `lg`, so a side-by-side layout opening at `lg` (the `/admin/overlays` Speed | Freestyle columns, the control header's one-row health block) is still side by side at 1280×720. Admin's side-by-side layouts stack below `lg`, at the 1024 tablet; 1280 is never a stacking width.
+
+**Desk gates.** Each board switches between its desk and the narrow layout on a viewport media query sized to what that desk was measured to hold, not on a breakpoint. One owner: `deskGate` in `tokens.ts` holds the two numbers and `deskMedia` renders each board's query from them, for both the desk grid's `@media` key and the board's `useMediaQuery`:
+
+- Freestyle (`deskMedia.freestyle`): `(min-width:1280px) and (min-height:900px)`. 1280×720 is wide enough and fails on height, so it takes the tab layout; the reasoning is the brief's §2 desk-gate paragraph.
+- Speedline (`deskMedia.speedline`): `(min-width:1280px)` alone. Its start strip sits between the two lane columns, which holds the transport above a 720 px fold; stacking at 1280×720 is what would bury it (`Speedline/ControlPage.tsx`, `DESK_SX`).
+
+Every other viewport switch in `app/` is a `theme.breakpoints` key; `noRawColour.test.ts` fails on a px viewport query anywhere else (an `@container` query keys on its panel and is exempt), and `tokens.parity.test.ts` holds the two quotes above to the token. `web/test/util/deskGeometry.ts` derives the jsdom suites' desk viewport from `deskGate`.
+
+**Fold rule.** A surface is above the fold when `document.documentElement.scrollHeight ≤ innerHeight`, and its headroom is `innerHeight − scrollHeight`, never `innerHeight` minus the last control's bottom. A trailing reserved slot or gap after the last control adds page height without moving that control, so a control-`y` check passes a page that scrolls. Measure the tallest state the surface reaches (both battle scores saved, winner line up). The per-board measurements are the brief's iteration 4 fold budget ([`freestyle-board-ux.md`](./freestyle-board-ux.md)).
 
 ---
 

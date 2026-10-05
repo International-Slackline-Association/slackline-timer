@@ -10,28 +10,27 @@
  * solves the *rendered* track lists against it (`solveTracks`), so a change to
  * `DESK_SX` or the run deck reds this file rather than quietly outdating it.
  */
+import { boardGeometry, deskGate, deskMedia, deskRails } from 'app/theme/tokens';
 
-/** `ControlPage`'s desk breakpoint — the width `useMediaQuery` is asked about. */
-export const DESK_MIN_PX = 1280;
+/** The desk gate's width, both boards — the width `useMediaQuery` is asked about. */
+export const DESK_MIN_PX = deskGate.minWidth;
 
-/** …and the height, the second half of the gate (fsux-desk-fold-budget, raised
- * by `freestyle-board-fold-budget`): a 1280x800 screen is wide enough for the
- * three columns and ~80 px too short to hold them — the battle desk's last
+/** …and the height, the Freestyle gate's second half (fsux-desk-fold-budget,
+ * raised by `freestyle-board-fold-budget`): a 1280x800 screen is wide enough for
+ * the three columns and ~80 px too short to hold them — the battle desk's last
  * control measures 879 — so anything shorter takes the tab layout. */
-export const DESK_MIN_HEIGHT_PX = 900;
+export const DESK_MIN_HEIGHT_PX = deskGate.minHeight;
 
-/** A viewport on the desk side of the gate — the 1440x900 laptop of the
- * responsive contract, expressed in the two numbers the media query reads. */
+/** A viewport on the desk side of the gate — the 1440x900 laptop of
+ * design-system §9 "Responsive contract", expressed in the two numbers the
+ * media query reads. */
 export const DESK_HEIGHT_PX = 900;
-
-/** The whole desk query, as `ControlPage` authors it. */
-export const DESK_MEDIA = `(min-width:${DESK_MIN_PX}px) and (min-height:${DESK_MIN_HEIGHT_PX}px)`;
 
 /** A width on the tabbed side of it. jsdom's own default (1024) is already
  * below the breakpoint, but a suite that means the compact branch says so. */
 export const COMPACT_PX = 1024;
 
-/** …and its height: the 1024x768 tablet of the responsive contract. */
+/** …and its height: the 1024x768 tablet of design-system §9 "Responsive contract". */
 export const COMPACT_HEIGHT_PX = 768;
 
 /** Wide enough for the desk, too short to hold it — the viewport the height
@@ -52,12 +51,12 @@ export const DESK_GAP_PX = 16;
 export const DECK_GAP_PX = 6;
 
 /** `DESK_SX`'s two fixed rails: setup left, score right. */
-export const SETUP_RAIL_PX = 248;
-export const SCORE_RAIL_PX = 360;
+export const SETUP_RAIL_PX = deskRails.setup;
+export const SCORE_RAIL_PX = deskRails.record;
 
 /** A line inside the score rail: the rail less the panel's `p: 2` inset, both
  * sides, and its hairline. The rail's two athlete panels declare
- * `flex: 1 1 220px`, so at this width they stack and each one gets the lot. */
+ * a `fieldWidths.wide` flex basis and floor, so at this width they stack and each one gets the lot. */
 export const SCORE_RAIL_CONTENT_PX = SCORE_RAIL_PX - 2 * 16 - 2;
 
 /** The live column of the narrowest three-column desk (1280 px): the viewport
@@ -76,6 +75,10 @@ export const LANE_COLUMN_PX = Math.floor(((LIVE_COLUMN_PX - 2 * DECK_GAP_PX) * 5
  * its inset is what the column can spare above the race pair — nothing — so the
  * hairline is the whole difference. */
 export const LANE_CARD_CONTENT_PX = LANE_COLUMN_PX - 2;
+
+/** The Speedline live deck's start strip floor, the slot the race pair's
+ * why-line wraps in: narrower than a lane card. */
+export const SPEEDLINE_START_STRIP_PX = boardGeometry.speedline.startStrip;
 
 /**
  * Pin which layout branch a suite renders. jsdom ships **no** `window.matchMedia`
@@ -119,13 +122,17 @@ export const pinLayoutWidth = (width: number, height: number = DESK_HEIGHT_PX): 
 };
 
 /**
- * What an element is declared to be inside a given `@media` block (the desk
- * gate by default). jsdom parses emotion's media blocks into the CSSOM but
- * never *applies* them — `getComputedStyle` reports the base rule at any
- * viewport — so a breakpoint's declarations are read off the rule the element
- * actually carries.
+ * What an element is declared to be inside a given `@media` block (the
+ * Freestyle desk gate by default). jsdom parses emotion's media blocks into the
+ * CSSOM but never *applies* them — `getComputedStyle` reports the base rule at
+ * any viewport — so a breakpoint's declarations are read off the rule the
+ * element actually carries.
  */
-export const deskMediaValue = (element: Element, property: string, media = DESK_MEDIA): string => {
+export const deskMediaValue = (
+  element: Element,
+  property: string,
+  media: string = deskMedia.freestyle,
+): string => {
   const wanted = media.replace(/\s+/g, '');
   for (const sheet of Array.from(document.styleSheets)) {
     for (const rule of Array.from(sheet.cssRules)) {

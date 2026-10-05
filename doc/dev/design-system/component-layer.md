@@ -211,11 +211,27 @@ rules**, not convention:
 - **MetaMask** ships `color-no-hex`, flagging any hex literal in styles, framed explicitly as a
   **consistency / scalability / maintenance** guarantee. [MetaMask]
 
-**We have a gap here.** Our only styling guardrail is the token _parity_ test; ESLint has **no**
-rule against raw hex or off-token `sx`. Adding a `no-restricted-syntax` rule that flags hex literals
-in `.tsx` (allow-listing `tokens.ts`/`tokens.css`/`overlayBg.ts`) would turn the DESIGN_SYSTEM's
-"never inline a raw hex" from a comment into a check. This is the single highest-leverage,
-lowest-risk enforcement step.
+**Ours is a test, not a lint rule.** `web/test/app/noRawColour.test.ts` fails on any raw hex /
+`rgb()` / `hsl()` literal in code anywhere under `app/` outside `app/theme/`, with an explicit,
+self-checking allowlist of real-world reference colours (the Buzz! handset swatches, the national
+flag art) — design-system §9. The same file's `app/ px lengths` suite guards px under `app/`
+outside `app/theme/`; spacing goes through `theme.spacing`, mark widths through `strokes`, desk
+rails through `deskRails` (design-system §5). It guards three forms:
+
+- a quoted bare px string (`'12px'`) fails, allowlisting only files whose `'1px'` box cannot be a
+  number (a bare `1` in `sx` is 100 %);
+- a quoted compound value opening on px (`'1px solid'`, `'248px minmax(0, 1fr) 360px'`) fails — a
+  border is `border: 1`, a track list comes from a token;
+- a template `${…}px` passes over a `tokens.ts` scale member (`${radii.sm}px`) or a runtime
+  measurement rounded with `.toFixed(2)` (device px by construction), and is otherwise
+  **ratcheted** with numeric `sx` geometry (`width: 96`, `minHeight: { xs: 120 }`).
+
+The ratchet is `RAW_PX_DEBT`: each file's count is frozen, may hold or shrink but never grow, and a
+twin test fails on an entry the file has dropped below — so the ledger prunes itself as each surface
+migrates onto tokens. Theme-multiplied keys (`gap`, `p`, `m`, `borderRadius`), fractions (`<= 1`)
+and decimal reference-frame measurements fed through `refVh` are not raw px and are not counted,
+except in an overlay body (`pages/Stream/*Overlay.tsx`): there theme spacing (`spacing={3}`, `pt: 6`)
+fails outright, because on-air gaps scale with the capture frame (design-system §7).
 
 ---
 
