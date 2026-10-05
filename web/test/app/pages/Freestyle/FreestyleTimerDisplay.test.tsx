@@ -262,6 +262,19 @@ describe('FreestyleTimerDisplay quali single-hero collapse', () => {
     expect(screen.getByText('John')).toBeInTheDocument();
   });
 
+  it('justifies battle clocks to their lane edges and the quali hero to the centre', () => {
+    const { repaint } = renderPastWarmup(laneAthletesMessage('a1', 'a2', 'battle'), 'broadcast');
+    const justify = () =>
+      screen
+        .getAllByTestId('countdown-plate')
+        .map((plate) => window.getComputedStyle(plate).justifyContent);
+    expect(justify()).toEqual(['flex-start', 'flex-end']);
+
+    lastMessage.current = laneAthletesMessage('a1', 'a2', 'quali');
+    repaint();
+    expect(justify()).toEqual(['center']);
+  });
+
   it('keeps the two-lane default when the selection carries no mode (pre-0036 board)', () => {
     const { repaint } = renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
 
@@ -284,6 +297,10 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
     renderDisplay();
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
+    // The slot holds the left corner, so its clock hugs the left edge.
+    expect(window.getComputedStyle(screen.getByTestId('countdown-plate')).justifyContent).toBe(
+      'flex-start',
+    );
   });
 
   // STATUS athlete-display-warmup-default: the shared feed holds the warm-up
@@ -710,6 +727,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
       tries: { 1: 2, 2: 1 },
       turn: 1,
       clockRunning: false,
+      rev: 0,
     });
 
     renderDisplay('projector');
@@ -729,7 +747,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
   // panel edit arriving late must not clear a fresher tally off the hero.
   it('ignores a stale-stamped selection (last-writer-wins by seq)', () => {
     lastMessage.current = {
-      ...bestTrickMessage({ cap: 5, tries: { 1: 2, 2: 1 }, turn: 1, clockRunning: false }),
+      ...bestTrickMessage({ cap: 5, tries: { 1: 2, 2: 1 }, turn: 1, clockRunning: false, rev: 0 }),
       senderId: 'panel-b',
       seq: 100,
     };
@@ -761,6 +779,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
       tries: { 1: 0, 2: 0 },
       turn: null,
       clockRunning: false,
+      rev: 0,
     });
     repaint();
 
@@ -779,6 +798,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
       tries: { 1: 0, 2: 0 },
       turn: 1,
       clockRunning: false,
+      rev: 0,
     });
     const { repaint } = renderDisplay('projector');
     expect(screen.getAllByText('Best Trick 0/3')).toHaveLength(2);
@@ -790,7 +810,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
 
   it('shows the try clock under the turn athlete once the board arms the window', () => {
     const { repaint } = renderPastWarmup(
-      bestTrickMessage({ cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: false }),
+      bestTrickMessage({ cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: false, rev: 0 }),
       'projector',
     );
 
@@ -815,7 +835,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
   // value instead of resting at the UNSEEDED 00:00.
   it('keeps the try-clock value across a turn flip (remount reseeds from the row)', () => {
     const { repaint } = renderPastWarmup(
-      bestTrickMessage({ cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: false }),
+      bestTrickMessage({ cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: false, rev: 0 }),
       'projector',
     );
 
@@ -844,6 +864,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
       tries: { 1: 1, 2: 0 },
       turn: 2,
       clockRunning: false,
+      rev: 0,
     });
     repaint();
 
@@ -863,6 +884,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
       tries: { 1: 0, 2: 0 },
       turn: 2,
       clockRunning: false,
+      rev: 0,
     });
     repaint();
     lastMessage.current = {
@@ -891,7 +913,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     const { repaint } = renderPastWarmup(
-      bestTrickMessage({ cap: 3, tries: { 1: 1, 2: 0 }, turn: 1, clockRunning: true }),
+      bestTrickMessage({ cap: 3, tries: { 1: 1, 2: 0 }, turn: 1, clockRunning: true, rev: 0 }),
       'projector',
     );
 
@@ -919,6 +941,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
       tries: { 1: 1, 2: 0 },
       turn: 2,
       clockRunning: false,
+      rev: 0,
     });
     repaint();
     act(() => {
@@ -932,7 +955,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
 
   it('keeps the round count on the turn banner while the try window runs', () => {
     const { repaint } = renderPastWarmup(
-      bestTrickMessage({ cap: 3, tries: { 1: 1, 2: 0 }, turn: 1, clockRunning: true }),
+      bestTrickMessage({ cap: 3, tries: { 1: 1, 2: 0 }, turn: 1, clockRunning: true, rev: 0 }),
       'projector',
     );
 
@@ -965,6 +988,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
       tries: { 1: 0, 2: 0 },
       turn: 1,
       clockRunning: true,
+      rev: 0,
     });
     repaint();
     expect(screen.getAllByText('Best Trick 0/3')).toHaveLength(2);

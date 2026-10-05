@@ -19,26 +19,18 @@ import { LockedControl } from 'app/components/LockedControl';
 import { RaceButton } from 'app/components/RaceButton';
 import { WhyLine } from 'app/components/WhyLine';
 import { NBSP, StateWord } from './cardText';
-import { fonts } from 'app/theme/tokens';
+import { boardGeometry, fonts } from 'app/theme/tokens';
 import { formatClock } from 'app/util/time';
 
-/** The identity row's reserved depth (§4.12) — a line of the taller half, so
- * picking an athlete does not move the transport under the hand. */
-const IDENTITY_ROW_PX = 26;
-
-/** The race pair's floor inside the card — two §6 120 px tracks and the row's
- * own gutter — plus the panel's hairline on both sides. The lane column is
- * spent on this before anything else: at the 1280 px desk it leaves 2 px. */
-const CARD_FLOOR_PX = 2 * 120 + 16 + 2;
-
 /**
- * The card's inline inset: whatever the column can spare above that floor, up
- * to the desk's own 16 px. It is read off the card's own width, not the
- * viewport — the 560 px quali card and the 260 px battle lane are the same
- * component on the same desk. Exported because jsdom parses no `clamp()` into
+ * The card's inline inset: whatever the column can spare above the race pair it
+ * is spent on first (`boardGeometry.freestyle.cardFloor` — at the 1280 px desk
+ * it leaves 2 px), up to the desk's own 16 px. It is read off the card's own
+ * width, not the viewport — the 560 px quali card and the 260 px battle lane
+ * are the same component on the same desk. Exported because jsdom parses no `clamp()` into
  * computed padding, so the test holds it against the floor the DOM reports.
  */
-export const LANE_CARD_PAD_INLINE = `clamp(0px, (100% - ${CARD_FLOOR_PX}px) / 2, 16px)`;
+export const LANE_CARD_PAD_INLINE = `clamp(0px, (100% - ${boardGeometry.freestyle.cardFloor}px) / 2, 16px)`;
 
 /** The fixed half: the card's owner never changes and the numeral is the
  * card's hero, so it takes the state word's family a step down rather than a
@@ -271,7 +263,7 @@ export const CountdownControl = (props: Props) => {
         data-testid="lane-identity"
         spacing={1}
         sx={{
-          minHeight: IDENTITY_ROW_PX,
+          minHeight: boardGeometry.freestyle.identityRow,
           width: '100%',
           alignItems: 'baseline',
           justifyContent: 'center',

@@ -64,6 +64,10 @@ export interface TrySeriesState {
   clock: TryClock;
   /** The side of the last started/skipped try, for the alternation suggestion. */
   lastSide: PlayerId | null;
+  /** The series revision (ADR 0049): bumped by every local transition, adopted
+   * from the wire by PEER_SELECTION, never moved by the other PEER_* actions —
+   * so a mirror echoes the highest rev it applied, and a lower one is stale. */
+  rev: number;
 }
 
 /** Events (domain verbs). Wall clock rides in on `at` so the reducer stays pure. */
@@ -88,6 +92,7 @@ export const initialTrySeries = (cap: number, tryMs: number = DEFAULT_TRY_MS): T
   used: { 1: 0, 2: 0 },
   clock: { running: false, endedMs: null },
   lastSide: null,
+  rev: 0,
 });
 
 /** Whether a side still has tries left (its used count is below the cap). */
@@ -138,6 +143,7 @@ export const bestTrickWire = (state: TrySeriesState | null): FreestyleSelection[
         tries: { 1: state.used[1], 2: state.used[2] },
         turn: currentTurn(state),
         clockRunning: state.clock.running,
+        rev: state.rev,
       };
 
 /**
@@ -180,7 +186,7 @@ const resetCountdown = (remainingMs: number): TimerEffect => ({
  * `never`-checked, no I/O. The try clock is anchored to the event wall clock so
  * both surfaces derive the same remaining off it (rule 6).
  */
-export const reduce = (state: TrySeriesState, event: TrySeriesEvent): TrySeriesResult => {
+const transition = (state: TrySeriesState, event: TrySeriesEvent): TrySeriesResult => {
   switch (event.type) {
     case 'START_TRY': {
       // Guard: never start over a live clock, and never over an exhausted side.
@@ -273,8 +279,7 @@ export const reduce = (state: TrySeriesState, event: TrySeriesEvent): TrySeriesR
       // wire clock so the preview hero reads the full window again.
       return {
         state: {
-          cap: state.cap,
-          tryMs: state.tryMs,
+          ...state,
           used: { 1: 0, 2: 0 },
           clock: { running: false, endedMs: null },
           lastSide: null,
@@ -287,6 +292,18 @@ export const reduce = (state: TrySeriesState, event: TrySeriesEvent): TrySeriesR
       return ((_exhaustive: never): TrySeriesResult => ({ state, effects: [] }))(event);
     }
   }
+};
+
+/**
+ * A local series transition: `transition`, with every state change stamped by
+ * a rev bump (ADR 0049). Bumped here rather than per case so no event can move
+ * the series without it; a guarded no-op returns the state as is.
+ */
+export const reduce = (state: TrySeriesState, event: TrySeriesEvent): TrySeriesResult => {
+  const result = transition(state, event);
+  return result.state === state
+    ? result
+    : { ...result, state: { ...result.state, rev: state.rev + 1 } };
 };
 
 /**
@@ -329,7 +346,7 @@ const sameContext = (a: TrySeriesContext | null, b: TrySeriesContext): boolean =
   a !== null && a.matchId === b.matchId && a.mode === b.mode;
 
 export type TrySeriesAction =
-  | { type: 'ARM'; cap: number; tryMs?: number }
+  | { type: 'ARM'; cap: number; tryMs?: number; at: number }
   | { type: 'DISARM' }
   | { type: 'DRAIN' }
   /** The board's own context, observed after every change: a real change is the
@@ -364,9 +381,17 @@ export const trySeriesReducer = (
       // and the re-arm that replaces it can land in one tick) — the ordered
       // queue then ends on this window, where discarding lost the disarm's own
       // reset and left the preview hero on the previous match's clock.
+      //
+      // A fresh series has no rev to bump from once a disarm has dropped the
+      // last one, so ARM anchors its rev at the wall clock (the selection seq's
+      // rule, ADR 0038 §4): a mirror that missed the disarm still holds a rev
+      // of the old cycle, and a counter restarting at 1 would sit below it.
       return {
         ...store,
-        series: initialTrySeries(action.cap, action.tryMs),
+        series: {
+          ...initialTrySeries(action.cap, action.tryMs),
+          rev: Math.max((store.series?.rev ?? 0) + 1, action.at),
+        },
         effects: appendEffects(store.effects, [resetCountdown(action.tryMs ?? DEFAULT_TRY_MS)]),
       };
     case 'DISARM':
@@ -419,6 +444,13 @@ export const trySeriesReducer = (
       // wire `turn`: a running clock's side IS the acting panel's lastSide;
       // between tries the suggestion is other(lastSide).
       const current = store.series ?? initialTrySeries(bt.cap);
+      // The rev gate (ADR 0049): a wire below the rev held here is an echo sent
+      // before its panel applied a later transition — the pre-start tally with
+      // `clockRunning: false` that rolled the acting panel back a try. A RESET
+      // bumps too, so its all-zero wire still outranks the lag it resembles.
+      // The wire field is typed required, but a pre-rev page omits it.
+      const rev = (bt.rev as number | undefined) ?? 0;
+      if (rev < current.rev) return store;
       // The clock channel (PEER_TRY_*) owns the clock; the selection only
       // corrects a running one's SIDE — the one fact PEER_TRY_START has to
       // guess. It may NOT stop one: every panel re-pushes this payload, so a
@@ -452,21 +484,21 @@ export const trySeriesReducer = (
               : current.lastSide;
       // A try is consumed on start, so a panel whose clock is running has
       // already spent that side's try — while both ends agree a window is open,
-      // a lower wire count is a mirror lagging by one (it anchors off
-      // start_countdown but takes `used` from the selection), never a decrement.
-      // A lagging echo that still reads `clockRunning: false` slips past this
-      // and CAN roll the tally back; widening the guard to every wire clock
-      // state was tried and measured worse, because a peer RESET's all-zero
-      // wire is indistinguishable from a pre-start lag.
+      // a lower wire count at an equal rev is a mirror lagging by one (it
+      // anchors off start_countdown but takes `used` from the selection), never
+      // a decrement. A lag that reads `clockRunning: false` is the rev gate's.
       const used = { 1: bt.tries[1], 2: bt.tries[2] };
       if (clock.running && bt.clockRunning) {
         used[clock.side] = Math.max(used[clock.side], current.used[clock.side]);
       }
-      const next: TrySeriesState = { ...current, cap: bt.cap, used, lastSide, clock };
+      const next: TrySeriesState = { ...current, cap: bt.cap, used, lastSide, clock, rev };
       // Value-guarded: an equal mirror returns the same store, so the
       // cross-panel selection echo dies out instead of re-rendering forever.
+      // The rev is a value too: a mirror left on an older rev would send its
+      // own next edit below the room's, and every peer would drop it.
       const unchanged =
         store.series !== null &&
+        store.series.rev === next.rev &&
         store.series.cap === next.cap &&
         store.series.used[1] === next.used[1] &&
         store.series.used[2] === next.used[2] &&

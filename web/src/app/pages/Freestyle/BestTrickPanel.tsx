@@ -27,7 +27,7 @@ import { RaceButton } from 'app/components/RaceButton';
 import { SecondsField } from 'app/components/SecondsField';
 import { WhyLine } from 'app/components/WhyLine';
 import { NBSP, StateWord } from './cardText';
-import { chosenKey, colors, fonts, liveCaption } from 'app/theme/tokens';
+import { boardGeometry, chosenKey, colors, fonts, liveCaption } from 'app/theme/tokens';
 
 interface Props {
   /** The armed series, or null while the phase is off (ADR 0032 idiom). */
@@ -87,19 +87,16 @@ const SERIES_ASKS: Record<SeriesAsk, { verb: string; title: string; gerund: stri
 /** The answer that keeps the tally, whichever press asked. */
 const KEEP_SERIES = 'Keep series';
 
-/** The three race tracks the armed panel is spent on before anything else —
- * both Start trys and End try, at §6's 120 px — plus the deck's two gutters and
- * the panel's own hairline on each side. */
-const PANEL_FLOOR_PX = 3 * 120 + 2 * 16 + 2;
-
 /**
- * The panel's inline inset: whatever the live column can spare above that
- * floor, up to the desk's own 16 px. Read off the panel's own width, not the
- * viewport, so the ceiling the deck above it takes is what measures it.
+ * The panel's inline inset: whatever the live column can spare above the three
+ * race tracks it is spent on first (both Start trys and End try,
+ * `boardGeometry.freestyle.panelFloor`), up to the desk's own 16 px. Read off
+ * the panel's own width, not the viewport, so the ceiling the deck above it
+ * takes is what measures it.
  * Exported because jsdom parses no `clamp()` into computed padding, so the test
  * holds it against the floor the DOM reports.
  */
-export const BEST_TRICK_PAD_INLINE = `clamp(0px, (100% - ${PANEL_FLOOR_PX}px) / 2, 16px)`;
+export const BEST_TRICK_PAD_INLINE = `clamp(0px, (100% - ${boardGeometry.freestyle.panelFloor}px) / 2, 16px)`;
 
 /**
  * The chosen key of the cap pair, on §6's `chosenKey` — the same mark the theme
@@ -365,7 +362,7 @@ export const BestTrickPanel = (props: Props) => {
               here: the shared field takes and hands back plain seconds. */}
           <SecondsField
             label="Try (s)"
-            sx={{ width: 96 }}
+            sx={{ width: boardGeometry.freestyle.tryField }}
             value={Math.round(tryMs / 1000)}
             disabled={locks.settings !== null}
             onChange={(seconds) => props.onSetTryMs(Math.max(1, seconds) * 1000)}

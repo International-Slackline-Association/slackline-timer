@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { FreestyleSelection } from 'app/hooks/useWebSocket';
 import {
   BEST_TRICK_TIMER_ID,
   DEFAULT_TRY_MS,
@@ -217,6 +218,7 @@ describe('bestTrickSeries — RESET', () => {
       used: { 1: 0, 2: 0 },
       clock: { running: false, endedMs: null },
       lastSide: null,
+      rev: 2,
     });
     expect(r.effects).toEqual([
       {
@@ -237,6 +239,7 @@ describe('bestTrickSeries — trySeriesReducer arm/disarm', () => {
       type: 'ARM',
       cap: 5,
       tryMs: DEFAULT_TRY_MS,
+      at: 1_000,
     });
     expect(armed.series?.cap).toBe(5);
     expect(armed.effects).toEqual([
@@ -269,11 +272,11 @@ describe('bestTrickSeries — trySeriesReducer arm/disarm', () => {
     // render), so ARM must queue behind whatever is still pending rather than
     // replace it — a dropped disarm reset would leave the preview hero on the
     // previous match's clock.
-    const armed = trySeriesReducer(initialTrySeriesStore, { type: 'ARM', cap: 3 });
+    const armed = trySeriesReducer(initialTrySeriesStore, { type: 'ARM', cap: 3, at: 1_000 });
     const disarmed = trySeriesReducer(armed, { type: 'DISARM' });
     expect(disarmed.effects).toHaveLength(2);
 
-    const rearmed = trySeriesReducer(disarmed, { type: 'ARM', cap: 5, tryMs: 20_000 });
+    const rearmed = trySeriesReducer(disarmed, { type: 'ARM', cap: 5, tryMs: 20_000, at: 2_000 });
     expect(rearmed.series?.cap).toBe(5);
     expect(rearmed.effects).toEqual([
       ...disarmed.effects,
@@ -303,7 +306,7 @@ describe('bestTrickSeries — peer mirroring (ADR 0038)', () => {
     const actions: TrySeriesAction[] = [
       {
         type: 'PEER_SELECTION',
-        bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false },
+        bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false, rev: 0 },
       },
       { type: 'PEER_SELECTION', bestTrick: undefined },
       { type: 'PEER_TRY_START', at: 100, startedAt: 100, remainingMs: DEFAULT_TRY_MS },
@@ -321,7 +324,7 @@ describe('bestTrickSeries — peer mirroring (ADR 0038)', () => {
   it('PEER_SELECTION arms a disarmed store to match the peer board and mirrors the tally', () => {
     const r = trySeriesReducer(disarmed, {
       type: 'PEER_SELECTION',
-      bestTrick: { cap: 5, tries: { 1: 2, 2: 1 }, turn: 2, clockRunning: false },
+      bestTrick: { cap: 5, tries: { 1: 2, 2: 1 }, turn: 2, clockRunning: false, rev: 0 },
     });
     expect(r.series).not.toBeNull();
     expect(r.series?.cap).toBe(5);
@@ -334,7 +337,7 @@ describe('bestTrickSeries — peer mirroring (ADR 0038)', () => {
     // Side 2 exhausted, side 1 last ran and goes again: turn stays 1.
     const r = trySeriesReducer(disarmed, {
       type: 'PEER_SELECTION',
-      bestTrick: { cap: 2, tries: { 1: 1, 2: 2 }, turn: 1, clockRunning: false },
+      bestTrick: { cap: 2, tries: { 1: 1, 2: 2 }, turn: 1, clockRunning: false, rev: 0 },
     });
     expect(currentTurn(r.series as TrySeriesState)).toBe(1);
   });
@@ -353,11 +356,11 @@ describe('bestTrickSeries — peer mirroring (ADR 0038)', () => {
   it('PEER_SELECTION with equal values returns the same store (echo terminator)', () => {
     const first = trySeriesReducer(disarmed, {
       type: 'PEER_SELECTION',
-      bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false },
+      bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false, rev: 0 },
     });
     const second = trySeriesReducer(first, {
       type: 'PEER_SELECTION',
-      bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false },
+      bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false, rev: 0 },
     });
     expect(second).toBe(first);
   });
@@ -373,7 +376,7 @@ describe('bestTrickSeries — peer mirroring (ADR 0038)', () => {
     expect(store.series?.clock).toMatchObject({ running: true, side: 1 });
     store = trySeriesReducer(store, {
       type: 'PEER_SELECTION',
-      bestTrick: { cap: 3, tries: { 1: 0, 2: 1 }, turn: 2, clockRunning: true },
+      bestTrick: { cap: 3, tries: { 1: 0, 2: 1 }, turn: 2, clockRunning: true, rev: 0 },
     });
     expect(store.series?.clock).toMatchObject({ running: true, side: 2, startedAt: 0 });
   });
@@ -383,7 +386,7 @@ describe('bestTrickSeries — peer mirroring (ADR 0038)', () => {
     // start_countdown. The mirrored clock must start on side 2.
     let store = trySeriesReducer(disarmed, {
       type: 'PEER_SELECTION',
-      bestTrick: { cap: 3, tries: { 1: 0, 2: 1 }, turn: 2, clockRunning: true },
+      bestTrick: { cap: 3, tries: { 1: 0, 2: 1 }, turn: 2, clockRunning: true, rev: 0 },
     });
     store = trySeriesReducer(store, {
       type: 'PEER_TRY_START',
@@ -445,12 +448,14 @@ describe('bestTrickSeries — peer mirroring (ADR 0038)', () => {
   });
 
   it('PEER_SELECTION never stops a running try clock (the clock channel owns it)', () => {
-    // The peer has not applied our start_countdown yet, so its echo still says
-    // "no try is open". Stopping on that killed the acting panel's own try.
-    const acting = armedStore(step(fresh(), { type: 'START_TRY', side: 1, at: 1000 }));
+    // The peer took our selection but not yet our start_countdown, so its echo
+    // (same rev) still says "no try is open". Stopping on that killed the
+    // acting panel's own try.
+    const series = step(fresh(), { type: 'START_TRY', side: 1, at: 1000 });
+    const acting = armedStore(series);
     const r = trySeriesReducer(acting, {
       type: 'PEER_SELECTION',
-      bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 1, clockRunning: false },
+      bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 1, clockRunning: false, rev: series.rev },
     });
     expect(r.series?.clock).toEqual(acting.series?.clock);
     // A preserved clock keeps its side as the last one to run, so the turn the
@@ -462,24 +467,27 @@ describe('bestTrickSeries — peer mirroring (ADR 0038)', () => {
   it('PEER_SELECTION never lowers the tally of the side whose try is running', () => {
     // A mirrored panel anchors its clock off start_countdown WITHOUT consuming
     // the try (`used` rides the selection), so its echo lags by one — applying
-    // it verbatim wiped the acting panel's tally back to 0.
-    const acting = armedStore(step(fresh(), { type: 'START_TRY', side: 1, at: 1000 }));
+    // it verbatim wiped the acting panel's tally back to 0. A lower rev is
+    // dropped by the rev gate; the clamp still holds at an equal one.
+    const series = step(fresh(), { type: 'START_TRY', side: 1, at: 1000 });
+    const acting = armedStore(series);
     const r = trySeriesReducer(acting, {
       type: 'PEER_SELECTION',
-      bestTrick: { cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: true },
+      bestTrick: { cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: true, rev: series.rev },
     });
     expect(r.series?.used).toEqual({ 1: 1, 2: 0 });
     expect(r).toBe(acting); // and the lagging echo dies here, unchanged
   });
 
   it('still takes a peer RESET that clears the tally under a running clock', () => {
-    // The one legitimate decrement: a RESET zeroes BOTH sides and stops the
-    // wire clock, so it is not a lagging echo and must pass through — the
-    // acting panel's `Reset series` has to clear the mirror mid-try.
-    const mirror = armedStore(step(fresh(), { type: 'START_TRY', side: 1, at: 1000 }));
+    // The one legitimate decrement: a RESET zeroes BOTH sides under a bumped
+    // rev, so it is not a lagging echo and must pass through — the acting
+    // panel's `Reset series` has to clear the mirror mid-try.
+    const running = step(fresh(), { type: 'START_TRY', side: 1, at: 1000 });
+    const mirror = armedStore(running);
     const r = trySeriesReducer(mirror, {
       type: 'PEER_SELECTION',
-      bestTrick: { cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: false },
+      bestTrick: bestTrickWire(step(running, { type: 'RESET' })),
     });
     expect(r.series?.used).toEqual({ 1: 0, 2: 0 });
   });
@@ -573,6 +581,125 @@ describe('bestTrickSeries — peer mirroring (ADR 0038)', () => {
   });
 });
 
+describe('bestTrickSeries — the series rev (the stale-echo gate)', () => {
+  const armedStore = (series: TrySeriesState): TrySeriesStore => ({
+    series,
+    context: null,
+    effects: [],
+  });
+  const running = step(fresh(), { type: 'START_TRY', side: 1, at: 1_000 });
+
+  it.each<[string, TrySeriesState, Parameters<typeof reduce>[1]]>([
+    ['START_TRY', fresh(), { type: 'START_TRY', side: 1, at: 1_000 }],
+    ['END_TRY', running, { type: 'END_TRY', at: 5_000 }],
+    ['TRY_TIMEOUT', running, { type: 'TRY_TIMEOUT', at: 31_000 }],
+    ['SKIP_TRY', fresh(), { type: 'SKIP_TRY', side: 2 }],
+    ['SET_CAP', fresh(), { type: 'SET_CAP', cap: 5 }],
+    ['SET_TRY_MS', fresh(), { type: 'SET_TRY_MS', tryMs: 20_000 }],
+    ['RESET', running, { type: 'RESET' }],
+  ])('a local %s bumps the rev by one', (_name, state, event) => {
+    expect(reduce(state, event).state.rev).toBe(state.rev + 1);
+  });
+
+  it('a guarded no-op keeps the rev (the state is returned as is)', () => {
+    expect(reduce(running, { type: 'START_TRY', side: 2, at: 2_000 }).state).toBe(running);
+    expect(reduce(fresh(), { type: 'END_TRY', at: 2_000 }).state.rev).toBe(0);
+  });
+
+  it('ARM anchors the rev at the wall clock, above any rev it replaces', () => {
+    const armed = trySeriesReducer(initialTrySeriesStore, { type: 'ARM', cap: 3, at: 5_000 });
+    expect(armed.series?.rev).toBe(5_000);
+    // A disarm loses the series, so the floor across arm cycles is the clock: a
+    // mirror that missed the disarm still holds a rev of the old cycle.
+    const ahead = armedStore({ ...fresh(), rev: 9_000 });
+    expect(trySeriesReducer(ahead, { type: 'ARM', cap: 3, at: 5_000 }).series?.rev).toBe(9_001);
+  });
+
+  it('no PEER_* action bumps the rev; PEER_SELECTION adopts the wire rev', () => {
+    const store = armedStore({ ...running, rev: 7 });
+    const peers: TrySeriesAction[] = [
+      { type: 'PEER_TRY_START', at: 2_000, startedAt: 2_000, remainingMs: DEFAULT_TRY_MS },
+      { type: 'PEER_TRY_STOP', remainingMs: 9_000 },
+      { type: 'PEER_TRY_RESET', remainingMs: DEFAULT_TRY_MS },
+      { type: 'PEER_CONTEXT', context: { matchId: 'm1', mode: 'battle' } },
+    ];
+    for (const action of peers) {
+      expect(trySeriesReducer(store, action).series?.rev).toBe(7);
+    }
+    const adopted = trySeriesReducer(store, {
+      type: 'PEER_SELECTION',
+      bestTrick: { ...bestTrickWire(running)!, rev: 12 },
+    });
+    expect(adopted.series?.rev).toBe(12);
+  });
+
+  it('drops a lower-rev echo with the pre-start tally — the tally is not rolled back', () => {
+    // The located residue: the mirror echoed the series as it stood before the
+    // acting panel's second start (`clockRunning: false`, one try spent) after
+    // that start had landed here — the `A=1 / 3` roll-back.
+    let acting = step(fresh(), { type: 'START_TRY', side: 1, at: 1_000 });
+    acting = step(acting, { type: 'END_TRY', at: 5_000 });
+    const beforeSecond = bestTrickWire(acting);
+    acting = step(acting, { type: 'START_TRY', side: 2, at: 6_000 });
+    const store = armedStore(acting);
+    const r = trySeriesReducer(store, { type: 'PEER_SELECTION', bestTrick: beforeSecond });
+    expect(r).toBe(store);
+    expect(r.series?.used).toEqual({ 1: 1, 2: 1 });
+  });
+
+  it('applies an equal rev, and a higher one together with its rev', () => {
+    const store = armedStore(running);
+    const equal = trySeriesReducer(store, {
+      type: 'PEER_SELECTION',
+      bestTrick: { ...bestTrickWire(running)!, tries: { 1: 1, 2: 1 } },
+    });
+    expect(equal.series?.used).toEqual({ 1: 1, 2: 1 });
+    const higher = trySeriesReducer(store, {
+      type: 'PEER_SELECTION',
+      bestTrick: { ...bestTrickWire(running)!, tries: { 1: 2, 2: 0 }, rev: running.rev + 3 },
+    });
+    expect(higher.series?.used).toEqual({ 1: 2, 2: 0 });
+    expect(higher.series?.rev).toBe(running.rev + 3);
+  });
+
+  it('tells a RESET from lag: the bumped all-zero wire applies, an older one does not', () => {
+    let acting = step(fresh(), { type: 'SKIP_TRY', side: 1 });
+    acting = step(acting, { type: 'SKIP_TRY', side: 2 });
+    const mirror = armedStore(acting);
+    const reset = bestTrickWire(step(acting, { type: 'RESET' }));
+    expect(
+      trySeriesReducer(mirror, { type: 'PEER_SELECTION', bestTrick: reset }).series?.used,
+    ).toEqual({ 1: 0, 2: 0 });
+    const lag = bestTrickWire(fresh());
+    expect(trySeriesReducer(mirror, { type: 'PEER_SELECTION', bestTrick: lag })).toBe(mirror);
+  });
+
+  it('reads an absent rev (a pre-rev peer) as rev 0', () => {
+    const { rev: _omit, ...legacy } = bestTrickWire({ ...fresh(), used: { 1: 1, 2: 0 } })!;
+    const wire = legacy as FreestyleSelection['bestTrick'];
+    const atZero = trySeriesReducer(armedStore(fresh()), {
+      type: 'PEER_SELECTION',
+      bestTrick: wire,
+    });
+    expect(atZero.series?.used).toEqual({ 1: 1, 2: 0 });
+    expect(atZero.series?.rev).toBe(0);
+    const ahead = armedStore(running);
+    expect(trySeriesReducer(ahead, { type: 'PEER_SELECTION', bestTrick: wire })).toBe(ahead);
+  });
+
+  it('adopts a higher rev even when every other value is equal', () => {
+    // Otherwise the mirror keeps the older rev, and its own next local edit
+    // would go out below the room's and be dropped everywhere.
+    const store = armedStore(running);
+    const r = trySeriesReducer(store, {
+      type: 'PEER_SELECTION',
+      bestTrick: { ...bestTrickWire(running)!, rev: running.rev + 1 },
+    });
+    expect(r).not.toBe(store);
+    expect(r.series?.rev).toBe(running.rev + 1);
+  });
+});
+
 describe('bestTrickSeries — bestTrickWire (the mirrored selection payload)', () => {
   it('is absent while disarmed and carries the live tally/turn while armed', () => {
     expect(bestTrickWire(null)).toBeUndefined();
@@ -582,6 +709,7 @@ describe('bestTrickSeries — bestTrickWire (the mirrored selection payload)', (
       tries: { 1: 0, 2: 1 },
       turn: 2,
       clockRunning: true,
+      rev: 1,
     });
   });
 });
@@ -678,13 +806,13 @@ describe('bestTrickSeries — board context (the disarm-on-change rule)', () => 
   const armedIn = (context: { matchId: string; mode: 'quali' | 'battle' }) => {
     const armed = trySeriesReducer(
       { ...initialTrySeriesStore, context },
-      { type: 'ARM', cap: 3, tryMs: DEFAULT_TRY_MS },
+      { type: 'ARM', cap: 3, tryMs: DEFAULT_TRY_MS, at: 1_000 },
     );
     return trySeriesReducer(armed, { type: 'DRAIN' });
   };
 
   it('adopts the first context it is told about without disarming', () => {
-    const armed = trySeriesReducer(initialTrySeriesStore, { type: 'ARM', cap: 3 });
+    const armed = trySeriesReducer(initialTrySeriesStore, { type: 'ARM', cap: 3, at: 1_000 });
     const r = trySeriesReducer(armed, { type: 'CONTEXT', context: quarterM1 });
     expect(r.series).not.toBeNull();
     expect(r.context).toEqual(quarterM1);
@@ -729,7 +857,7 @@ describe('bestTrickSeries — board context (the disarm-on-change rule)', () => 
   });
 
   it('adopts the first peer-reported context without dropping anything', () => {
-    const armed = trySeriesReducer(initialTrySeriesStore, { type: 'ARM', cap: 3 });
+    const armed = trySeriesReducer(initialTrySeriesStore, { type: 'ARM', cap: 3, at: 1_000 });
     const r = trySeriesReducer(armed, { type: 'PEER_CONTEXT', context: quarterM1 });
     expect(r.series).not.toBeNull();
     expect(r.context).toEqual(quarterM1);
@@ -764,7 +892,7 @@ describe('bestTrickSeries — board context (the disarm-on-change rule)', () => 
     });
     store = trySeriesReducer(store, {
       type: 'PEER_SELECTION',
-      bestTrick: { cap: 5, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false },
+      bestTrick: { cap: 5, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false, rev: 0 },
     });
     expect(store.series?.cap).toBe(5);
     expect(store.series?.used).toEqual({ 1: 1, 2: 0 });

@@ -7,7 +7,7 @@ import { SelectionChangeConfirmDialog } from 'app/components/SelectionChangeConf
 import { WhyLine } from 'app/components/WhyLine';
 import type { ScoreSelection } from 'app/hooks/useScoreRecorder';
 import { usePeerFlash } from 'app/hooks/usePeerFlash';
-import { liveCaption } from 'app/theme/tokens';
+import { boardGeometry, fieldWidths, liveCaption, space } from 'app/theme/tokens';
 import { GENDERS, MATCH_ROUNDS, type Athlete } from 'app/types';
 import { athleteOptions } from 'app/util/athleteOptions';
 import { genderLabel } from 'app/util/gender';
@@ -19,8 +19,11 @@ import { roundLabel, roundsForMode } from 'app/util/rounds';
  * flex basis IS that width, so the row wraps at the field boundary instead of
  * squeezing four selects into their own option text. */
 const FIELD_SX = { width: '100%', minWidth: 0 } as const;
-const PICKER_SX = { ...FIELD_SX, minWidth: { xs: 0, sm: 170 } } as const;
-const field = (basis: number) => ({ flex: `1 1 ${basis}px`, minWidth: 0 });
+const PICKER_SX = { ...FIELD_SX, minWidth: { xs: 0, sm: fieldWidths.short } } as const;
+const field = (key: keyof typeof boardGeometry.freestyle.selectionBasis) => ({
+  flex: `1 1 ${boardGeometry.freestyle.selectionBasis[key]}px`,
+  minWidth: 0,
+});
 /**
  * ONE wrapping row for the whole selection (`freestyle-board-fold-budget`).
  * Battle used to stack a "Recording context" grid over a bordered "Athlete
@@ -39,13 +42,13 @@ const SELECTION_ROW_SX = {
 } as const;
 /** The assignment trio: one flex item of the row above, laid out as its own
  * three-track grid — so it wraps as a unit and stacks in order when it must. */
-const ASSIGNMENT_SX = { flex: '1 1 480px', minWidth: 0 } as const;
+const ASSIGNMENT_SX = field('assignment');
 const ASSIGNMENT_GRID_SX = {
   display: 'grid',
   gap: 0.75,
   gridTemplateColumns: {
     xs: '1fr',
-    md: 'minmax(0, 1fr) minmax(140px, auto) minmax(0, 1fr)',
+    md: `minmax(0, 1fr) minmax(${fieldWidths.compact}px, auto) minmax(0, 1fr)`,
   },
   alignItems: 'start',
 } as const;
@@ -157,7 +160,11 @@ export const FreestyleSelectionPanel = ({
           <Stack
             direction="row"
             spacing={0.75}
-            sx={{ alignItems: 'center', justifyContent: 'space-between', minHeight: 24 }}
+            sx={{
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              minHeight: space.unit * 3,
+            }}
           >
             <Typography variant="caption" sx={{ ...liveCaption, color: 'text.secondary' }}>
               Recording context
@@ -167,7 +174,7 @@ export const FreestyleSelectionPanel = ({
             )}
           </Stack>
           <Box data-testid="selection-context-group" sx={SELECTION_ROW_SX}>
-            <Box sx={field(140)}>
+            <Box sx={field('round')}>
               <SelectField
                 label="Round"
                 value={round}
@@ -177,7 +184,7 @@ export const FreestyleSelectionPanel = ({
               />
             </Box>
 
-            <Box sx={field(110)}>
+            <Box sx={field('gender')}>
               <SelectField
                 label="Gender"
                 value={selectedGender}
@@ -191,9 +198,9 @@ export const FreestyleSelectionPanel = ({
               /* No helper line under it: what the match fills is the manual's
                  §2 sentence and the two pickers beside it show the answer, and
                  a permanent 20 px hint under a once-per-match control is setup
-                 chrome the live path pays for (the responsive contract's
-                 collapse order). */
-              <Box sx={field(210)}>
+                 chrome the live path pays for (the collapse order of
+                 design-system §9 "Responsive contract"). */
+              <Box sx={field('match')}>
                 <SelectField
                   label="Match (freestyle)"
                   value={selectedMatchId}
@@ -208,13 +215,13 @@ export const FreestyleSelectionPanel = ({
               </Box>
             ) : (
               <>
-                <Box sx={field(170)}>{athletePicker(1)}</Box>
+                <Box sx={field('athlete')}>{athletePicker(1)}</Box>
                 {/* The quali next-up hint: not derivable — the board knows who
                     is selected, not who follows — so the operator names it, and
                     the placeholder clears it in one press. It rides
                     `updateSelection`, so a second panel mirrors it and nothing
                     is persisted. */}
-                <Box sx={field(170)}>
+                <Box sx={field('athlete')}>
                   <SelectField
                     label="Next up"
                     value={nextUpAthleteId ?? ''}
@@ -239,7 +246,11 @@ export const FreestyleSelectionPanel = ({
                   <Stack
                     data-testid="athlete-swap-control"
                     spacing={0.5}
-                    sx={{ alignItems: 'stretch', justifyContent: 'center', minWidth: { md: 140 } }}
+                    sx={{
+                      alignItems: 'stretch',
+                      justifyContent: 'center',
+                      minWidth: { md: fieldWidths.compact },
+                    }}
                   >
                     <RaceButton
                       variant="outlined"

@@ -9,6 +9,7 @@ const TALLY: NonNullable<FreestyleSelection['bestTrick']> = {
   tries: { 1: 1, 2: 0 },
   turn: 1,
   clockRunning: false,
+  rev: 0,
 };
 
 /**
@@ -20,22 +21,14 @@ const TALLY: NonNullable<FreestyleSelection['bestTrick']> = {
  */
 describe('BestTrickTally athlete labels', () => {
   it('falls back to the shared athlete label when the room has no names yet', () => {
-    render(
-      <BestTrickTally bestTrick={TALLY} laneNames={{ lane1: '', lane2: '' }} variant="hero" />,
-    );
+    render(<BestTrickTally bestTrick={TALLY} laneNames={{ lane1: '', lane2: '' }} />);
 
     expect(screen.getByText(/^Athlete 1 1\/3$/)).toBeInTheDocument();
     expect(screen.getByText(/^Athlete 2 0\/3$/)).toBeInTheDocument();
   });
 
   it('shows the relayed names once they arrive', () => {
-    render(
-      <BestTrickTally
-        bestTrick={TALLY}
-        laneNames={{ lane1: 'Bianchi', lane2: 'Roe' }}
-        variant="band"
-      />,
-    );
+    render(<BestTrickTally bestTrick={TALLY} laneNames={{ lane1: 'Bianchi', lane2: 'Roe' }} />);
 
     expect(screen.getByText(/^Bianchi 1\/3$/)).toBeInTheDocument();
     expect(screen.getByText(/^Roe 0\/3$/)).toBeInTheDocument();

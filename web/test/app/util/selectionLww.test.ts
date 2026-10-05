@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type { FreestyleSelection, LiveSelection, SpeedSelection } from 'app/hooks/useWebSocket';
 import {
@@ -157,7 +157,7 @@ const fullFreestyleSelection: Required<FreestyleSelection> = {
   athlete1Id: 'athlete-1',
   athlete2Id: 'athlete-2',
   freestyleMode: 'battle',
-  bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: true },
+  bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: true, rev: 4 },
   nextUp: 1,
   qualiNextUp: 'athlete-3',
 };
@@ -172,6 +172,11 @@ const fullSpeedSelection: Required<SpeedSelection> = {
   runWins: { 1: 1, 2: 2 },
   falseStarts: { 1: 0, 2: 1 },
 };
+
+// The series rev (ADR 0049) is the best-trick tally's own ordering signal, so it
+// lives inside the freestyle arm's `bestTrick` and nowhere on the speed arm.
+expectTypeOf<NonNullable<FreestyleSelection['bestTrick']>>().toHaveProperty('rev');
+expectTypeOf<SpeedSelection>().not.toHaveProperty('rev');
 
 const FULL_SELECTIONS: [string, LiveSelection][] = [
   ['freestyle', fullFreestyleSelection],

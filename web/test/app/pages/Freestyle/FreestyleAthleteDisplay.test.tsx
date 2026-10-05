@@ -664,7 +664,7 @@ describe('FreestyleAthleteDisplay shared heroes', () => {
         athlete1Id: null,
         athlete2Id: null,
         // turn: null so the hero's turn-name line doesn't itself render "Alpha".
-        bestTrick: { cap: 5, tries: { 1: 2, 2: 1 }, turn: null, clockRunning: false },
+        bestTrick: { cap: 5, tries: { 1: 2, 2: 1 }, turn: null, clockRunning: false, rev: 0 },
       },
     };
     repaint();

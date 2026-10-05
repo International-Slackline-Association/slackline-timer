@@ -388,6 +388,13 @@ export const entryDraft = (entry: SlotEntry): EntryDraft =>
     ? { fields: EMPTY_FIELDS, override: null }
     : { fields: entry.fields, override: entry.override };
 
+/** Has anything been typed into this panel? A cleared number field reads 0
+ * (`+''`), so a component off zero or any override is a draft. */
+export const hasDraft = (entry: SlotEntry): boolean => {
+  const { fields, override } = entryDraft(entry);
+  return override !== null || Object.values(fields).some((value) => value !== 0);
+};
+
 /** A panel taking input: neither locked by a save nor mid-POST. */
 export const isEntryOpen = (entry: SlotEntry): boolean =>
   entry.status !== 'pending' && entry.status !== 'saved';

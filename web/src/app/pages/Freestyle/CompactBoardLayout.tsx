@@ -1,5 +1,5 @@
 import { Box, Stack, Tab, Tabs } from '@mui/material';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { FreestyleMode } from 'app/state/freestyleModeMemory';
 import type { CurrentStep } from 'app/util/boardStep';
 type CompactBoardTab = 'selection' | 'run' | 'bestTrick' | 'score' | 'setup';
@@ -19,6 +19,16 @@ const compactTabOf = (step: CurrentStep): CompactBoardTab => {
       return 'run';
   }
 };
+/**
+ * The tab a step change moves to. The board follows the operator forward, with
+ * one exception: a Score tab held while the step lands on Selection from
+ * anywhere but Score. The step never passed through Score, so the operator
+ * picked the tab by hand and saved over clocks that never ran — the SAVED chip
+ * is what they are reading. Save at Score → Reset still follows, because that
+ * Selection arrives from Score.
+ */
+const followTab = (from: CurrentStep, to: CurrentStep, tab: CompactBoardTab): CompactBoardTab =>
+  to === 'selection' && tab === 'score' && from !== 'score' ? tab : compactTabOf(to);
 interface Props {
   mode: FreestyleMode;
   step: CurrentStep;
@@ -43,10 +53,12 @@ export const CompactBoardLayout = ({
   setupSection,
   handsetSection,
 }: Props) => {
-  const [compactTab, setCompactTab] = useState<CompactBoardTab>(() => compactTabOf(step));
-  useEffect(() => {
-    setCompactTab(compactTabOf(step));
-  }, [step]);
+  // The tab and the step it last followed change together, during render: the
+  // hold above needs the step the board is leaving.
+  const [view, setView] = useState(() => ({ step, tab: compactTabOf(step) }));
+  if (view.step !== step) setView({ step, tab: followTab(view.step, step, view.tab) });
+  const compactTab = view.tab;
+  const setCompactTab = (tab: CompactBoardTab) => setView({ step, tab });
   return (
     <Stack spacing={1.5} data-testid="compact-board">
       <Box

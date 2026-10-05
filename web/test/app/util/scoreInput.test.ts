@@ -5,6 +5,7 @@ import {
   deriveFreestyleMatchWinner,
   dnfScoreInput,
   entryDraft,
+  hasDraft,
   initialScoreEntries,
   isEntryOpen,
   matchResultsOf,
@@ -677,5 +678,25 @@ describe('winnerAwaiting', () => {
 
   it('waits for nothing once both athlete slots are saved', () => {
     expect(winnerAwaiting({ 1: saved, 2: saved })).toBeNull();
+  });
+});
+
+describe('hasDraft', () => {
+  const editing = (fields: Partial<ScoreFields>, override: string | null = null): SlotEntry => ({
+    status: 'editing',
+    fields: { ...ZERO_FIELDS, ...fields },
+    override,
+  });
+
+  // A cleared number field reads 0 (`+''`), so zero is what blank looks like.
+  it.each<[string, boolean, SlotEntry]>([
+    ['an empty panel', false, { status: 'empty' }],
+    ['a panel edited back to blank', false, editing({})],
+    ['one judged component', true, editing({ style: 12 })],
+    ['the control penalty alone', true, editing({ controlPenalty: 2 })],
+    ['an Overall override alone', true, editing({}, '30')],
+    ['a half-typed negative override', true, editing({}, '-')],
+  ])('%s → %s', (_label, expected, entry) => {
+    expect(hasDraft(entry)).toBe(expected);
   });
 });
