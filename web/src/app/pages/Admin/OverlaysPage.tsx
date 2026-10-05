@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   Alert,
@@ -17,9 +17,11 @@ import { useAthletes } from 'app/api/athletes';
 import { useMatches } from 'app/api/matches';
 import { useRankings } from 'app/api/rankings';
 import { usePersistentReadToken, useRevokeReadTokens } from 'app/api/readTokens';
+import { BoardConfirmDialog } from 'app/components/BoardConfirmDialog';
 import { SelectCompetitionGate } from 'app/components/SelectCompetitionGate';
 import { SelectField, enumOptions } from 'app/components/SelectField';
 import { useAthleteLookup } from 'app/hooks/useAthleteLookup';
+import { fieldWidths } from 'app/theme/tokens';
 import {
   DISCIPLINE,
   GENDERS,
@@ -50,12 +52,33 @@ const origin = () => (typeof window !== 'undefined' ? window.location.origin : '
 const disciplineLabel = (discipline: Discipline) =>
   discipline === 'speed' ? 'Speed' : 'Freestyle';
 
+/** Speed | Freestyle side by side from `lg`, so both Live groups open the page. */
+const DISCIPLINE_COLUMNS = { xs: '1fr', lg: '1fr 1fr' } as const;
+
+/**
+ * From `lg` each discipline section is a subgrid over three shared row tracks
+ * (heading, Live, Round-pinned): the taller Live group sets the row for both
+ * columns, so the Round-pinned headings share a line. Stacked, it is inert.
+ */
+const DISCIPLINE_SECTION_ROWS = {
+  display: { lg: 'grid' },
+  gridTemplateRows: { lg: 'subgrid' },
+  gridRow: { lg: 'span 3' },
+} as const;
+
+/** `pinned`: built from the Round/Gender pickers rather than following the board. */
+interface OverlayLink {
+  label: string;
+  url: string;
+  pinned: boolean;
+}
+
 /**
  * Overlay URLs for one discipline. The read token is competition-scoped, so the
  * same token serves both disciplines — only the appended `&discipline=` differs
  * (omitted for speed, the overlay default). `bgSuffix` is the shared background
- * mode (`''` for transparent or `&bg=key` for the magenta chroma), threaded onto
- * every minted link so the operator copies the right one for their rig.
+ * mode, threaded onto every minted link so the operator copies the right one
+ * for their rig.
  */
 const overlayLinks = (
   compId: string,
@@ -64,18 +87,41 @@ const overlayLinks = (
   round: MatchRound,
   gender: Gender,
   bgSuffix: string,
-) => {
+): OverlayLink[] => {
   const suffix = `?compId=${compId}&token=${token}${
     discipline === 'speed' ? '' : `&discipline=${discipline}`
   }${bgSuffix}`;
+  // The timer pages join the relay room by `sessionId` and take their
+  // discipline from the path, so they carry neither `compId` nor `&discipline=`.
+  const timerSuffix = `?sessionId=${compId}&token=${token}${bgSuffix}`;
   return [
+    discipline === 'speed'
+      ? {
+          label: 'Race timer (Speed)',
+          url: `${origin()}/stream/timer${timerSuffix}`,
+          pinned: false,
+        }
+      : {
+          label: 'Run clock (Freestyle)',
+          url: `${origin()}/stream/timer-freestyle${timerSuffix}`,
+          pinned: false,
+        },
     // Full-screen audience-facing athlete display (freestyle only): quali
     // single-hero / battle split-screen, switching on the board's relayed mode.
-    // Round/gender-independent — it follows the live board like the timer.
     ...(discipline === 'freestyle'
-      ? [{ label: 'Athlete display', url: `${origin()}/stream/athletes-freestyle${suffix}` }]
+      ? [
+          {
+            label: 'Athlete display',
+            url: `${origin()}/stream/athletes-freestyle${suffix}`,
+            pinned: false,
+          },
+        ]
       : []),
-    { label: 'Rankings', url: `${origin()}/stream/rankings/${round}/${gender}${suffix}` },
+    {
+      label: 'Rankings',
+      url: `${origin()}/stream/rankings/${round}/${gender}${suffix}`,
+      pinned: true,
+    },
     // The freestyle judged score table: the round's ranked field with the full
     // component breakdown. Freestyle only — there is nothing to break down on
     // the speed plane.
@@ -84,6 +130,7 @@ const overlayLinks = (
           {
             label: 'Score card (judged table)',
             url: `${origin()}/stream/scorecard/${round}/${gender}${suffix}`,
+            pinned: true,
           },
         ]
       : []),
@@ -93,24 +140,36 @@ const overlayLinks = (
     {
       label: 'Rankings (top-4 profiles)',
       url: `${origin()}/stream/rankings/${round}/${gender}${suffix}&variant=profile`,
+      pinned: true,
     },
     // Final overall standings (rule G3): the `overall` pseudo-round merging
-    // bracket outcomes with quali. Round-independent, same names recipe.
+    // bracket outcomes with quali. Round-independent but gender-pinned.
     {
       label: 'Final standings',
       url: `${origin()}/stream/rankings/overall/${gender}${suffix}`,
+      pinned: true,
     },
-    { label: 'Head-to-head (VS)', url: `${origin()}/stream/vs/${round}/${gender}${suffix}` },
+    {
+      label: 'Head-to-head (VS)',
+      url: `${origin()}/stream/vs/${round}/${gender}${suffix}`,
+      pinned: true,
+    },
     // Round-following VS: one source that tracks the board's selected match
     // across every round of this gender+discipline (quarters → final), so the
-    // operator never swaps the OBS link. Round-independent, hence no `${round}`.
+    // operator never swaps the OBS link. Live, though the Gender picker still
+    // chooses the division it follows.
     {
       label: 'Head-to-head (VS, live — follows all rounds)',
       url: `${origin()}/stream/vs-live/${gender}${suffix}`,
+      pinned: false,
     },
     // Match winner (board-driven): the decided match's winner card. Follows the
     // same match precedence as VS; blank until the match has a winnerId.
-    { label: 'Match winner', url: `${origin()}/stream/winner/${round}/${gender}${suffix}` },
+    {
+      label: 'Match winner',
+      url: `${origin()}/stream/winner/${round}/${gender}${suffix}`,
+      pinned: true,
+    },
     // Best-of-3 rounds summary (speed only): accumulates a winner card per won
     // run from the board's live `runWins` tally. Blank until the first run lands.
     ...(discipline === 'speed'
@@ -118,22 +177,28 @@ const overlayLinks = (
           {
             label: 'Rounds summary (best of 3)',
             url: `${origin()}/stream/rounds-summary/${round}/${gender}${suffix}`,
+            pinned: true,
           },
         ]
       : []),
     // Single-competitor (live, board-driven): one card per lane/player, following
     // the control board's selection. Result follows the board's discipline; the
     // appended `&discipline=` here just keeps the URL self-describing.
-    { label: 'SVO (live, side 1)', url: `${origin()}/stream/svo-live/1${suffix}` },
-    { label: 'SVO (live, side 2)', url: `${origin()}/stream/svo-live/2${suffix}` },
+    { label: 'SVO (live, side 1)', url: `${origin()}/stream/svo-live/1${suffix}`, pinned: false },
+    { label: 'SVO (live, side 2)', url: `${origin()}/stream/svo-live/2${suffix}`, pinned: false },
     // Both bracket layouts (the LAAX reference art): the photo `profile` tree
     // (the overlay default, left implicit) and the single-direction `name`
     // tree. Mint both so operators pick the layout in-UI rather than
     // hand-editing `&variant=`.
-    { label: 'Bracket (photos)', url: `${origin()}/stream/brackets/${gender}${suffix}` },
+    {
+      label: 'Bracket (photos)',
+      url: `${origin()}/stream/brackets/${gender}${suffix}`,
+      pinned: true,
+    },
     {
       label: 'Bracket (names)',
       url: `${origin()}/stream/brackets/${gender}${suffix}&variant=name`,
+      pinned: true,
     },
   ];
 };
@@ -150,12 +215,20 @@ const OverlaysManager = ({ compId }: { compId: string }) => {
   // '&bg=h2r' (transparent + the measured color adaptation for the H2R
   // #EC008C keyed chain). See doc/dev/broadcast-overlays.md.
   const [bgSuffix, setBgSuffix] = useState<'' | '&bg=key' | '&bg=h2r'>('');
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
   const token = overlayToken.token;
   const expiresAt = overlayToken.expiresAt;
 
+  const revokeAll = () => {
+    setConfirmingRevoke(false);
+    // Revoking bumps the tokenVersion, so the cached token is now dead — drop
+    // it too, or the page would keep serving a broken link.
+    revokeTokens.mutate(undefined, { onSuccess: overlayToken.clear });
+  };
+
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
       <Typography variant="h4" gutterBottom>
         Streaming overlays
       </Typography>
@@ -164,7 +237,7 @@ const OverlaysManager = ({ compId }: { compId: string }) => {
         all outstanding links immediately.
       </Typography>
 
-      <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+      <Stack direction="row" useFlexGap sx={{ mb: 3, gap: 2, flexWrap: 'wrap' }}>
         <Button
           variant="contained"
           onClick={() => overlayToken.generate()}
@@ -172,17 +245,28 @@ const OverlaysManager = ({ compId }: { compId: string }) => {
         >
           {token ? 'Regenerate overlay links' : 'Generate overlay links'}
         </Button>
+        {/* Enabled with no token cached here: links minted on another machine
+            still need revoking. */}
         <Button
           color="error"
           variant="outlined"
-          // Revoking bumps the tokenVersion, so the cached token is now dead —
-          // drop it too, or the page would keep serving a broken link.
-          onClick={() => revokeTokens.mutate(undefined, { onSuccess: overlayToken.clear })}
+          onClick={() => setConfirmingRevoke(true)}
           disabled={revokeTokens.isPending}
+          sx={{ ml: 'auto' }}
         >
           Revoke all links
         </Button>
       </Stack>
+      <BoardConfirmDialog
+        open={confirmingRevoke}
+        titleId="revoke-links-title"
+        title="Revoke all overlay links?"
+        body="Every OBS, H2R and Companion link for this competition stops working immediately. You will need to generate new links and paste them into every source again."
+        confirmLabel="Revoke all links"
+        safeAnswer="Keep links"
+        onConfirm={revokeAll}
+        onCancel={() => setConfirmingRevoke(false)}
+      />
 
       {overlayToken.isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -202,26 +286,30 @@ const OverlaysManager = ({ compId }: { compId: string }) => {
 
       {token && (
         <Box>
-          <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center' }}>
+          <Stack
+            direction="row"
+            useFlexGap
+            sx={{ mb: 1, gap: 2, alignItems: 'center', flexWrap: 'wrap' }}
+          >
             <SelectField
-              label="Round (rankings / VS)"
+              label="Round"
               value={round}
               onChange={(e) => setRound(e.target.value as MatchRound)}
-              sx={{ minWidth: 180 }}
+              sx={{ minWidth: fieldWidths.field }}
               options={enumOptions(MATCH_ROUNDS, roundLabel)}
             />
             <SelectField
               label="Gender"
               value={gender}
               onChange={(e) => setGender(e.target.value as Gender)}
-              sx={{ minWidth: 140 }}
+              sx={{ minWidth: fieldWidths.compact }}
               options={enumOptions(GENDERS, genderLabel)}
             />
             <SelectField
               label="Background"
               value={bgSuffix}
               onChange={(e) => setBgSuffix(e.target.value as '' | '&bg=key' | '&bg=h2r')}
-              sx={{ minWidth: 220 }}
+              sx={{ minWidth: fieldWidths.wide }}
               options={[
                 { value: '', label: 'Transparent (OBS/vMix/NDI)' },
                 { value: '&bg=key', label: 'Chroma key — magenta' },
@@ -234,42 +322,25 @@ const OverlaysManager = ({ compId }: { compId: string }) => {
               </Typography>
             )}
           </Stack>
+          <Typography variant="caption" component="p" color="text.secondary" sx={{ mb: 2 }}>
+            Round and Gender set the round-pinned links and the feed status; Gender also picks the
+            division the live VS link follows. Background applies to every link.
+          </Typography>
           <OverlayStatusPanel compId={compId} round={round} gender={gender} />
           <Divider sx={{ mb: 2 }} />
-          <Stack spacing={2} sx={{ mb: 3 }}>
-            <CopyableUrl
-              label="Race timer (Speed)"
-              url={`${origin()}/stream/timer?sessionId=${compId}&token=${token}${bgSuffix}`}
-            />
-            <CopyableUrl
-              label="Race timer (Freestyle)"
-              url={`${origin()}/stream/timer-freestyle?sessionId=${compId}&token=${token}${bgSuffix}`}
-            />
-          </Stack>
-          {DISCIPLINE.map((discipline) => (
-            <Box key={discipline} sx={{ mb: 3 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                {disciplineLabel(discipline)}
-              </Typography>
-              <Stack spacing={2}>
-                {overlayLinks(compId, token, discipline, round, gender, bgSuffix).map((link) => (
-                  <CopyableUrl
-                    key={`${discipline}-${link.label}`}
-                    label={link.label}
-                    url={link.url}
-                  />
-                ))}
-                <PerMatchVsLinks
-                  compId={compId}
-                  token={token}
-                  discipline={discipline}
-                  round={round}
-                  gender={gender}
-                  bgSuffix={bgSuffix}
-                />
-              </Stack>
-            </Box>
-          ))}
+          <Box sx={{ display: 'grid', gridTemplateColumns: DISCIPLINE_COLUMNS, columnGap: 3 }}>
+            {DISCIPLINE.map((discipline) => (
+              <DisciplineLinks
+                key={discipline}
+                compId={compId}
+                token={token}
+                discipline={discipline}
+                round={round}
+                gender={gender}
+                bgSuffix={bgSuffix}
+              />
+            ))}
+          </Box>
           <CombinedLinks compId={compId} token={token} bgSuffix={bgSuffix} />
           <SvoAthleteLink compId={compId} token={token} bgSuffix={bgSuffix} />
           <H2rBridgeLink compId={compId} token={token} />
@@ -278,6 +349,81 @@ const OverlaysManager = ({ compId }: { compId: string }) => {
     </Container>
   );
 };
+
+interface DisciplineLinksProps {
+  compId: string;
+  token: string;
+  discipline: Discipline;
+  round: MatchRound;
+  gender: Gender;
+  bgSuffix: string;
+}
+
+/**
+ * One discipline's links, split by what drives them: the Live group (paste
+ * once, follows the board) leads, so it is never below a scroll of
+ * round-pinned links that go stale as soon as the pickers move.
+ */
+const DisciplineLinks = (props: DisciplineLinksProps) => {
+  const { compId, token, discipline, round, gender, bgSuffix } = props;
+  const links = overlayLinks(compId, token, discipline, round, gender, bgSuffix);
+  const headingId = `overlays-${discipline}`;
+  const renderLinks = (pinned: boolean) =>
+    links
+      .filter((link) => link.pinned === pinned)
+      .map((link) => (
+        <CopyableUrl key={`${discipline}-${link.label}`} label={link.label} url={link.url} />
+      ));
+
+  return (
+    <Box
+      component="section"
+      aria-labelledby={headingId}
+      sx={{ mb: 3, minWidth: 0, ...DISCIPLINE_SECTION_ROWS }}
+    >
+      <Typography id={headingId} variant="h6" sx={{ mb: 1 }}>
+        {disciplineLabel(discipline)}
+      </Typography>
+      <LinkGroup
+        id={`${headingId}-live`}
+        title="Live — load once (follows the board)"
+        caption="Paste these into OBS once; they follow the control board through every round."
+      >
+        {renderLinks(false)}
+      </LinkGroup>
+      <LinkGroup
+        id={`${headingId}-pinned`}
+        title="Round-pinned — uses the Round/Gender pickers"
+        caption={`Built for ${roundLabel(round)} · ${genderLabel(gender)}; copy again after changing the pickers.`}
+      >
+        {renderLinks(true)}
+        <PerMatchVsLinks {...props} />
+      </LinkGroup>
+    </Box>
+  );
+};
+
+const LinkGroup = ({
+  id,
+  title,
+  caption,
+  children,
+}: {
+  id: string;
+  title: string;
+  caption: string;
+  children: ReactNode;
+}) => (
+  <Box component="section" aria-labelledby={id} sx={{ mb: 2 }}>
+    <Typography id={id} variant="subtitle2">
+      {title}
+    </Typography>
+    <Typography variant="caption" component="p" color="text.secondary" sx={{ mb: 1.5 }}>
+      {caption}
+    </Typography>
+    <Stack spacing={2}>{children}</Stack>
+  </Box>
+);
 
 /**
  * Combined-title (rule G2) ranking links — cross-discipline by definition, so
@@ -338,7 +484,7 @@ const SvoAthleteLink = ({
           label="Athlete"
           value={athleteId}
           onChange={(e) => setAthleteId(e.target.value)}
-          sx={{ minWidth: 240 }}
+          sx={{ minWidth: fieldWidths.wide }}
           placeholder={{ value: '', label: '— select an athlete —' }}
           options={roster.map((a) => ({ value: a.athleteId, label: a.name }))}
         />
@@ -455,7 +601,7 @@ const OverlayStatusPanel = ({
     <Typography variant="subtitle2" sx={{ mb: 1 }} color="text.secondary">
       Live feed status — {roundLabel(round)} · {genderLabel(gender)}
     </Typography>
-    <Stack spacing={1}>
+    <Box sx={{ display: 'grid', gridTemplateColumns: DISCIPLINE_COLUMNS, gap: 1 }}>
       {DISCIPLINE.map((discipline) => (
         <DisciplineStatus
           key={discipline}
@@ -465,7 +611,7 @@ const OverlayStatusPanel = ({
           discipline={discipline}
         />
       ))}
-    </Stack>
+    </Box>
   </Box>
 );
 
@@ -539,22 +685,48 @@ const DisciplineStatus = ({
 /** Lower rank = more attention needed; drives the per-discipline summary severity. */
 const statusRank = (s: StreamStatus): number => ({ error: 0, loading: 1, empty: 2, ready: 3 })[s];
 
+const COPIED_MS = 2_500;
+
+/**
+ * The marker belongs to the URL that was copied, not to the field: a picker
+ * change rebuilds the URL in place and the stale mark drops with it. A fresh
+ * object per click restarts the fade on a re-copy.
+ */
 const CopyableUrl = ({ label, url }: { label: string; url: string }) => {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    void navigator.clipboard?.writeText(url);
-    setCopied(true);
+  const [copiedFor, setCopiedFor] = useState<{ url: string; failed: boolean } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const mark = copiedFor?.url === url ? copiedFor : null;
+
+  useEffect(() => {
+    if (!copiedFor) return;
+    const timeoutId = window.setTimeout(() => setCopiedFor(null), COPIED_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [copiedFor]);
+
+  // `navigator.clipboard` is undefined on an insecure origin (the admin over
+  // plain http on a venue LAN); that TypeError lands in the catch with a denied write.
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedFor({ url, failed: false });
+    } catch {
+      setCopiedFor({ url, failed: true });
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
   };
+  const suffix = mark ? (mark.failed ? ' — copy failed, press Ctrl+C' : ' — copied!') : '';
   return (
     <TextField
-      label={`${label}${copied ? ' — copied!' : ''}`}
+      label={`${label}${suffix}`}
       value={url}
+      inputRef={inputRef}
       slotProps={{
         input: {
           readOnly: true,
           endAdornment: (
             <InputAdornment position="end">
-              <IconButton aria-label={`Copy ${label} link`} onClick={copy} edge="end">
+              <IconButton aria-label={`Copy ${label} link`} onClick={() => void copy()} edge="end">
                 <ContentCopyIcon fontSize="small" />
               </IconButton>
             </InputAdornment>

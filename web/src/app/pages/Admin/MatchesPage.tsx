@@ -31,6 +31,7 @@ import { SelectCompetitionGate } from 'app/components/SelectCompetitionGate';
 import { SelectField, enumOptions } from 'app/components/SelectField';
 import { useAdvanceBracket, useDeleteMatch, useMatches, type SeedStage } from 'app/api/matches';
 import { useAthleteLookup } from 'app/hooks/useAthleteLookup';
+import { fieldWidths } from 'app/theme/tokens';
 import {
   DISCIPLINE,
   GENDERS,
@@ -139,7 +140,7 @@ const BracketActions = ({
         label="Advance bracket"
         value={fromStage}
         onChange={(e) => setFromStage(e.target.value as MatchRound)}
-        sx={{ minWidth: 220 }}
+        sx={{ minWidth: fieldWidths.wide }}
         options={ADVANCE_STAGES.map((s) => ({ value: s.from, label: s.label }))}
       />
       {fromStage === 'qualification' && (
@@ -148,7 +149,7 @@ const BracketActions = ({
           label="Seed stage"
           value={seedStage}
           onChange={(e) => setSeedStage(e.target.value as 'auto' | SeedStage)}
-          sx={{ minWidth: 190 }}
+          sx={{ minWidth: fieldWidths.field }}
           options={SEED_STAGES.map((s) => ({ value: s.value, label: s.label }))}
         />
       )}
@@ -288,7 +289,7 @@ const MatchesManager = ({ compId }: { compId: string }) => {
             label="Gender"
             value={gender}
             onChange={(e) => setGender(e.target.value as Gender)}
-            sx={{ minWidth: 160 }}
+            sx={{ minWidth: fieldWidths.short }}
             options={enumOptions(GENDERS, genderLabel)}
           />
           {view === 'bracket' && (
@@ -308,7 +309,7 @@ const MatchesManager = ({ compId }: { compId: string }) => {
               label="Filter by round"
               value={roundFilter}
               onChange={(e) => setRoundFilter(e.target.value)}
-              sx={{ minWidth: 200 }}
+              sx={{ minWidth: fieldWidths.field }}
               placeholder={{ value: ALL, label: 'All rounds' }}
               options={enumOptions(MATCH_ROUNDS, roundLabel)}
             />

@@ -42,6 +42,15 @@ const MODE_ROUNDS: Record<'quali' | 'battle', readonly MatchRound[]> = {
 
 export const roundsForMode = (mode: 'quali' | 'battle'): readonly MatchRound[] => MODE_ROUNDS[mode];
 
+/**
+ * A round a head-to-head match is raced or fought in — the battle rounds — so
+ * the one a match picker belongs in on either board. Not `isMatchRound`: that
+ * is the sort-key vocabulary and carries `qualification`, which runs one
+ * athlete against the clock.
+ */
+export const isHeadToHeadRound = (round: string): boolean =>
+  (MODE_ROUNDS.battle as readonly string[]).includes(round);
+
 /** The round a mode switch normalizes an out-of-mode round to. */
 export const defaultRoundForMode = (mode: 'quali' | 'battle'): MatchRound =>
   mode === 'quali' ? 'qualification' : 'quarter';
@@ -49,8 +58,9 @@ export const defaultRoundForMode = (mode: 'quali' | 'battle'): MatchRound =>
 /**
  * Short broadcast caps tag for the round a standings placement was decided in
  * (rule G3). Distinct from `roundLabel`'s long headers: on an overall-standings
- * row it qualifies the raw result as "best time from the placing round", so a
- * slower time above a faster one reads as a bracket outcome, not a mis-sort.
+ * row it names the placing round even when the shown result was borrowed from
+ * qualification, so a slower time above a faster one reads as a bracket
+ * outcome, not a mis-sort.
  */
 const STANDINGS_SOURCE_TAGS: Record<StandingsSource, string> = {
   final: 'FINAL',

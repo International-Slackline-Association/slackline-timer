@@ -4,6 +4,7 @@ import { MATCH_ROUNDS, TIME_ROUNDS, type Match } from 'app/types';
 import {
   defaultRoundForMode,
   displayRoundName,
+  isHeadToHeadRound,
   roundLabel,
   roundsForMode,
   standingsSourceTag,
@@ -30,6 +31,29 @@ describe('roundLabel', () => {
 
   it('falls back to the raw value for an unknown round', () => {
     expect(roundLabel('mystery')).toBe('mystery');
+  });
+});
+
+// The rounds a match picker mounts in, on either discipline's board: a
+// qualification or training run is one athlete against the clock.
+describe('isHeadToHeadRound', () => {
+  it('is the battle rounds — the playoffs plus the test rehearsal round', () => {
+    expect(TIME_ROUNDS.filter(isHeadToHeadRound)).toEqual([
+      'test',
+      'quarter',
+      'half',
+      'small_final',
+      'final',
+    ]);
+    expect(TIME_ROUNDS.filter(isHeadToHeadRound)).toEqual(
+      TIME_ROUNDS.filter((r) => (roundsForMode('battle') as readonly string[]).includes(r)),
+    );
+  });
+
+  it('excludes qualification and training, though qualification is a Match round', () => {
+    expect(MATCH_ROUNDS).toContain('qualification');
+    expect(isHeadToHeadRound('qualification')).toBe(false);
+    expect(isHeadToHeadRound('training')).toBe(false);
   });
 });
 

@@ -19,12 +19,12 @@ import { SelectedCompetitionProvider } from 'app/state/selectedCompetition';
 
 const COMP = 'worlds-2026';
 
-const renderPage = (compId: string | null) => {
+const renderPage = (compId: string | null, search = '') => {
   if (compId) window.localStorage.setItem('speedline.selectedCompId', compId);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[`/admin/times${search}`]}>
         <SelectedCompetitionProvider>
           <TimesPage />
         </SelectedCompetitionProvider>
@@ -136,6 +136,42 @@ describe('TimesPage', () => {
 
     expect(within(table).getByText('John Roe')).toBeInTheDocument();
     expect(within(table).queryByText('Jane Doe')).not.toBeInTheDocument();
+  });
+
+  // The Speedline board's lane link (`timesLink`) names the one row a failed
+  // save or a DNF needs, so its filters are applied on arrival.
+  describe('a correction link', () => {
+    it('lands on the athlete and round it names', async () => {
+      wireApi([time('t1'), time('t2', { athleteId: 'a2', round: 'final', timeMs: 62_000 })]);
+      renderPage(COMP, '?athlete=a2&round=final');
+
+      const table = await screen.findByRole('table');
+      expect(within(table).getByText('John Roe')).toBeInTheDocument();
+      expect(within(table).queryByText('Jane Doe')).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/filter by athlete/i)).toHaveValue('a2');
+      expect(screen.getByLabelText(/filter by round/i)).toHaveValue('final');
+    });
+
+    it('is still a page: the operator can widen the filters it arrived with', async () => {
+      wireApi([time('t1'), time('t2', { athleteId: 'a2', round: 'final', timeMs: 62_000 })]);
+      renderPage(COMP, '?athlete=a2&round=final');
+      const table = await screen.findByRole('table');
+
+      fireEvent.change(screen.getByLabelText(/filter by athlete/i), { target: { value: '' } });
+      fireEvent.change(screen.getByLabelText(/filter by round/i), { target: { value: '' } });
+
+      expect(within(table).getByText('Jane Doe')).toBeInTheDocument();
+      expect(within(table).getByText('John Roe')).toBeInTheDocument();
+    });
+
+    it('drops an athlete this competition does not have', async () => {
+      wireApi([time('t1'), time('t2', { athleteId: 'a2', round: 'final', timeMs: 62_000 })]);
+      renderPage(COMP, '?athlete=ghost&round=final');
+
+      const table = await screen.findByRole('table');
+      expect(within(table).getByText('John Roe')).toBeInTheDocument();
+      expect(screen.getByLabelText(/filter by athlete/i)).toHaveValue('');
+    });
   });
 
   it('sorts fastest first, DNF sentinel last', async () => {

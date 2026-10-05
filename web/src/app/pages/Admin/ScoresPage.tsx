@@ -22,6 +22,7 @@ import { QueryStates } from 'app/components/QueryStates';
 import { SelectCompetitionGate } from 'app/components/SelectCompetitionGate';
 import { SelectField, enumOptions } from 'app/components/SelectField';
 import { useAthleteLookup } from 'app/hooks/useAthleteLookup';
+import { fieldWidths } from 'app/theme/tokens';
 import { GENDERS, MATCH_ROUNDS, type Athlete, type Score } from 'app/types';
 import { formatScore } from 'app/util/resultLabel';
 import { genderLabel } from 'app/util/gender';
@@ -108,7 +109,7 @@ const ScoresManager = ({ compId }: { compId: string }) => {
           label="Filter by athlete"
           value={athleteShown}
           onChange={(e) => setAthleteFilter(e.target.value)}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: fieldWidths.field }}
           placeholder={{ value: ALL, label: 'All athletes' }}
           options={(athletes.data ?? []).map((a: Athlete) => ({
             value: a.athleteId,
@@ -119,7 +120,7 @@ const ScoresManager = ({ compId }: { compId: string }) => {
           label="Filter by round"
           value={roundFilter}
           onChange={(e) => setRoundFilter(e.target.value)}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: fieldWidths.field }}
           placeholder={{ value: ALL, label: 'All rounds' }}
           options={enumOptions(MATCH_ROUNDS, roundLabel)}
         />
@@ -127,7 +128,7 @@ const ScoresManager = ({ compId }: { compId: string }) => {
           label="Filter by gender"
           value={genderFilter}
           onChange={(e) => setGenderFilter(e.target.value)}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: fieldWidths.field }}
           placeholder={{ value: ALL, label: 'All genders' }}
           options={enumOptions(GENDERS, (g) => genderLabel(g, 'subject'))}
         />
