@@ -91,6 +91,13 @@ export interface FreestyleSelection extends SelectionCommon {
     tries: { 1: number; 2: number };
     turn: 1 | 2 | null;
     clockRunning: boolean;
+    /**
+     * The series revision (ADR 0049): bumped by every local series transition,
+     * adopted as-is by a mirror. A peer panel drops a `bestTrick` below the rev
+     * it holds — an echo sent before the mirror caught up, which otherwise
+     * rolled the acting panel's tally back. Absent from a pre-rev page, read as 0.
+     */
+    rev: number;
   };
   /**
    * The **battle** next-up player — whom the next ADVANCE would start

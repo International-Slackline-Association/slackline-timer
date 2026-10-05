@@ -2,6 +2,8 @@ import { TextField } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { WheelEvent } from 'react';
 
+import { controlTargets } from 'app/theme/tokens';
+
 /**
  * A wheel over a FOCUSED number input scrubs its value (FREESTYLE_BOARD_UX §9):
  * a stray scroll past the rail must not rewrite a judged score or a live
@@ -18,7 +20,7 @@ export const blurOnWheel = (event: WheelEvent<HTMLInputElement>): void =>
 /**
  * The board's whole-seconds number field — `Try (s)`, `Run (s)`, `Warm-up (s)`.
  * One component because all three tune a clock the operator is standing next
- * to: each is wheel-hardened, keyed numerically, and kept on §6's ≥44 px target
+ * to: each is wheel-hardened, keyed numerically, and held to `controlTargets.live`
  * (MUI's `small` field is 40).
  *
  * It takes and hands back SECONDS and nothing else. `Try (s)` is ms-backed and
@@ -52,7 +54,7 @@ export const SecondsField = ({
     helperText={helperText}
     onChange={(e) => onChange(+e.target.value)}
     slotProps={{
-      input: { sx: { minHeight: 44 } },
+      input: { sx: { minHeight: controlTargets.live } },
       htmlInput: { inputMode: 'numeric', onWheel: blurOnWheel },
     }}
   />

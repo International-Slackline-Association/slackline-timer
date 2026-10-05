@@ -9,6 +9,9 @@ import { PlayoffBracket } from 'app/pages/Admin/PlayoffBracket';
 import { STREAM_INSET_X_PX } from 'app/pages/Stream/StreamLayout';
 import type { Athlete, Match } from 'app/types';
 import { colors, overlayArt, OVERLAY_TYPE_FLOOR_PX } from 'app/theme/tokens';
+import { refVh } from 'app/util/overlayScale';
+
+import { emPx, px, vhPx } from '../../../util/computedUnits';
 
 /** Resolve a hex token to the `rgb(...)` form jsdom reports for a color. */
 const rgb = (hex: string) => {
@@ -86,7 +89,7 @@ describe('PlayoffBracket champion green ring', () => {
           expect(style.boxShadow).toBe('none');
           expect(style.borderTopColor).toBe(rgb(colors.race.go));
           // Green edge width equals the shared white edge width (not doubled).
-          expect(style.borderTopWidth).toBe(overlayArt.strokeWidth);
+          expect(px(style.borderTopWidth)).toBeCloseTo(vhPx(refVh(6)), 2);
         }
       });
     });
@@ -105,6 +108,16 @@ describe('PlayoffBracket champion green ring', () => {
     );
     const given = within(screen.getByTestId('slot-box_final_l')).getByText('Jane');
     expect(window.getComputedStyle(given).color).toBe(rgb(colors.race.goDim));
+  });
+
+  it('tracks the name plate on the shared name token', () => {
+    render(<PlayoffBracket variant="name" matches={[finalMatch()]} athleteById={byId(athletes)} />);
+    const name = within(screen.getByTestId('slot-box_final_l')).getByText('Jane')
+      .parentElement as HTMLElement;
+    expect(px(window.getComputedStyle(name).letterSpacing)).toBeCloseTo(
+      emPx(overlayArt.nameTracking, name),
+      2,
+    );
   });
 
   it('keeps per-match advancing-slot greens (final winner’s own box) untouched', () => {
@@ -170,6 +183,97 @@ describe('NameBracket plate type scale', () => {
     );
     expect(src).not.toMatch(/clamp\(\s*[\d.]+px/);
   });
+});
+
+describe('PlayoffBracket line systems (frame-relative strokes)', () => {
+  const athletes = [athlete('a1', 'Jane', 'Doe'), athlete('a2', 'John', 'Roe')];
+  const connectorWidths = () =>
+    [...screen.getByTestId('playoff-bracket').querySelectorAll('polyline')].map(
+      (line) => line.style.strokeWidth,
+    );
+  /** An inline vh stroke, compared numerically (the CSSOM drops trailing zeros). */
+  const expectVh = (width: string, authored: string) => {
+    expect(width).toMatch(/vh$/);
+    expect(parseFloat(width)).toBeCloseTo(parseFloat(authored), 3);
+  };
+
+  it('draws the profile connectors at the box edge width, both off the 1080 frame', () => {
+    render(<PlayoffBracket matches={[finalMatch()]} athleteById={byId(athletes)} />);
+    const widths = connectorWidths();
+    expect(widths.length).toBeGreaterThan(0);
+    // A vh CSS stroke, like the name tree's, so both variants scale together
+    // away from 1080p; `non-scaling-stroke` keeps it out of the viewBox scale.
+    for (const width of widths) expectVh(width, refVh(6));
+    for (const line of screen.getByTestId('playoff-bracket').querySelectorAll('polyline')) {
+      expect(line.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+    }
+    const edge = window.getComputedStyle(
+      screen.getByTestId('slot-box_final_l').firstElementChild as HTMLElement,
+    ).borderTopWidth;
+    expect(px(edge)).toBeCloseTo(vhPx(refVh(6)), 2);
+  });
+
+  it('keeps the name tree connectors one step under its plates', () => {
+    render(<PlayoffBracket variant="name" matches={[finalMatch()]} athleteById={byId(athletes)} />);
+    for (const width of connectorWidths()) expectVh(width, refVh(4));
+  });
+
+  it('gives the name-tree TBD mark the plate’s full inner height', () => {
+    render(<PlayoffBracket variant="name" matches={[]} athleteById={() => undefined} />);
+    const mark = screen.getByTestId('slot-unknown-box_q_1_3');
+    expect(window.getComputedStyle(mark).height).toBe('100%');
+  });
+
+  it('crops the name-tree TBD mark to its ink, leaving the photo cards portrait', () => {
+    // The portrait viewBox carries card margin that shrank the "?" to ~73% of
+    // the bar; the tight fit lets the glyph fill the bar's inner height.
+    render(<PlayoffBracket variant="name" matches={[]} athleteById={() => undefined} />);
+    expect(screen.getByTestId('slot-unknown-box_q_1_3').getAttribute('viewBox')).toBe(
+      '18 18 84 123',
+    );
+  });
+
+  it('keeps the profile cards’ TBD mark on the portrait viewBox', () => {
+    render(<PlayoffBracket matches={[]} athleteById={() => undefined} />);
+    for (const mark of screen.getAllByTestId('athlete-card-unknown')) {
+      expect(mark.getAttribute('viewBox')).toBe('0 0 120 152');
+    }
+  });
+});
+
+describe('PlayoffBracket seeded straight into the semis', () => {
+  const semi = (position: number): Match =>
+    finalMatch({ matchId: `h${position}`, round: 'half', roundName: 'Semi', position });
+
+  for (const variant of ['profile', 'name'] as const) {
+    describe(`${variant} variant`, () => {
+      it('renders no quarter slots and no QUARTER FINALS label', () => {
+        render(
+          <PlayoffBracket
+            variant={variant}
+            matches={[semi(1), semi(2)]}
+            athleteById={() => undefined}
+          />,
+        );
+        expect(screen.queryByTestId('slot-box_a_1')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('slot-box_a_8')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('bracket-label-QUARTER FINALS')).not.toBeInTheDocument();
+        expect(screen.getByTestId('slot-box_q_1_3')).toBeInTheDocument();
+      });
+
+      it('keeps the full tree while a quarter match exists', () => {
+        render(
+          <PlayoffBracket
+            variant={variant}
+            matches={[finalMatch({ round: 'quarter' }), semi(1)]}
+            athleteById={() => undefined}
+          />,
+        );
+        expect(screen.getByTestId('slot-box_a_1')).toBeInTheDocument();
+        expect(screen.getAllByTestId('bracket-label-QUARTER FINALS').length).toBeGreaterThan(0);
+      });
+    });
+  }
 });
 
 describe('PlayoffBracket type floor (keyed to the canvas, not the viewport)', () => {

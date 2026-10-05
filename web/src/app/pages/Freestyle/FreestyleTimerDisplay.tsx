@@ -4,10 +4,10 @@ import { AudioMutedBadge } from 'app/components/AudioMutedBadge';
 import { ConnectingBadge } from 'app/components/ConnectingBadge';
 import { ConnectionLostBadge } from 'app/components/ConnectionLostBadge';
 import { useLinkPhase } from 'app/hooks/useLinkPhase';
-import { colors, fonts, overlayTextShadow } from 'app/theme/tokens';
+import { colors, fonts, OVERLAY_LANE, overlayTextShadow } from 'app/theme/tokens';
 import { useAthleteLookup } from 'app/hooks/useAthleteLookup';
 import { useQueryParams } from 'app/hooks/useQueryParams';
-import { CORNER_INSET_X, OVERLAY_LANE, TimerLaneBlock } from 'app/pages/Stream/TimerLaneBlock';
+import { CORNER_INSET_X, TimerLaneBlock } from 'app/pages/Stream/TimerLaneBlock';
 import { RankingsBody } from 'app/pages/Stream/RankingsOverlay';
 import { isGender, isMatchRound } from 'app/types';
 import { applyOverlayBodyStyle } from 'app/pages/Stream/overlayBg';
@@ -164,8 +164,8 @@ export const FreestyleTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
       )}
       <Box
         sx={{
-          // The `?bottomMargin`/`?sideMargin` producer knobs stay RAW px against
-          // the capture (the Speedline twin's rule).
+          // The `?bottomMargin`/`?sideMargin` producer knobs stay raw output px
+          // (broadcast-overlays.md "Producer margin knobs").
           mb: bottomMargin ? `${bottomMargin}px` : BAND_BOTTOM,
           mx: sideMargin ? `${sideMargin}px` : CORNER_INSET_X,
           position: 'relative',
@@ -286,6 +286,7 @@ export const FreestyleTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
                                 endTryWindow();
                               }}
                               size="plate"
+                              plateAlign={side}
                             />
                           )}
                         </Box>
@@ -309,6 +310,7 @@ export const FreestyleTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
                           reserveBreakRows={freestyleMode === 'quali'}
                           reserveCaptionRow={freestyleMode === 'quali'}
                           size="plate"
+                          plateAlign={side}
                         />
                       )}
                     </TimerLaneBlock>

@@ -4,9 +4,14 @@ import { ControlStatusHeader } from 'app/components/ControlStatusHeader';
 import { RecorderToast } from 'app/components/RecorderToast';
 import { useFreestyleBoard } from 'app/hooks/useFreestyleBoard';
 import { useSessionId } from 'app/hooks/useControlSession';
-import { liveCaption } from 'app/theme/tokens';
+import { boardGeometry, deskColumns, deskMedia, liveCaption } from 'app/theme/tokens';
 import type { PlayerId } from 'app/util/breakState';
-import { currentStep, type BoardStep } from 'app/util/boardStep';
+import {
+  currentStep,
+  isSelectionComplete,
+  recordedLanes,
+  type BoardStep,
+} from 'app/util/boardStep';
 import { athleteLabel } from 'app/util/raceNames';
 import { roundLabel } from 'app/util/rounds';
 import { BestTrickPanel } from './BestTrickPanel';
@@ -22,7 +27,7 @@ import { PauseClock } from './PauseClock';
 import { TallyPlate } from './TallyPlate';
 import { WarmupCard } from './WarmupCard';
 /**
- * The board layout (FREESTYLE_BOARD_UX §2): three fixed columns at ≥1280×800 so
+ * The board layout (FREESTYLE_BOARD_UX §2): three fixed columns at ≥1280×900 so
  * the clocks, the plate and both Save buttons share one 1440×900 screen —
  * setup and warm-up left, the live column centre, the score rail right. Outside
  * that box the live flow collapses to tabs so only one step has to fit at a
@@ -39,10 +44,10 @@ import { WarmupCard } from './WarmupCard';
  * fold budget spent down (`freestyle-board-fold-budget`), the battle desk's
  * last control lands at 879 and quali's at 862, so 800 was a promise the
  * layout could not keep — at 1280×800 it took the desk and put End turn,
- * Reset and Athlete 2's Save under the fold in both modes. 900 is the
- * responsive contract's laptop and the nearest honest threshold above what the
- * desk measures; everything shorter gets the tab layout, which holds every
- * lane and Save control above a 720 px fold.
+ * Reset and Athlete 2's Save under the fold in both modes. 900 is the laptop of
+ * design-system §9 "Responsive contract" and the nearest honest threshold
+ * above what the desk measures; everything shorter gets the tab layout, which
+ * holds every lane and Save control above a 720 px fold.
  *
  * The columns stretch to the desk row rather than to their own content: the
  * plate is `position: sticky` inside the live column, and a sticky box may not
@@ -56,8 +61,8 @@ const DESK_SX = {
   gap: 2,
   gridTemplateColumns: '1fr',
   alignItems: 'stretch',
-  '@media (min-width:1280px) and (min-height:900px)': {
-    gridTemplateColumns: '248px minmax(0, 1fr) 360px',
+  [`@media ${deskMedia.freestyle}`]: {
+    gridTemplateColumns: deskColumns,
   },
 } as const;
 /** The live column's width ceiling: two lane cards plus the changeover gutter
@@ -66,7 +71,7 @@ const DESK_SX = {
  * The sticky plate takes this ceiling too. Spanning the whole live column
  * (`VW - 672`) hung its right-hand verb 448 px clear of the lane it names at
  * 1920. */
-const RUN_MAX_WIDTH = 800;
+const RUN_MAX_WIDTH = boardGeometry.deckMax.freestyle;
 /**
  * Quali runs one athlete, so its deck is the single centred card (§2) — and it
  * is the one deck the plate does NOT follow. Measured in a browser (jsdom lays
@@ -76,7 +81,7 @@ const RUN_MAX_WIDTH = 800;
  * plate that overhangs its 500 px deck is a cosmetic mismatch. So quali keeps
  * the full column (owner's pre-decided branch, `fsux-tally-plate-width`).
  */
-const QUALI_RUN_MAX_WIDTH = 500;
+const QUALI_RUN_MAX_WIDTH = boardGeometry.deckMax.freestyleQuali;
 /**
  * The Freestyle control board — layout only. Every machine, relay send, beep
  * and expiry timeout lives in `useFreestyleBoard`; this file decides what the
@@ -92,7 +97,7 @@ const QUALI_RUN_MAX_WIDTH = 500;
  * it was typed at, under a page with nothing at level 2 to hold it.
  */
 export const FreestyleControlPage = () => {
-  const wideDesk = useMediaQuery('(min-width:1280px) and (min-height:900px)');
+  const wideDesk = useMediaQuery(deskMedia.freestyle);
   const sessionId = useSessionId();
   const { chrome, selection, format, warmup, lanes, advance, bestTrick } =
     useFreestyleBoard(sessionId);
@@ -108,13 +113,17 @@ export const FreestyleControlPage = () => {
   const selectionMaxWidth = RUN_MAX_WIDTH;
   const plateMaxWidth = format.mode === 'quali' ? 'none' : RUN_MAX_WIDTH;
   const hasAthlete = Boolean(recorder.athletes[1] || recorder.athletes[2]);
+  const recordedDone = recordedLanes(format.mode).every(
+    (lane) => recorder.entries[lane].status === 'saved',
+  );
   const names = selection.athleteNames;
   const step = currentStep({
     mode: format.mode,
     battle: lanes.battle,
     trySeries: bestTrick.series,
     warmupRunning: warmup.running,
-    hasAthlete,
+    selectionComplete: isSelectionComplete(format.mode, recorder.athletes),
+    recordedDone,
   });
   const section = (id: BoardStep, children: ReactNode) => (
     <DeskSection step={id} current={step} mode={format.mode} showCaption={wideDesk}>
@@ -275,77 +284,81 @@ export const FreestyleControlPage = () => {
         lanes: { 1: lanes.battle[1], 2: lanes.battle[2] },
         runningLane: lanes.running,
         bestTrickArmed: bestTrick.series !== null,
-        onReset: lanes.actions.resetBoth,
+        onReset: lanes.actions.resetRecorded,
       }}
     />,
   );
   return (
-    <Stack spacing={1.5} sx={{ width: '100%', padding: { xs: 1, sm: 2 } }}>
-      <ControlStatusHeader
-        context={{
-          mode: 'Freestyle',
-          round: roundLabel(recorder.round),
-          boardMode: format.mode === 'battle' ? 'BATTLE' : 'QUALI',
-        }}
-        health={{
-          link: chrome.link,
-          audioBlocked: chrome.audioBlocked,
-          peer: chrome.peerState,
-          recovered: chrome.selfRecovered,
-          sound: chrome.sound,
-        }}
-        recording={{ active: hasAthlete, detail: 'no athletes selected' }}
-      />
-      {wideDesk ? (
-        <Box sx={DESK_SX}>
-          <Stack spacing={1.5} data-testid="desk-left">
-            {setupSection}
-            {handsetSection}
-            {warmupSection}
-          </Stack>
-          <Stack spacing={1.5} data-testid="desk-live" sx={{ minWidth: 0 }}>
-            <Box
-              data-testid="plate-rail"
-              sx={{
-                position: 'sticky',
-                maxWidth: plateMaxWidth,
-                top: 0,
-                zIndex: 2,
-                backgroundColor: 'background.default',
-                pb: 0.75,
-              }}
-            >
-              {tallyPlate}
-            </Box>
-            {selectionSection}
-            {runSection}
-            {bestTrickSection}
-          </Stack>
-          <Stack spacing={1.5} data-testid="desk-right">
-            {scoreSection}
-          </Stack>
-        </Box>
-      ) : (
-        <CompactBoardLayout
-          mode={format.mode}
-          step={step}
-          tallyPlate={tallyPlate}
-          selectionSection={selectionSection}
-          runSection={runSection}
-          bestTrickSection={bestTrickSection}
-          scoreSection={scoreSection}
-          warmupSection={warmupSection}
-          setupSection={setupSection}
-          handsetSection={handsetSection}
+    <>
+      <Stack spacing={1.5} sx={{ width: '100%', padding: { xs: 1, sm: 2 } }}>
+        <ControlStatusHeader
+          context={{
+            mode: 'Freestyle',
+            round: roundLabel(recorder.round),
+            boardMode: format.mode === 'battle' ? 'BATTLE' : 'QUALI',
+          }}
+          health={{
+            link: chrome.link,
+            audioBlocked: chrome.audioBlocked,
+            peer: chrome.peerState,
+            recovered: chrome.selfRecovered,
+            sound: chrome.sound,
+          }}
+          recording={{ active: hasAthlete, detail: 'no athletes selected' }}
         />
-      )}
+        {wideDesk ? (
+          <Box sx={DESK_SX}>
+            <Stack spacing={1.5} data-testid="desk-left">
+              {setupSection}
+              {handsetSection}
+              {warmupSection}
+            </Stack>
+            <Stack spacing={1.5} data-testid="desk-live" sx={{ minWidth: 0 }}>
+              <Box
+                data-testid="plate-rail"
+                sx={{
+                  position: 'sticky',
+                  maxWidth: plateMaxWidth,
+                  top: 0,
+                  zIndex: 2,
+                  backgroundColor: 'background.default',
+                  pb: 0.75,
+                }}
+              >
+                {tallyPlate}
+              </Box>
+              {selectionSection}
+              {runSection}
+              {bestTrickSection}
+            </Stack>
+            <Stack spacing={1.5} data-testid="desk-right">
+              {scoreSection}
+            </Stack>
+          </Box>
+        ) : (
+          <CompactBoardLayout
+            mode={format.mode}
+            step={step}
+            tallyPlate={tallyPlate}
+            selectionSection={selectionSection}
+            runSection={runSection}
+            bestTrickSection={bestTrickSection}
+            scoreSection={scoreSection}
+            warmupSection={warmupSection}
+            setupSection={setupSection}
+            handsetSection={handsetSection}
+          />
+        )}
+        <RecorderToast
+          open={recorder.toast !== null}
+          message={recorder.toast?.text ?? ''}
+          severity={recorder.toast?.severity ?? 'success'}
+          onClose={recorder.clearToast}
+        />
+      </Stack>
+      {/* Outside the spaced stack: the zero-height holder would still take a
+          spacing gap below the desk. */}
       {chrome.audioElement}
-      <RecorderToast
-        open={recorder.toast !== null}
-        message={recorder.toast?.text ?? ''}
-        severity={recorder.toast?.severity ?? 'success'}
-        onClose={recorder.clearToast}
-      />
-    </Stack>
+    </>
   );
 };

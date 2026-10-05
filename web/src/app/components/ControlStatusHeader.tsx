@@ -12,7 +12,7 @@ import type { ReactNode } from 'react';
 import { blurOnClickProps } from 'app/components/RaceButton';
 import type { PeerState } from 'app/hooks/useControlSession';
 import type { LinkPhase } from 'app/hooks/useLinkPhase';
-import { chosenKey, liveCaption } from 'app/theme/tokens';
+import { chosenKey, controlTargets, liveCaption } from 'app/theme/tokens';
 
 interface ControlHeaderContext {
   mode: string;
@@ -45,10 +45,14 @@ interface ControlStatusHeaderProps {
   context: ControlHeaderContext;
   health: ControlHeaderHealth;
   recording?: ControlHeaderRecording;
+  /** Setup chrome laid under the context plates, beside the health block — see
+   * `SETUP_GRID_SX`. */
+  setup?: ReactNode;
 }
 
 const LINK_DETAIL = 'clocks keep running; the preview is not receiving';
 const RECOVERED_DETAIL = 'recovered this panel’s last run';
+const AUDIO_DETAIL = 'click anywhere to unlock audio';
 
 const LINK_STATUS: Record<
   LinkPhase,
@@ -70,7 +74,7 @@ const LINK_STATUS: Record<
  * `AUDIO LOCKED` plate beside it needed, tipped it into a second line and pushed
  * the whole desk down a row — exactly when the operator is reading an alarm.
  * `ch`, not a pixel width: it tracks the type scale, and the desk grid keeps its
- * relative tracks (the responsive contract).
+ * relative tracks (design-system §9 "Responsive contract").
  */
 const LINK_LABEL_CH = Math.max(...Object.values(LINK_STATUS).map(({ label }) => label.length));
 
@@ -98,6 +102,29 @@ const healthPlateSx = {
   bgcolor: 'action.hover',
 };
 
+const HEADER_GRID_SX = {
+  gridTemplateColumns: { xs: '1fr', md: 'minmax(0,1fr) auto minmax(0,1fr)' },
+} as const;
+
+/**
+ * The header with a setup row (the Speedline stacked tier,
+ * `speedline-compact-fold-lane-dnf-1024`). Below `lg` the health block is the
+ * tallest cell — two plate rows plus the caption track — so the context plates
+ * and the recording line leave ~60 px of empty column beside it, and the setup
+ * strip takes that column rather than a row under the whole header. Row 2 is
+ * the flexible one, so the health block's surplus height lands under the strip,
+ * never between it and the plates.
+ */
+const SETUP_GRID_SX = {
+  gridTemplateColumns: { xs: '1fr', md: 'auto minmax(0,1fr) auto' },
+  gridTemplateRows: { md: 'auto 1fr' },
+  gridTemplateAreas: {
+    xs: '"meta" "recording" "health" "setup"',
+    md: '"meta recording health" "setup setup health"',
+  },
+  rowGap: 0.75,
+} as const;
+
 const StatusLine = ({
   icon,
   label,
@@ -124,20 +151,29 @@ const StatusLine = ({
   </Stack>
 );
 
-export const ControlStatusHeader = ({ context, health, recording }: ControlStatusHeaderProps) => {
+export const ControlStatusHeader = ({
+  context,
+  health,
+  recording,
+  setup,
+}: ControlStatusHeaderProps) => {
+  const withSetup = setup !== undefined;
   const linkStatus = LINK_STATUS[health.link];
   const LinkStatusIcon = linkStatus.icon;
   const soundLabel = health.sound?.on ? 'Sound on this panel' : 'Sound off on this panel';
   // The header's one reserved caption line (see its render comment) carries
-  // whichever of the two sentences is owed: a link alarm always outranks the
-  // recovery notice: the operator reads the recovery off the restored board
-  // itself, while nothing else reports a dead link.
-  const linkDetail =
-    health.link === 'unreachable' || health.link === 'reconnecting' || health.link === 'lost'
-      ? LINK_DETAIL
-      : health.recovered
-        ? RECOVERED_DETAIL
-        : '\u00a0';
+  // whichever sentences are owed. The recovery leads, then the audio gesture
+  // (the AUDIO LOCKED plate's only instruction); the link sentence trails
+  // because its chip already reads the alarm, and the clipped tail stays whole
+  // in the title.
+  const linkDown =
+    health.link === 'unreachable' || health.link === 'reconnecting' || health.link === 'lost';
+  const owed = [
+    health.recovered && RECOVERED_DETAIL,
+    health.audioBlocked && AUDIO_DETAIL,
+    linkDown && LINK_DETAIL,
+  ].filter(Boolean);
+  const linkDetail = owed.length > 0 ? owed.join(' \u00b7 ') : '\u00a0';
 
   return (
     <Stack data-testid="control-status-header" spacing={0.75} sx={{ width: '100%' }}>
@@ -145,12 +181,17 @@ export const ControlStatusHeader = ({ context, health, recording }: ControlStatu
         sx={{
           width: '100%',
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'minmax(0,1fr) auto minmax(0,1fr)' },
           alignItems: 'start',
           gap: 1.5,
+          ...(withSetup ? SETUP_GRID_SX : HEADER_GRID_SX),
         }}
       >
-        <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        <Stack
+          direction="row"
+          spacing={0.75}
+          useFlexGap
+          sx={{ flexWrap: 'wrap', gridArea: withSetup ? 'meta' : undefined }}
+        >
           <Box sx={metaPlateSx}>
             <Typography
               variant="caption"
@@ -183,7 +224,11 @@ export const ControlStatusHeader = ({ context, health, recording }: ControlStatu
         <Stack
           data-testid="control-recording"
           spacing={0.5}
-          sx={{ alignItems: 'center', justifySelf: { xs: 'start', md: 'center' } }}
+          sx={
+            withSetup
+              ? { gridArea: 'recording', alignItems: 'flex-start', alignSelf: 'center' }
+              : { alignItems: 'center', justifySelf: { xs: 'start', md: 'center' } }
+          }
         >
           {recording && (
             <StatusLine
@@ -210,6 +255,7 @@ export const ControlStatusHeader = ({ context, health, recording }: ControlStatu
           sx={{
             alignItems: { xs: 'flex-start', md: 'flex-end' },
             justifySelf: { xs: 'start', md: 'end' },
+            gridArea: withSetup ? 'health' : undefined,
           }}
         >
           {/* ONE row at the desk widths (fsux-desk-fold-budget): the health
@@ -221,8 +267,8 @@ export const ControlStatusHeader = ({ context, health, recording }: ControlStatu
 
               The single row starts at `lg`, not `md`: the header splits the
               width three ways, so below ~1200 px the four cells share a third of
-              a tablet and the loud AUDIO LOCKED wording folds to four lines
-              inside its own plate — taller AND messier than two rows of two.
+              a tablet, which `5a69ad8` measured taller AND messier than two rows
+              of two.
               The desk itself starts at 1280, so `lg` is where the promise is
               owed. The reading tracks shrink (`minmax(0, auto)`) either way, so
               a long phrase wraps inside its plate instead of widening the
@@ -263,7 +309,7 @@ export const ControlStatusHeader = ({ context, health, recording }: ControlStatu
                     <VolumeUpIcon fontSize="small" />
                   )
                 }
-                label={health.audioBlocked ? 'AUDIO LOCKED — click anywhere' : 'Audio armed'}
+                label={health.audioBlocked ? 'AUDIO LOCKED' : 'Audio armed'}
                 color={health.audioBlocked ? 'error.main' : 'text.secondary'}
               />
             </Box>
@@ -286,7 +332,12 @@ export const ControlStatusHeader = ({ context, health, recording }: ControlStatu
                   aria-pressed={health.sound.on}
                   // Its track is as wide as the reading beside it; the toggle is
                   // an icon and must not stretch to fill one.
-                  sx={{ minWidth: 44, minHeight: 32, px: 0.5, justifySelf: 'end' }}
+                  sx={{
+                    minWidth: controlTargets.live,
+                    minHeight: controlTargets.chip,
+                    px: 0.5,
+                    justifySelf: 'end',
+                  }}
                   {...blurOnClickProps<HTMLButtonElement>({ onClick: health.sound.onToggle })}
                 >
                   {health.sound.on ? (
@@ -329,6 +380,7 @@ export const ControlStatusHeader = ({ context, health, recording }: ControlStatu
             {linkDetail}
           </Typography>
         </Stack>
+        {withSetup && <Box sx={{ gridArea: 'setup', minWidth: 0 }}>{setup}</Box>}
       </Box>
     </Stack>
   );

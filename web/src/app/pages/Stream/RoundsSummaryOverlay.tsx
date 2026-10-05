@@ -7,13 +7,24 @@ import { useMatches } from 'app/api/matches';
 import { Numeral } from 'app/components/Numeral';
 import { type LiveSelection } from 'app/hooks/useWebSocket';
 import { isGender, isMatchRound, type Athlete, type Gender, type MatchRound } from 'app/types';
-import { colors, fonts } from 'app/theme/tokens';
+import { colors, fonts, overlayArt } from 'app/theme/tokens';
 import { displayRoundName } from 'app/util/rounds';
-import { refVh } from 'app/util/overlayScale';
+import { refVh, refVw } from 'app/util/overlayScale';
 import { Competitor } from 'app/pages/Stream/Competitor';
-import { pickMatch } from 'app/pages/Stream/VsOverlay';
+import { pickMatch, VS_ART } from 'app/pages/Stream/VsOverlay';
 import { InvalidOverlay, StreamLayout, useReportStreamStatus } from 'app/pages/Stream/StreamLayout';
 import { streamStatusFromQueries } from 'app/pages/Stream/streamStatus';
+
+/** The best-of-3 composition, reference px on the 1080p frame (design-system
+ *  §7): the gaps between caption, tally and cards and inside the tally, and the
+ *  caption / tally-name / numeral sizes. */
+const SUMMARY_ART = {
+  stackGap: 24,
+  tallyGap: 16,
+  caption: 32,
+  name: 40,
+  numeral: 64,
+} as const;
 
 /**
  * `/stream/rounds-summary/:round/:gender?compId=&token=&match=` — the best-of-3
@@ -104,31 +115,49 @@ const SummaryBody = ({
   if (status !== 'ready' || match == null) return null;
 
   return (
-    <Stack spacing={3} sx={{ alignItems: 'center' }}>
+    <Stack sx={{ alignItems: 'center', rowGap: refVh(SUMMARY_ART.stackGap) }}>
       <Typography
         data-testid="rounds-summary-caption"
         sx={{
           fontFamily: fonts.display,
           fontWeight: 700,
           textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          fontSize: refVh(32),
+          letterSpacing: overlayArt.bannerTracking,
+          fontSize: refVh(SUMMARY_ART.caption),
         }}
       >
         {displayRoundName(match)} — Best of 3
       </Typography>
-      <Stack data-testid="series-tally" direction="row" spacing={2} sx={{ alignItems: 'baseline' }}>
+      <Stack
+        data-testid="series-tally"
+        direction="row"
+        sx={{ alignItems: 'baseline', columnGap: refVw(SUMMARY_ART.tallyGap) }}
+      >
         <TallyName athlete={athlete1} />
         <SeriesNumeral value={wins1} lead={wins1 > wins2} testId="series-wins-1" />
-        <Typography
-          sx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: refVh(40), lineHeight: 1 }}
+        <Numeral
+          fontWeight={700}
+          fontSize={refVh(SUMMARY_ART.numeral)}
+          lineHeight={1}
+          color={colors.overlay.label}
+          testId="series-separator"
         >
           –
-        </Typography>
+        </Numeral>
         <SeriesNumeral value={wins2} lead={wins2 > wins1} testId="series-wins-2" />
         <TallyName athlete={athlete2} />
       </Stack>
-      <Stack direction="row" spacing={3} sx={{ alignItems: 'center', justifyContent: 'center' }}>
+      {/* Half the VS card gap: the same lower-third family's spacing, and enough
+          ground for the outset winner rim to clear the other card. */}
+      <Stack
+        data-testid="rounds-summary-cards"
+        direction="row"
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          columnGap: refVw(VS_ART.vsGap / 2),
+        }}
+      >
         <Competitor athlete={athlete1} isWinner={wins1 > wins2} />
         <Competitor athlete={athlete2} isWinner={wins2 > wins1} />
       </Stack>
@@ -147,8 +176,8 @@ const TallyName = ({ athlete }: { athlete?: Athlete }) =>
         fontFamily: fonts.display,
         fontWeight: 700,
         textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-        fontSize: refVh(40),
+        letterSpacing: overlayArt.bannerTracking,
+        fontSize: refVh(SUMMARY_ART.name),
         lineHeight: 1,
       }}
     >
@@ -167,8 +196,8 @@ const SeriesNumeral = ({
   testId: string;
 }) => (
   <Numeral
-    fontWeight={800}
-    fontSize={refVh(64)}
+    fontWeight={700}
+    fontSize={refVh(SUMMARY_ART.numeral)}
     lineHeight={1}
     // The trailing count is overlay-label white, not ink.hi: `ink.*` is the
     // on-white-plate tier and vanishes keyed over dark footage on this

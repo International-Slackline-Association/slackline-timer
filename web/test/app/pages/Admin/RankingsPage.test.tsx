@@ -236,6 +236,32 @@ describe('RankingsPage', () => {
     expect(within(rows[2]).getByText('Qualification')).toBeInTheDocument();
   });
 
+  it('suffixes the standings source with the round a borrowed result came from', async () => {
+    const standings: StandingsEntry[] = [
+      {
+        athlete: athlete('a1', 'Jane Doe'),
+        rank: 1,
+        source: 'final',
+        resultSource: 'qualification',
+        bestTimeMs: 83_450,
+      },
+      { athlete: athlete('a2', 'John Roe'), rank: 2, source: 'final', bestTimeMs: 84_000 },
+    ];
+    apiFetchMock.mockResolvedValue(standings);
+    renderPage(COMP);
+
+    fireEvent.change(screen.getByLabelText(/round/i), { target: { value: 'overall' } });
+
+    const table = await screen.findByRole('table');
+    const sourceCell = (row: HTMLElement) => within(row).getAllByRole('cell').at(-1)!;
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(sourceCell(rows[0])).toHaveTextContent(/^Final \(result: Qualification\)$/);
+    expect(within(rows[0]).getByText('(result: Qualification)')).toHaveClass(
+      'MuiTypography-caption',
+    );
+    expect(sourceCell(rows[1])).toHaveTextContent(/^Final$/);
+  });
+
   it('renders the combined ranking with shared =N ranks and disables the discipline toggle', async () => {
     const combined: CombinedEntry[] = [
       {

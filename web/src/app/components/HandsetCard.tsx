@@ -5,7 +5,7 @@ import { BuzzerMappingDialog } from 'app/components/BuzzerMappingDialog';
 import { GamepadPicker } from 'app/components/GamepadPicker';
 import { useGamepads } from 'app/hooks/useGamepads';
 import { useGamepadSelection } from 'app/state/gamepadSelection';
-import { liveCaption } from 'app/theme/tokens';
+import { fieldWidths, liveCaption } from 'app/theme/tokens';
 import type { BuzzerMappingRow } from 'app/util/buzzer';
 import { agoLabel } from 'app/util/handsetReadout';
 
@@ -108,8 +108,8 @@ export const HandsetCard = ({ title, rows, describe, variant = 'card' }: Props) 
         variant="outlined"
         data-testid="handset-strip"
         // Grows into the row and wraps out of it on its own — the strip shares a
-        // line with the Preview switch and may not pin a desk track (the
-        // responsive contract's no-fixed-widths rule).
+        // line with the Preview switch and may not pin a desk track
+        // (design-system §9 "Responsive contract").
         sx={{ px: 1, py: 0.5, flex: '1 1 20rem', minWidth: 0 }}
       >
         <Stack
@@ -141,7 +141,7 @@ export const HandsetCard = ({ title, rows, describe, variant = 'card' }: Props) 
       aria-label="Handsets"
       variant="outlined"
       data-testid="handset-card"
-      sx={{ p: 1.5, width: '100%', maxWidth: 360 }}
+      sx={{ p: 1.5, width: '100%', maxWidth: fieldWidths.card }}
     >
       <Stack spacing={0.75}>
         <Typography variant="overline" component="div" sx={{ letterSpacing: '0.1em' }}>

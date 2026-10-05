@@ -61,6 +61,21 @@ const elbow = (
   ];
 };
 
+/**
+ * A top-4 bracket: small-field seeding (rules S7/F11) writes the semis straight
+ * away, so the quarter round never gets a match. Both trees then drop the empty
+ * quarter column. No matches at all is the pre-seed frame and keeps the full
+ * TBD tree.
+ */
+export const seededFromSemis = (matches: readonly Match[]): boolean =>
+  !matches.some((m) => m.round === 'quarter') && matches.some((m) => m.round === 'half');
+
+/** Layout options shared by both tree builders. */
+export interface TreeOptions {
+  /** Leave out the quarter-final column: its boxes, label(s) and feed connectors. */
+  hideQuarter?: boolean;
+}
+
 export interface ResolvedSlot extends BracketSlot {
   athleteId?: string;
   isWinner: boolean;
@@ -113,12 +128,19 @@ export interface NameTreeLayout {
  * tree — boxes, label bands and connector coordinates alike — so its bounding
  * box centres on the canvas, leaving every relative percentage the art encodes
  * untouched. The admin preview and the overlay therefore stay one tree.
+ *
+ * `centreX` also centres the boxes' horizontal extent — only for the name tree
+ * without its quarter column, which would otherwise hug the right edge. Labels
+ * sit centred on box columns there, so the boxes alone bound the tree.
  */
-const recentreTree = <B extends NamePlate>(tree: {
-  boxes: readonly B[];
-  labels: readonly NameLabel[];
-  connectors: readonly (readonly (readonly [number, number])[])[];
-}) => {
+const recentreTree = <B extends NamePlate>(
+  tree: {
+    boxes: readonly B[];
+    labels: readonly NameLabel[];
+    connectors: readonly (readonly (readonly [number, number])[])[];
+  },
+  { centreX = false }: { centreX?: boolean } = {},
+) => {
   // A label's painted band is its centre ± half its cap size.
   const tops = [
     ...tree.boxes.map((b) => b.topPct),
@@ -129,12 +151,26 @@ const recentreTree = <B extends NamePlate>(tree: {
     ...tree.labels.map((l) => l.yPct + (l.sizePct * 100) / 2),
   ];
   const shift = 50 - (Math.min(...tops) + Math.max(...bottoms)) / 2;
+  const left = Math.min(...tree.boxes.map((b) => b.leftPct));
+  const right = Math.max(...tree.boxes.map((b) => b.leftPct + b.widthPct));
+  const shiftX = centreX ? 50 - (left + right) / 2 : 0;
   return {
-    boxes: tree.boxes.map((b) => ({ ...b, topPct: b.topPct + shift })),
-    labels: tree.labels.map((l) => ({ ...l, yPct: l.yPct + shift })),
-    connectors: tree.connectors.map((run) => run.map(([x, y]) => [x, y + shift] as const)),
+    boxes: tree.boxes.map((b) => ({ ...b, leftPct: b.leftPct + shiftX, topPct: b.topPct + shift })),
+    labels: tree.labels.map((l) => ({ ...l, xPct: l.xPct + shiftX, yPct: l.yPct + shift })),
+    connectors: tree.connectors.map((run) => run.map(([x, y]) => [x + shiftX, y + shift] as const)),
   };
 };
+
+const QUARTER_BOX_IDS = new Set(
+  BRACKET_SLOTS.filter((s) => s.round === 'quarter').map((s) => s.boxId),
+);
+const QUARTER_LABEL = 'QUARTER FINALS';
+
+/** Without the quarter column: its boxes and its label(s) go (connectors are per tree). */
+const keepBox = (hideQuarter: boolean) => (b: NamePlate) =>
+  !hideQuarter || !QUARTER_BOX_IDS.has(b.boxId);
+const keepLabel = (hideQuarter: boolean) => (l: NameLabel) =>
+  !hideQuarter || l.text !== QUARTER_LABEL;
 
 // Geometry measured off `LAAX 2026_Name Brackets.svg` in the client-delivered
 // LAAX 2026 master art (not part of this repo; the measurements are recorded in
@@ -179,7 +215,7 @@ const bar = (boxId: string, leftPct: number, centerYPct: number): NamePlate => (
 });
 
 /** Build the single-direction name-bracket layout (pure; percentages of 16:9). */
-export const nameTreeLayout = (): NameTreeLayout => {
+export const nameTreeLayout = ({ hideQuarter = false }: TreeOptions = {}): NameTreeLayout => {
   const plates: NamePlate[] = [
     // Quarter finals — 4 pairs, left column
     bar('box_a_1', Q_X, qTop(SEMI_CENTERS[0])),
@@ -212,7 +248,7 @@ export const nameTreeLayout = (): NameTreeLayout => {
   // captions the bronze advancement bar at the WINNER caption's exact offset
   // below its plate, so the two result bars read as a pair.
   const labels: NameLabel[] = [
-    { text: 'QUARTER FINALS', xPct: artX(72), yPct: WIN_CENTER, sizePct: 39 / 1080, rotate: -90 },
+    { text: QUARTER_LABEL, xPct: artX(72), yPct: WIN_CENTER, sizePct: 39 / 1080, rotate: -90 },
     { text: 'SEMI FINALS', xPct: SEMI_X + PLATE_W / 2, yPct: WIN_CENTER, sizePct: 71.29 / 1080 },
     { text: 'FINALS', xPct: FINAL_X + PLATE_W / 2, yPct: artY(592), sizePct: 129.96 / 1080 },
     { text: 'WINNER', xPct: WIN_X + PLATE_W / 2, yPct: artY(651), sizePct: 55 / 1080 },
@@ -230,18 +266,23 @@ export const nameTreeLayout = (): NameTreeLayout => {
   const QR = Q_X + PLATE_W; // right edge of quarter bars
   const SR = SEMI_X + PLATE_W;
   const FR = FINAL_X + PLATE_W;
-  const connectors: (readonly (readonly [number, number])[])[] = [
-    elbow(QR, qTop(SEMI_CENTERS[0]), qBot(SEMI_CENTERS[0]), SEMI_X, SEMI_CENTERS[0]),
-    elbow(QR, qTop(SEMI_CENTERS[1]), qBot(SEMI_CENTERS[1]), SEMI_X, SEMI_CENTERS[1]),
-    elbow(QR, qTop(SEMI_CENTERS[2]), qBot(SEMI_CENTERS[2]), SEMI_X, SEMI_CENTERS[2]),
-    elbow(QR, qTop(SEMI_CENTERS[3]), qBot(SEMI_CENTERS[3]), SEMI_X, SEMI_CENTERS[3]),
+  const quarterRuns = SEMI_CENTERS.map((c) => elbow(QR, qTop(c), qBot(c), SEMI_X, c));
+  const connectors = [
+    ...(hideQuarter ? [] : quarterRuns),
     elbow(SR, SEMI_CENTERS[0], SEMI_CENTERS[1], FINAL_X, FINAL_CENTERS[0]),
     elbow(SR, SEMI_CENTERS[2], SEMI_CENTERS[3], FINAL_X, FINAL_CENTERS[1]),
     elbow(FR, FINAL_CENTERS[0], FINAL_CENTERS[1], WIN_X, WIN_CENTER),
     elbow(FR, SMALL_CENTERS[0], SMALL_CENTERS[1], WIN_X, SMALL_WIN_CENTER),
   ];
 
-  const centred = recentreTree({ boxes: plates, labels, connectors });
+  const centred = recentreTree(
+    {
+      boxes: plates.filter(keepBox(hideQuarter)),
+      labels: labels.filter(keepLabel(hideQuarter)),
+      connectors,
+    },
+    { centreX: hideQuarter },
+  );
   return { plates: centred.boxes, labels: centred.labels, connectors: centred.connectors };
 };
 
@@ -292,7 +333,7 @@ const artRect = (boxId: string, x: number, top: number, w: number, h: number): P
 const mirrorX = (x: number, w: number) => 1920 - x - w;
 
 /** Build the mirrored profile (photo-box) bracket layout (pure; % of 16:9). */
-export const profileTreeLayout = (): ProfileTreeLayout => {
+export const profileTreeLayout = ({ hideQuarter = false }: TreeOptions = {}): ProfileTreeLayout => {
   const quarter = (boxId: string, tier: number, right = false) =>
     artRect(
       boxId,
@@ -350,14 +391,14 @@ export const profileTreeLayout = (): ProfileTreeLayout => {
   // spacing).
   const labels: NameLabel[] = [
     {
-      text: 'QUARTER FINALS',
+      text: QUARTER_LABEL,
       xPct: artX(72.8),
       yPct: artY(P_MID_Y),
       sizePct: 34.79 / 1080,
       rotate: -90,
     },
     {
-      text: 'QUARTER FINALS',
+      text: QUARTER_LABEL,
       xPct: 100 - artX(72.8),
       yPct: artY(P_MID_Y),
       sizePct: 34.79 / 1080,
@@ -390,13 +431,16 @@ export const profileTreeLayout = (): ProfileTreeLayout => {
   // pair's outer edges) plus a separate stub into the next box's edge.
   const run = (...pts: (readonly [number, number])[]): readonly (readonly [number, number])[] =>
     pts.map(([x, y]) => [artX(x), artY(y)] as const);
-  const leftRuns: (readonly (readonly [number, number])[])[] = [
+  const leftQuarterRuns = [
     // Top quarter pair C-elbow + stub into the top semi
     run([207.57, 282.12], [271.96, 282.12], [271.96, 568.75], [207.57, 568.75]),
     run([271.96, 425.43], [326.36, 425.43]),
     // Bottom quarter pair C-elbow + stub into the bottom semi
     run([207.57, 692.27], [271.96, 692.27], [271.96, 978.9], [207.57, 978.9]),
     run([271.96, 835.58], [326.36, 835.58]),
+  ];
+  const leftRuns = [
+    ...(hideQuarter ? [] : leftQuarterRuns),
     // Semi pair C-elbow + stub into the finalist box
     run([452.35, 425.43], [516.57, 425.43], [516.57, 835.58], [452.35, 835.58]),
     run([516.57, 630.51], [570.83, 630.51]),
@@ -415,7 +459,11 @@ export const profileTreeLayout = (): ProfileTreeLayout => {
     run([912.53, 915.09], [1007.47, 915.09]),
   ];
 
-  return recentreTree({ boxes, labels, connectors });
+  return recentreTree({
+    boxes: boxes.filter(keepBox(hideQuarter)),
+    labels: labels.filter(keepLabel(hideQuarter)),
+    connectors,
+  });
 };
 
 /**

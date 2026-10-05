@@ -19,7 +19,7 @@ import { SecondsField } from 'app/components/SecondsField';
 import { WhyLine } from 'app/components/WhyLine';
 import type { WarmupChannel } from 'app/hooks/useWarmupChannel';
 import type { FreestyleMode } from 'app/state/freestyleModeMemory';
-import { liveCaption } from 'app/theme/tokens';
+import { fieldWidths, liveCaption } from 'app/theme/tokens';
 import { FREESTYLE_FORMAT_PRESETS } from 'app/types';
 import { lockReason } from 'app/util/lockReason';
 
@@ -90,7 +90,7 @@ export const FreestyleSetupPanel = ({
 
   return (
     <>
-      <Paper variant="outlined" sx={{ p: 2, width: '100%', maxWidth: 360 }}>
+      <Paper variant="outlined" sx={{ p: 2, width: '100%', maxWidth: fieldWidths.card }}>
         <Stack spacing={2}>
           <Stack spacing={0.5}>
             <Typography variant="caption" sx={{ ...liveCaption, color: 'text.secondary' }}>

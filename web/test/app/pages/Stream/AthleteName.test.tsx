@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { Athlete } from 'app/types';
 import { AthleteName } from 'app/pages/Stream/AthleteName';
-import { colors, fonts } from 'app/theme/tokens';
+import { colors, fonts, overlayArt } from 'app/theme/tokens';
+
+import { emPx, px } from '../../../util/computedUnits';
 
 /** Resolve a hex token to the `rgb(...)` form jsdom reports for `color`. */
 const rgb = (hex: string) => {
@@ -30,6 +32,25 @@ describe('AthleteName (the LAAX bold-first / light-last split)', () => {
     );
     for (const part of ['Amanda', 'Montminy']) {
       expect(window.getComputedStyle(screen.getByText(part)).fontFamily).toContain('Oswald');
+    }
+  });
+
+  it('tracks the name on the shared name token in both sizing modes', () => {
+    const { unmount } = render(<AthleteName athlete={person} />);
+    const wrapper = screen.getByText('Amanda').parentElement as HTMLElement;
+    expect(px(window.getComputedStyle(wrapper).letterSpacing)).toBeCloseTo(
+      emPx(overlayArt.nameTracking, wrapper),
+      2,
+    );
+    unmount();
+
+    render(<AthleteName athlete={person} sizing="cqh" />);
+    for (const part of ['Amanda', 'Montminy']) {
+      const el = screen.getByText(part);
+      expect(px(window.getComputedStyle(el).letterSpacing)).toBeCloseTo(
+        emPx(overlayArt.nameTracking, el),
+        2,
+      );
     }
   });
 

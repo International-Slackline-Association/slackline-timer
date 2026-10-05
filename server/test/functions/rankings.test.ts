@@ -197,19 +197,22 @@ describe('rankings handler — overall standings (round=overall)', () => {
     expect(res.statusCode).toBe(200);
     expect(listMatchesMock).toHaveBeenCalledWith(COMP, 'speed', 'female');
     expect(
-      res.body.map((e: { rank: number; athlete: { athleteId: string }; source: string }) => [
-        e.rank,
-        e.athlete.athleteId,
-        e.source,
-      ]),
+      res.body.map(
+        (e: {
+          rank: number;
+          athlete: { athleteId: string };
+          source: string;
+          resultSource?: string;
+        }) => [e.rank, e.athlete.athleteId, e.source, e.resultSource],
+      ),
     ).toEqual([
-      // a1 won the final but has no final-round Time → the row reports the
-      // round its VALUE came from (quali), never the placement round.
-      [1, 'a1', 'qualification'],
-      // a4 has no Time anywhere → no value to attribute, so the placement round stands.
-      [2, 'a4', 'final'],
-      [3, 'a2', 'qualification'],
-      [4, 'a3', 'qualification'],
+      // a1 won the final but has no final-round Time → `source` stays the placing
+      // round and `resultSource` names where the shown value came from.
+      [1, 'a1', 'final', 'qualification'],
+      // a4 has no Time anywhere → nothing borrowed, so no resultSource.
+      [2, 'a4', 'final', undefined],
+      [3, 'a2', 'qualification', undefined],
+      [4, 'a3', 'qualification', undefined],
     ]);
     // No final-round time → the winner's result falls back to quali.
     expect(res.body[0].bestTimeMs).toBe(10_000);
@@ -252,13 +255,14 @@ describe('rankings handler — overall standings (round=overall)', () => {
           provisional?: boolean;
           overall: number;
           source: string;
-        }) => [e.rank, e.athlete.athleteId, e.provisional, e.overall, e.source],
+          resultSource?: string;
+        }) => [e.rank, e.athlete.athleteId, e.provisional, e.overall, e.source, e.resultSource],
       ),
     ).toEqual([
-      // a1 has no final score → quali fallback, so the row reports `qualification`;
-      // a2 shows its final-round score and keeps `final`.
-      [1, 'a1', true, 31, 'qualification'],
-      [2, 'a2', true, 40, 'final'],
+      // a1 has no final score → its quali score is borrowed (resultSource);
+      // a2 shows its own final-round score, so nothing is borrowed.
+      [1, 'a1', true, 31, 'final', 'qualification'],
+      [2, 'a2', true, 40, 'final', undefined],
     ]);
   });
 
@@ -290,8 +294,69 @@ describe('rankings handler — overall standings (round=overall)', () => {
       res.body.map((e: { source: string; bestTimeMs?: number }) => [e.source, e.bestTimeMs]),
     ).toEqual([
       ['final', 9_000],
-      ['qualification', 11_000],
+      ['final', 11_000],
     ]);
+    expect(res.body[0]).not.toHaveProperty('resultSource');
+    expect(res.body[1].resultSource).toBe('qualification');
+  });
+
+  it('captions a decided small final with no times by its placing round, borrowing quali', async () => {
+    // The small final placed a slower athlete above a faster one; with no
+    // small-final Times both show quali values, so `source` must still say
+    // small_final or the order reads as a mis-sort on air.
+    listAthletesMock.mockResolvedValue([
+      fem('a1', 'Lea Müller'),
+      fem('a2', 'Mia Roe'),
+      fem('a3', 'Zoe Poe'),
+      fem('a4', 'Kim Loe'),
+    ]);
+    listTimesMock.mockResolvedValue([
+      t('a1', 'qualification', 6_000),
+      t('a2', 'qualification', 6_100),
+      t('a3', 'qualification', 6_210),
+      t('a4', 'qualification', 7_090),
+      t('a1', 'final', 5_280),
+      t('a2', 'final', 5_400),
+    ]);
+    const match = (
+      matchId: string,
+      round: 'final' | 'small_final',
+      ids: string[],
+      winnerId: string,
+    ) => ({
+      matchId,
+      compId: COMP,
+      discipline: 'speed',
+      round,
+      gender: 'female',
+      position: 1,
+      athlete1Id: ids[0],
+      athlete2Id: ids[1],
+      winnerId,
+    });
+    listMatchesMock.mockResolvedValue([
+      match('m1', 'final', ['a1', 'a2'], 'a1'),
+      match('m2', 'small_final', ['a3', 'a4'], 'a4'),
+    ]);
+
+    const res = await invoke(event({ round: 'overall' }));
+
+    expect(
+      res.body.map(
+        (e: {
+          athlete: { athleteId: string };
+          source: string;
+          resultSource?: string;
+          bestTimeMs?: number;
+        }) => [e.athlete.athleteId, e.source, e.resultSource, e.bestTimeMs],
+      ),
+    ).toEqual([
+      ['a1', 'final', undefined, 5_280],
+      ['a2', 'final', undefined, 5_400],
+      ['a4', 'small_final', 'qualification', 7_090],
+      ['a3', 'small_final', 'qualification', 6_210],
+    ]);
+    expect(res.body[0]).not.toHaveProperty('resultSource');
   });
 
   it('requires a valid gender for the overall view (400)', async () => {

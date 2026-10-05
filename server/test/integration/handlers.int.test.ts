@@ -910,7 +910,13 @@ describe.skipIf(!reachable)('HTTP API handlers integration', () => {
       await postMatch('small_final', third, fourth, fourth);
 
       const res = await callHandler<
-        Array<{ athlete: { athleteId: string }; rank: number; source: string; bestTimeMs: number }>
+        Array<{
+          athlete: { athleteId: string };
+          rank: number;
+          source: string;
+          resultSource?: string;
+          bestTimeMs: number;
+        }>
       >(rankingsHandler, {
         routeKey: 'GET /competitions/{compId}/rankings/{round}',
         pathParameters: { compId, round: 'overall' },
@@ -918,15 +924,15 @@ describe.skipIf(!reachable)('HTTP API handlers integration', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      // Nobody ran a bracket round, so every row's VALUE is its quali best and
-      // every row reports `qualification` — the tag names where the number came
-      // from, not where the rank was decided.
-      expect(res.body.map((r) => [r.rank, r.athlete.athleteId, r.source])).toEqual([
-        [1, second, 'qualification'],
-        [2, first, 'qualification'],
-        [3, fourth, 'qualification'],
-        [4, third, 'qualification'],
-        [5, fifth, 'qualification'],
+      // Nobody ran a bracket round, so every bracket row's value is its quali
+      // best: `source` keeps the placing round and `resultSource` names the
+      // borrowed one; the quali tail borrows nothing.
+      expect(res.body.map((r) => [r.rank, r.athlete.athleteId, r.source, r.resultSource])).toEqual([
+        [1, second, 'final', 'qualification'],
+        [2, first, 'final', 'qualification'],
+        [3, fourth, 'small_final', 'qualification'],
+        [4, third, 'small_final', 'qualification'],
+        [5, fifth, 'qualification', undefined],
       ]);
       expect(res.body[0].bestTimeMs).toBe(10_000);
     });

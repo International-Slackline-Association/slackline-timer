@@ -58,16 +58,36 @@ Read by `StreamLayout` (data overlays) and the timer display pages
 | -------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | _(absent)_ / `transparent` | none (alpha)                                | **Default.** OBS Studio Browser Source, vMix Web Browser, NDI-RGBA.                                                        |
 | `key` / `magenta`          | `#FF00FF` (`--tl-chroma-key`)               | **Recommended chroma.** Any hardware/colour keyer; safe vs our greens/blues.                                               |
-| `green`                    | `#00B140`                                   | Operator's keyer only has a green preset **and** no green is on-screen.                                                    |
-| `blue`                     | `#0047BB`                                   | Blue-screen rigs where no blue/teal is on-screen.                                                                          |
+| `green`                    | `#00B140` (`chromaKeyGreen`)                | Operator's keyer only has a green preset **and** no green is on-screen.                                                    |
+| `blue`                     | `#0047BB` (`chromaKeyBlue`)                 | Blue-screen rigs where no blue/teal is on-screen.                                                                          |
 | `h2r`                      | none (alpha) + **colour adaptation**        | **Keyed composite chains**: the transparent overlay is flattened onto a chroma ground _before_ the keyer (see §h2r below). |
 | any CSS color              | that color (e.g. `%23123456`, `rgb(0,0,0)`) | Escape hatch — exotic keyers / solid backers.                                                                              |
 
 - Transparent is the default and preserves the §7 "fail-safe blank" rule: an
   empty overlay paints nothing and composites away invisibly.
-- The chroma fill is an opaque full-viewport ground behind the graphic layers;
-  the foreground (white plates, green winner, GO light) is unchanged and survives
-  the magenta key.
+- The chroma fill is an opaque full-viewport ground behind the graphic layers.
+  The opaque foreground (filled white plates, green winner, GO light) is
+  unchanged and survives the key. The **translucent** plates cannot: a solid
+  ground carries no alpha, so 30–48 % white blends with it (the 48 % stat band
+  airs `#FF7AFF` over magenta) and a tolerant keyer half-erases the band. Every
+  chroma ground (`key`/`magenta`/`green`/`blue`, or a custom colour equal to
+  one of them) therefore sets the `tl-chroma-ground` body class, which
+  **flattens** `--tl-overlay-plate` / `-plate-name` / `-plate-strip` to the
+  opaque neutral their alpha gives over slate `--tl-bg-void` (`#707783` /
+  `#7A808C` / `#959AA3`, block in `tokens.css`). Only see-through is lost, and
+  only in modes that could not carry it.
+
+## Producer margin knobs
+
+The timer displays (`/stream/timer`, both disciplines, and the projector
+previews) read two integers beside `?bg=`, via `useQueryParams`:
+`?sideMargin=<n>` (the inline inset of the lane band and the standings) and
+`?bottomMargin=<n>` (the band's bottom inset). Each replaces its frame-relative
+default when set. They are **raw output px**, not 1080p reference px fed
+through `refVh`: they exist to nudge the overlay clear of a rig's own furniture
+(a scoreboard bug, a safe-area mask), which the producer measures in output
+pixels. `?sideMargin=40` moves the band 40 device px at any capture size. The
+`app/` px guard (`noRawColour.test.ts`) exempts exactly these two names.
 
 ## The colour-adaptation mode (`?bg=h2r`) {#h2r}
 
@@ -99,9 +119,10 @@ If the chain's lift is fixed, delete those overrides; the numbers live at the
 block in `tokens.css`.
 
 Known limitation (accepted while the colour adaptation is under test): the
-mode does not change the **translucent** surfaces — the 30–48 % white plates
-and the blurred protection halos blend with the pink ground during the flatten
-and can fringe or tint through the keyer.
+mode keeps the **translucent** surfaces as alpha — the chroma-ground plate
+flatten does not apply, since the ground is transparent here — so the 30–48 %
+white plates and the blurred protection halos blend with the pink ground during
+the upstream flatten and can fringe or tint through the keyer.
 
 The corner status badges treat the mode as a keyed ground (suppressed — they
 would hit air through the downstream keyer). `/admin/overlays` mints it as the

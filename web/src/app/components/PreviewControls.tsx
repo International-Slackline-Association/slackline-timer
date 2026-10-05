@@ -15,6 +15,9 @@ interface Props {
   /** The projector surfaces this console feeds (Freestyle adds the athlete
    * display to the preview). */
   links: readonly ProjectorLink[];
+  /** The switch and its links on one line — the Speedline setup strip, where a
+   * second line is a row of header height (`speedline-compact-fold-lane-dnf-1024`). */
+  inline?: boolean;
 }
 
 /**
@@ -30,14 +33,19 @@ interface Props {
  * leaves the keyboard where it found it: a clicked link cannot activate on
  * Space at all, so one kept focus is a silently dead handset.
  */
-export const PreviewControls = ({ enabled, onToggle, links }: Props) => {
+export const PreviewControls = ({ enabled, onToggle, links, inline = false }: Props) => {
   // The switch takes its name from the visible word beside it, so the label the
   // operator reads and the one a screen reader speaks cannot drift; the ON/OFF
   // stays the state, which the switch already reports itself.
   const labelId = useId();
 
   return (
-    <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
+    <Stack
+      data-testid="preview-controls"
+      direction={inline ? 'row' : 'column'}
+      spacing={inline ? 1.5 : 1}
+      sx={{ alignItems: inline ? 'center' : 'flex-start' }}
+    >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <Switch
           checked={enabled}

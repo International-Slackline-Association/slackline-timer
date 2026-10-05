@@ -103,31 +103,31 @@ export const laneLocks = ({ id, lane, runningLane, bestTrickArmed }: LaneLockInp
   };
 };
 
-export interface ResetBothLockInput {
+export interface ResetLanesLockInput {
   lanes: Record<PlayerId, LaneState>;
   runningLane: PlayerId | null;
   bestTrickArmed: boolean;
 }
 
 /**
- * The score rail's `Reset lanes for the next match` (§4.9). It fires the two
- * per-lane RESETs, so it takes whatever locks either lane's own Reset — one
- * press cannot be live for a lane the board has closed. In practice that is the
- * board hold: while a series is armed the run board is re-armed *after* Leave
- * best trick (§4.7's one exit), and the rail foot is the other way to those
- * same clocks.
+ * The score rail's re-arm for the next match / athlete (§4.9). It fires one
+ * RESET per lane the mode records (`ids`: both in a battle, lane 1 in quali), so
+ * it takes whatever locks any of those lanes' own Reset — one press cannot be
+ * live for a lane the board has closed. In practice that is the board hold:
+ * while a series is armed the run board is re-armed *after* Leave best trick
+ * (§4.7's one exit), and the rail foot is the other way to those same clocks.
  *
- * The lanes' own phases are deliberately not a lock here: clearing a spent or a
- * fallen lane is what this button is for, and `laneResetNeedsConfirm` asks
- * about those (`resetGuard.ts`).
+ * The lanes' own phases are not a lock here: clearing a spent or a fallen lane
+ * is what this button is for, and `laneResetNeedsConfirm` asks about those
+ * (`resetGuard.ts`).
  */
-export const resetBothLock = ({
-  lanes,
-  runningLane,
-  bestTrickArmed,
-}: ResetBothLockInput): Lock | null =>
-  laneLocks({ id: 1, lane: lanes[1], runningLane, bestTrickArmed }).reset ??
-  laneLocks({ id: 2, lane: lanes[2], runningLane, bestTrickArmed }).reset;
+export const resetLanesLock = (
+  { lanes, runningLane, bestTrickArmed }: ResetLanesLockInput,
+  ids: readonly PlayerId[],
+): Lock | null =>
+  ids
+    .map((id) => laneLocks({ id, lane: lanes[id], runningLane, bestTrickArmed }).reset)
+    .find((lock) => lock !== null) ?? null;
 
 export interface BestTrickLockInput {
   /** The armed series, or null while the phase is off. */

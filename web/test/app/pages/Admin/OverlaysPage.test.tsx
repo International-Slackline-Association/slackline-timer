@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -155,6 +155,122 @@ describe('OverlaysPage', () => {
     expect(screen.getByRole('button', { name: /regenerate overlay links/i })).toBeInTheDocument();
   });
 
+  describe('copied marker', () => {
+    const renderLinks = async () => {
+      mockApi({ token: 'unused', expiresAt: 1_900_000_000_000 });
+      seedCachedToken('tok-cached', Date.now(), Date.now() + 10 * 24 * 3_600_000);
+      renderPage(COMP);
+      await screen.findByDisplayValue(/\/stream\/rankings\/final\/male\?.*token=tok-cached$/);
+    };
+    const clickCopy = (name: string, index = 0) =>
+      act(async () => {
+        fireEvent.click(screen.getAllByRole('button', { name })[index]);
+      });
+    const copyRankings = () => clickCopy('Copy Rankings link');
+    const copiedMarkers = () => screen.queryAllByText(/copied!/);
+    // jsdom ships no Clipboard API, which is also what an insecure (plain-http) origin looks like.
+    const stubClipboard = (writeText: (text: string) => Promise<void>) =>
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    beforeEach(() => stubClipboard(vi.fn().mockResolvedValue(undefined)));
+    afterEach(() => {
+      vi.useRealTimers();
+      Reflect.deleteProperty(navigator, 'clipboard');
+    });
+
+    it('marks the link copied only once the clipboard write resolves', async () => {
+      await renderLinks();
+      let resolveWrite = () => {};
+      const writeText = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveWrite = resolve;
+          }),
+      );
+      stubClipboard(writeText);
+
+      await copyRankings();
+      expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/token=tok-cached$/));
+      expect(copiedMarkers()).toHaveLength(0);
+
+      await act(async () => resolveWrite());
+      expect(copiedMarkers()).not.toHaveLength(0);
+    });
+
+    describe('when the copy fails', () => {
+      const failedField = () =>
+        screen.getAllByLabelText(/^Rankings — copy failed, press Ctrl\+C$/)[0] as HTMLInputElement;
+      const expectSelected = (input: HTMLInputElement) => {
+        expect(input).toHaveFocus();
+        expect(input.selectionStart).toBe(0);
+        expect(input.selectionEnd).toBe(input.value.length);
+      };
+
+      it('selects the link for Ctrl+C when the write is rejected', async () => {
+        const unhandled = vi.fn();
+        process.on('unhandledRejection', unhandled);
+        try {
+          await renderLinks();
+          stubClipboard(vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError')));
+
+          await copyRankings();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          expect(copiedMarkers()).toHaveLength(0);
+          expectSelected(failedField());
+          expect(unhandled).not.toHaveBeenCalled();
+        } finally {
+          process.off('unhandledRejection', unhandled);
+        }
+      });
+
+      it('selects the link for Ctrl+C when the origin exposes no clipboard', async () => {
+        Reflect.deleteProperty(navigator, 'clipboard');
+        await renderLinks();
+
+        await copyRankings();
+
+        expect(copiedMarkers()).toHaveLength(0);
+        expectSelected(failedField());
+      });
+    });
+
+    it('drops the marker when the pickers rebuild the copied URL', async () => {
+      await renderLinks();
+      await copyRankings();
+      expect(copiedMarkers()).not.toHaveLength(0);
+
+      fireEvent.change(screen.getByLabelText(/^round$/i), { target: { value: 'half' } });
+      await screen.findByDisplayValue(
+        /\/stream\/rankings\/half\/male\?compId=worlds-2026&token=tok-cached$/,
+      );
+      expect(copiedMarkers()).toHaveLength(0);
+    });
+
+    it('drops every marker when the background changes', async () => {
+      await renderLinks();
+      await copyRankings();
+      await clickCopy('Copy Final standings link', 1);
+      expect(copiedMarkers()).not.toHaveLength(0);
+
+      fireEvent.change(screen.getByLabelText(/background/i), { target: { value: '&bg=key' } });
+      await screen.findByDisplayValue(
+        /\/stream\/rankings\/final\/male\?compId=worlds-2026&token=tok-cached&bg=key$/,
+      );
+      expect(copiedMarkers()).toHaveLength(0);
+    });
+
+    it('fades the marker back to the plain label within 3s', async () => {
+      await renderLinks();
+      vi.useFakeTimers();
+      await copyRankings();
+      expect(copiedMarkers()).not.toHaveLength(0);
+
+      act(() => vi.advanceTimersByTime(3_000));
+      expect(copiedMarkers()).toHaveLength(0);
+    });
+  });
+
   it('ignores a cached token past half its lifetime', () => {
     mockApi({ token: 'tok-new', expiresAt: 1_900_000_000_000 });
     // storedAt in the distant past, expiry barely ahead → midpoint long gone.
@@ -190,11 +306,55 @@ describe('OverlaysPage', () => {
     // The cached links are showing; revoking must drop the now-dead token.
     await screen.findAllByDisplayValue(/token=tok-cached/);
     fireEvent.click(screen.getByRole('button', { name: /revoke all links/i }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: /revoke all links/i }),
+    );
 
     await waitFor(() =>
       expect(window.localStorage.getItem(`speedline.overlayReadToken.${COMP}`)).toBeNull(),
     );
     expect(screen.queryAllByDisplayValue(/token=tok-cached/)).toHaveLength(0);
+  });
+
+  it('mints exactly the pinned URL set for the default picker state', async () => {
+    mockApi(
+      { token: 'tok-123', expiresAt: 1_900_000_000_000 },
+      { matches: [{ matchId: 'm1', compId: COMP, round: 'final', gender: 'male', position: 0 }] },
+    );
+    renderPage(COMP);
+    fireEvent.click(screen.getByRole('button', { name: /generate overlay links/i }));
+    await screen.findByDisplayValue(/&match=m1$/);
+
+    const s = `?compId=${COMP}&token=tok-123`;
+    const f = `${s}&discipline=freestyle`;
+    const minted = screen
+      .getAllByRole('textbox')
+      .map((el) => (el as HTMLInputElement).value.replace(window.location.origin, ''));
+    expect(minted.sort()).toEqual(
+      [
+        `/stream/timer?sessionId=${COMP}&token=tok-123`,
+        `/stream/timer-freestyle?sessionId=${COMP}&token=tok-123`,
+        ...[s, f].flatMap((q) => [
+          `/stream/rankings/final/male${q}`,
+          `/stream/rankings/final/male${q}&variant=profile`,
+          `/stream/rankings/overall/male${q}`,
+          `/stream/vs/final/male${q}`,
+          `/stream/vs-live/male${q}`,
+          `/stream/winner/final/male${q}`,
+          `/stream/svo-live/1${q}`,
+          `/stream/svo-live/2${q}`,
+          `/stream/brackets/male${q}`,
+          `/stream/brackets/male${q}&variant=name`,
+          `/stream/vs/final/male${q}&match=m1`,
+        ]),
+        `/stream/rounds-summary/final/male${s}`,
+        `/stream/athletes-freestyle${f}`,
+        `/stream/scorecard/final/male${f}`,
+        `/stream/rankings/combined/male${s}`,
+        `/stream/rankings/combined/female${s}`,
+        `/stream/bridge${s}`,
+      ].sort(),
+    );
   });
 
   it('mints a combined-ranking link per gender in a shared section', async () => {
@@ -246,7 +406,7 @@ describe('OverlaysPage', () => {
       /\/stream\/rankings\/final\/male\?compId=worlds-2026&token=tok-123$/,
     );
 
-    fireEvent.change(screen.getByLabelText(/gender/i), { target: { value: 'female' } });
+    fireEvent.change(screen.getByLabelText(/^gender$/i), { target: { value: 'female' } });
     expect(
       await screen.findByDisplayValue(
         /\/stream\/rankings\/final\/female\?compId=worlds-2026&token=tok-123$/,
@@ -295,17 +455,100 @@ describe('OverlaysPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('revokes all links', async () => {
+  const revokeCalls = () =>
+    apiFetchMock.mock.calls.filter(([path]) => path === `/competitions/${COMP}/revoke-read-tokens`);
+
+  it('asks before revoking and sends nothing until confirmed', async () => {
+    apiFetchMock.mockResolvedValue({ revoked: true });
+    renderPage(COMP);
+
+    // Links minted on another machine still need revoking, so the button is
+    // live with no token cached here.
+    const revoke = screen.getByRole('button', { name: /revoke all links/i });
+    expect(revoke).toBeEnabled();
+    fireEvent.click(revoke);
+
+    const dialog = screen.getByRole('dialog', { name: /revoke all overlay links/i });
+    expect(dialog).toHaveTextContent(/stops working immediately/i);
+    expect(revokeCalls()).toHaveLength(0);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /keep links/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(revokeCalls()).toHaveLength(0);
+  });
+
+  it('revokes all links once confirmed', async () => {
     apiFetchMock.mockResolvedValue({ revoked: true });
     renderPage(COMP);
     fireEvent.click(screen.getByRole('button', { name: /revoke all links/i }));
-
-    await waitFor(() =>
-      expect(apiFetchMock).toHaveBeenCalledWith(`/competitions/${COMP}/revoke-read-tokens`, {
-        method: 'POST',
-      }),
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: /revoke all links/i }),
     );
+
     expect(await screen.findByText(/all overlay links revoked/i)).toBeInTheDocument();
+    expect(revokeCalls()).toEqual([
+      [`/competitions/${COMP}/revoke-read-tokens`, { method: 'POST' }],
+    ]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('groups each discipline into Live then Round-pinned links', async () => {
+    mockApi(
+      { token: 'tok-123', expiresAt: 1_900_000_000_000 },
+      { matches: [{ matchId: 'm1', compId: COMP, round: 'final', gender: 'male', position: 0 }] },
+    );
+    renderPage(COMP);
+    fireEvent.click(screen.getByRole('button', { name: /generate overlay links/i }));
+    await screen.findByDisplayValue(/&match=m1$/);
+
+    // The pickers say which links they drive.
+    expect(screen.getByText(/round and gender set the round-pinned links/i)).toBeInTheDocument();
+
+    for (const [name, q, timer, timerLabel] of [
+      ['Speed', '', 'timer', 'Race timer (Speed)'],
+      ['Freestyle', '&discipline=freestyle', 'timer-freestyle', 'Run clock (Freestyle)'],
+    ] as const) {
+      const section = screen.getByRole('region', { name });
+      const [live, pinned, ...rest] = within(section).getAllByRole('region');
+      expect(rest).toHaveLength(0);
+      expect(live).toHaveAccessibleName(/^live/i);
+      expect(pinned).toHaveAccessibleName(/^round-pinned/i);
+      // The lg subgrid aligns the two columns' rows only over the section's
+      // direct children: heading, Live, Round-pinned — nothing wrapped between.
+      expect([...section.children]).toEqual([
+        within(section).getByRole('heading', { name }),
+        live,
+        pinned,
+      ]);
+      expect(within(live).getByLabelText(timerLabel)).toHaveValue(
+        `${window.location.origin}/stream/${timer}?sessionId=${COMP}&token=tok-123`,
+      );
+
+      const values = (group: HTMLElement) =>
+        within(group)
+          .getAllByRole('textbox')
+          .map((el) => (el as HTMLInputElement).value.replace(window.location.origin, ''));
+      const s = `?compId=${COMP}&token=tok-123${q}`;
+      // Board-following links in Live, picker-built ones (per-match VS too)
+      // in Round-pinned.
+      expect(values(live)).toEqual(
+        expect.arrayContaining([
+          `/stream/${timer}?sessionId=${COMP}&token=tok-123`,
+          `/stream/svo-live/1${s}`,
+          `/stream/svo-live/2${s}`,
+          `/stream/vs-live/male${s}`,
+        ]),
+      );
+      expect(values(live).some((v) => /\/(rankings|brackets|winner)\//.test(v))).toBe(false);
+      expect(values(pinned)).toEqual(
+        expect.arrayContaining([
+          `/stream/rankings/final/male${s}`,
+          `/stream/brackets/male${s}`,
+          `/stream/vs/final/male${s}&match=m1`,
+        ]),
+      );
+      expect(values(pinned).some((v) => /svo-live|vs-live|\/timer/.test(v))).toBe(false);
+    }
   });
 
   it('surfaces a mint error', async () => {

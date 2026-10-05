@@ -1,9 +1,9 @@
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography, type Theme } from '@mui/material';
 import { useEffect, useState } from 'react';
 
 import type { NoopPress } from 'app/hooks/useFreestyleBoard';
 import { RaceButton } from 'app/components/RaceButton';
-import { colors, fonts, liveCaption, radii } from 'app/theme/tokens';
+import { boardGeometry, colors, fonts, liveCaption, radii, strokes } from 'app/theme/tokens';
 import { boardLive } from 'app/util/boardState';
 import { ADVANCE_BUTTON, buzzButton } from 'app/util/buzzer';
 import {
@@ -42,18 +42,19 @@ export const STATE_STRIPE: Record<TallyStateTier, string> = {
 };
 
 /** Out of the flow, inside the plate's own `px: 2`: one place and one width in
- * every state is what makes the channel readable at a glance. The 2 px `panel`
+ * every state is what makes the channel readable at a glance. The `panel`
  * keyline is the tier's ground — the plate paints four fills, and a dark tier
  * laid straight onto the stop fill would vanish exactly while a lane runs
  * (`test/app/theme/contrast.test.ts` pins the tiers against that keyline). */
 const STRIPE_SX = {
   position: 'absolute',
-  left: '2px',
-  top: '12px',
-  bottom: '12px',
-  width: '12px',
+  // Inset by the keyline so the ring never clips at the plate's edge.
+  left: strokes.keyline,
+  top: (theme: Theme) => theme.spacing(1.5),
+  bottom: (theme: Theme) => theme.spacing(1.5),
+  width: (theme: Theme) => theme.spacing(1.5),
   borderRadius: `${radii.sm}px`,
-  boxShadow: `0 0 0 2px ${colors.surface.panel}`,
+  boxShadow: `0 0 0 ${strokes.keyline}px ${colors.surface.panel}`,
 } as const;
 
 /** The 1 s no-op answer (§3): a press that could do nothing greys the plate
@@ -199,12 +200,12 @@ export const TallyPlate = ({ board, onAdvance, noopPress }: Props) => {
         sx={{
           display: 'block',
           width: '100%',
-          minHeight: { xs: 120, lg: 76 },
+          minHeight: boardGeometry.freestyle.tallyPlate,
           px: 2,
           py: { xs: 1.25, lg: 0.5 },
           textAlign: 'left',
           textTransform: 'none',
-          border: '1px solid',
+          border: 1,
           borderColor: 'divider',
           transition: 'background-color 120ms linear',
           ...fill,

@@ -22,20 +22,18 @@
     <style>
       /*
         MIRROR, NOT SOURCE. web/src/app/theme/tokens.css is the single source of
-        truth for every token value; these vars are a HAND-KEPT copy under
-        DIFFERENT names (--tl-base vs --tl-bg-base, --tl-r-md vs --tl-radius-md,
-        --tl-ink-on vs --tl-ink-on-brand) plus two — --tl-shadow/-lg — that exist
-        nowhere else. tokens.parity.test.ts guards tokens.ts ↔ tokens.css and does
-        NOT see this file, so a token change here is silent drift: re-check against
-        tokens.css whenever you touch it.
+        truth; this page is opened straight off disk, so it carries a hand-kept
+        subset under the same names. tokens.parity.test.ts fails on any --tl-*
+        here that differs from (or is missing in) tokens.css — retune there first.
+        Page-only properties stay off the --tl- namespace (--ref-*).
       */
       :root {
         /* surfaces — ISA light */
-        --tl-void: #333c4e; /* slate: deep contrast / projector ground */
-        --tl-canvas: #f5f7f8; /* page */
-        --tl-base: #ffffff;
-        --tl-panel: #ffffff;
-        --tl-muted: #edf1f2;
+        --tl-bg-void: #333c4e; /* slate: deep contrast / projector ground */
+        --tl-bg-canvas: #f5f7f8; /* page */
+        --tl-bg-base: #ffffff;
+        --tl-bg-panel: #ffffff;
+        --tl-bg-muted: #edf1f2;
         --tl-line: #e1e6e8;
         --tl-line-strong: #c7d0d3;
         /* ink */
@@ -43,7 +41,7 @@
         --tl-ink-mid: #5b6776;
         --tl-ink-low: #8a939d;
         --tl-ink-faint: #b7bfc6;
-        --tl-ink-on: #ffffff;
+        --tl-ink-on-brand: #ffffff;
         /* brand — ISA */
         --tl-teal: #13a89e;
         --tl-teal-dark: #0e837b;
@@ -71,18 +69,31 @@
         --tl-font-body: 'Saira', system-ui, sans-serif;
         /* overlay — LAAX plate language */
         --tl-overlay-plate: rgba(255, 255, 255, 0.3);
+        --tl-overlay-plate-name: rgba(255, 255, 255, 0.35);
+        --tl-overlay-plate-strip: rgba(255, 255, 255, 0.48);
+        --tl-overlay-plate-filled: #ffffff;
         --tl-overlay-stroke: #ffffff;
+        --tl-overlay-name-ink: #231f20;
+        --tl-overlay-label: #ffffff;
+        --tl-overlay-scrim: rgba(51, 60, 78, 0.9);
         --tl-overlay-stroke-width: 6px; /* at the art's 1920×1080 reference frame */
         --tl-overlay-heading-tracking: -0.02em;
         --tl-overlay-backdrop: rgba(35, 31, 32, 0.6);
+        --tl-chroma-key: #ff00ff;
         /* radii */
-        --tl-r-sm: 4px;
-        --tl-r-md: 8px;
-        --tl-r-lg: 14px;
-        --tl-r-track: 14px 4px 14px 4px;
-        /* shadows */
-        --tl-shadow: 0 1px 2px rgba(51, 60, 78, 0.06), 0 2px 12px rgba(51, 60, 78, 0.05);
-        --tl-shadow-lg: 0 8px 30px rgba(51, 60, 78, 0.1);
+        --tl-radius-sm: 4px;
+        --tl-radius-md: 8px;
+        --tl-radius-lg: 14px;
+        --tl-radius-track-curve: 14px 4px 14px 4px;
+        /* shadows — page-only */
+        --ref-shadow: 0 1px 2px rgba(51, 60, 78, 0.06), 0 2px 12px rgba(51, 60, 78, 0.05);
+        --ref-shadow-lg: 0 8px 30px rgba(51, 60, 78, 0.1);
+      }
+      /* = tokens.css body.tl-chroma-ground, scoped to the swatch row */
+      .tl-chroma-ground {
+        --tl-overlay-plate: #707783;
+        --tl-overlay-plate-name: #7a808c;
+        --tl-overlay-plate-strip: #959aa3;
       }
 
       * {
@@ -98,7 +109,7 @@
         background:
           radial-gradient(1100px 560px at 88% -8%, rgba(19, 168, 158, 0.1), transparent 60%),
           radial-gradient(820px 460px at -8% 14%, rgba(240, 78, 52, 0.07), transparent 55%),
-          var(--tl-canvas);
+          var(--tl-bg-canvas);
         color: var(--tl-ink-hi);
         font-family: var(--tl-font-body);
         font-size: 16px;
@@ -197,9 +208,9 @@
         font-weight: 600;
         padding: 6px 12px;
         border: 1px solid var(--tl-line-strong);
-        border-radius: var(--tl-r-sm);
+        border-radius: var(--tl-radius-sm);
         color: var(--tl-ink-mid);
-        background: var(--tl-base);
+        background: var(--tl-bg-base);
       }
 
       /* ── SECTION SCAFFOLD ─────────────────────────────── */
@@ -236,11 +247,17 @@
       }
 
       .panel {
-        background: var(--tl-panel);
+        background: var(--tl-bg-panel);
         border: 1px solid var(--tl-line);
-        border-radius: var(--tl-r-lg);
-        padding: 32px;
-        box-shadow: var(--tl-shadow);
+        border-radius: var(--tl-radius-lg);
+        padding: clamp(16px, 4vw, 32px);
+        box-shadow: var(--ref-shadow);
+      }
+      .note {
+        color: var(--tl-ink-low);
+        font-size: 0.88rem;
+        margin-top: 14px;
+        max-width: 760px;
       }
       .label {
         text-transform: uppercase;
@@ -258,10 +275,10 @@
       }
       .swatch {
         border: 1px solid var(--tl-line);
-        border-radius: var(--tl-r-md);
+        border-radius: var(--tl-radius-md);
         overflow: hidden;
-        background: var(--tl-base);
-        box-shadow: var(--tl-shadow);
+        background: var(--tl-bg-base);
+        box-shadow: var(--ref-shadow);
       }
       .swatch .chipfill {
         height: 76px;
@@ -288,7 +305,7 @@
          video stand-in; plate chips carry the white plate stroke. */
       .chipfill.chip-composite {
         position: relative;
-        background: var(--tl-void);
+        background: var(--tl-bg-void);
       }
       .chip-composite .chip-layer {
         position: absolute;
@@ -298,6 +315,15 @@
         inset: 8px;
         /* stroke token is 6px @1080p; the chip is scaled up for the swatch */
         border: 5px solid var(--tl-overlay-stroke);
+      }
+      .chipfill.chip-composite.chip-key {
+        background: var(--tl-chroma-key);
+        color: var(--tl-ink-on-brand);
+      }
+      .chip-value {
+        font-family: var(--tl-font-numerals);
+        font-size: 0.7rem;
+        font-weight: 600;
       }
       .chip-composite span {
         position: relative;
@@ -331,6 +357,25 @@
         color: var(--tl-ink-low);
         font-family: var(--tl-font-numerals);
       }
+      /* A 3rem+ specimen beside the 150px meta column overflows a phone-width
+         row: specimens size with clamp(), the row stacks at 600px and below,
+         and a word that still cannot fit breaks rather than scrolling. */
+      .spec-disp,
+      .spec-num {
+        min-width: 0;
+        max-width: 100%;
+        overflow-wrap: break-word;
+      }
+      @media (max-width: 600px) {
+        .type-row {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 6px;
+        }
+        .type-meta {
+          width: auto;
+        }
+      }
       .spec-disp {
         font-family: var(--tl-font-display);
         font-weight: 600;
@@ -352,12 +397,12 @@
       }
       .state-card {
         border: 1px solid var(--tl-line);
-        border-radius: var(--tl-r-md);
+        border-radius: var(--tl-radius-md);
         padding: 18px;
-        background: var(--tl-base);
+        background: var(--tl-bg-base);
         position: relative;
         overflow: hidden;
-        box-shadow: var(--tl-shadow);
+        box-shadow: var(--ref-shadow);
       }
       .state-card::before {
         content: '';
@@ -392,12 +437,12 @@
       .race-stage {
         background:
           radial-gradient(680px 300px at 50% 120%, rgba(19, 168, 158, 0.08), transparent 70%),
-          var(--tl-base);
+          var(--tl-bg-base);
         border: 1px solid var(--tl-line);
-        border-radius: var(--tl-r-lg);
+        border-radius: var(--tl-radius-lg);
         padding: 40px;
         overflow: hidden;
-        box-shadow: var(--tl-shadow);
+        box-shadow: var(--ref-shadow);
       }
       .lanes {
         display: grid;
@@ -407,9 +452,9 @@
       }
       .lane {
         padding: 24px;
-        border-radius: var(--tl-r-md);
+        border-radius: var(--tl-radius-md);
         border: 1px solid var(--tl-line);
-        background: var(--tl-base);
+        background: var(--tl-bg-base);
         position: relative;
         transition: all 0.35s ease;
       }
@@ -432,7 +477,7 @@
         font-size: 0.85rem;
         color: var(--tl-ink-low);
         border: 1px solid var(--tl-line-strong);
-        border-radius: var(--tl-r-sm);
+        border-radius: var(--tl-radius-sm);
         padding: 2px 8px;
       }
       .lane .big {
@@ -496,43 +541,35 @@
         color: var(--tl-stop);
       }
 
-      /* start-light tree */
-      .tree {
+      /* start-light — §6: two bulbs in one sharp void housing on the plate
+         stroke. No transition on the bulbs: every phase, GO above all, is a hard
+         cut (§8). */
+      .signal {
+        justify-self: center;
         display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 14px;
-        padding: 0 8px;
+        gap: 8px;
+        padding: 8px;
+        background: var(--tl-bg-void);
+        border: var(--tl-overlay-stroke-width) solid var(--tl-overlay-stroke);
+      }
+      /* cleared (-1): the housing goes out but keeps its grid slot. */
+      .signal.cleared {
+        visibility: hidden;
       }
       .light {
-        width: 46px;
-        height: 46px;
+        width: 60px;
+        height: 60px;
         border-radius: 50%;
-        background: var(--tl-muted);
-        border: 1px solid var(--tl-line-strong);
-        transition: all 0.25s ease;
-      }
-      .light.set {
-        background: var(--tl-set);
-        border-color: var(--tl-set);
-        box-shadow: 0 0 24px 1px rgba(242, 169, 59, 0.7);
-      }
-      .light.go {
-        background: var(--tl-go);
-        border-color: var(--tl-go);
-        box-shadow: 0 0 28px 2px rgba(101, 188, 123, 0.85);
+        background: var(--tl-idle);
       }
       .light.stop {
         background: var(--tl-stop);
-        border-color: var(--tl-stop);
-        box-shadow: 0 0 28px 2px rgba(240, 78, 52, 0.85);
-        animation: flash 0.5s steps(1) infinite;
       }
-      @keyframes flash {
-        50% {
-          opacity: 0.25;
-          box-shadow: none;
-        }
+      .light.set {
+        background: var(--tl-set);
+      }
+      .light.go {
+        background: var(--tl-go);
       }
       .phase-readout {
         text-align: center;
@@ -556,7 +593,7 @@
         font-weight: 600;
         font-size: 0.92rem;
         padding: 10px 20px;
-        border-radius: var(--tl-r-md);
+        border-radius: var(--tl-radius-md);
         border: 1px solid transparent;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -577,7 +614,7 @@
         box-shadow: 0 2px 14px rgba(101, 188, 123, 0.45);
       }
       .btn-ghost {
-        background: var(--tl-base);
+        background: var(--tl-bg-base);
         border-color: var(--tl-line-strong);
         color: var(--tl-ink-hi);
       }
@@ -586,7 +623,7 @@
         color: var(--tl-teal-dark);
       }
       .btn-danger {
-        background: var(--tl-base);
+        background: var(--tl-bg-base);
         border-color: var(--tl-stop);
         color: var(--tl-stop);
       }
@@ -600,18 +637,15 @@
 
       .demo-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 22px;
       }
       @media (max-width: 820px) {
         .demo-grid {
-          grid-template-columns: 1fr;
+          grid-template-columns: minmax(0, 1fr);
         }
         .lanes {
           grid-template-columns: 1fr;
-        }
-        .tree {
-          flex-direction: row;
         }
       }
 
@@ -629,9 +663,9 @@
         font-family: var(--tl-font-body);
         font-size: 0.95rem;
         color: var(--tl-ink-hi);
-        background: var(--tl-muted);
+        background: var(--tl-bg-muted);
         border: 1px solid var(--tl-line);
-        border-radius: var(--tl-r-md);
+        border-radius: var(--tl-radius-md);
         padding: 11px 14px;
         outline: none;
         transition:
@@ -642,7 +676,7 @@
       .select:focus {
         border-color: var(--tl-teal);
         box-shadow: 0 0 0 3px rgba(19, 168, 158, 0.18);
-        background: var(--tl-base);
+        background: var(--tl-bg-base);
       }
       .input::placeholder {
         color: var(--tl-ink-faint);
@@ -651,7 +685,7 @@
       /* ── LEADERBOARD ──────────────────────────────────── */
       .board {
         border: 1px solid var(--tl-line);
-        border-radius: var(--tl-r-md);
+        border-radius: var(--tl-radius-md);
         overflow: hidden;
       }
       .row {
@@ -667,7 +701,7 @@
         border-bottom: 0;
       }
       .row:hover {
-        background: var(--tl-muted);
+        background: var(--tl-bg-muted);
       }
       .row.lead {
         background: linear-gradient(90deg, var(--tl-teal-tint), transparent 60%);
@@ -713,7 +747,7 @@
         letter-spacing: 0.1em;
         color: var(--tl-stop);
         border: 1px solid var(--tl-stop);
-        border-radius: var(--tl-r-sm);
+        border-radius: var(--tl-radius-sm);
         padding: 3px 9px;
       }
 
@@ -726,9 +760,9 @@
       }
       .vs .side {
         border: 1px solid var(--tl-line);
-        border-radius: var(--tl-r-track);
+        border-radius: var(--tl-radius-track-curve);
         padding: 20px;
-        background: var(--tl-base);
+        background: var(--tl-bg-base);
         text-align: center;
       }
       .vs .side.win {
@@ -763,17 +797,20 @@
         color: var(--tl-orange);
         font-size: 1.3rem;
       }
+      .row > * {
+        min-width: 0;
+      }
 
       .slot {
         width: 220px;
         border: 1px solid var(--tl-line);
-        border-radius: var(--tl-r-md);
+        border-radius: var(--tl-radius-md);
         padding: 12px;
-        background: var(--tl-base);
+        background: var(--tl-bg-base);
         display: flex;
         gap: 12px;
         align-items: center;
-        box-shadow: var(--tl-shadow);
+        box-shadow: var(--ref-shadow);
       }
       .slot.win {
         box-shadow: inset 0 0 0 3px var(--tl-go);
@@ -781,8 +818,8 @@
       .slot .av {
         width: 44px;
         height: 44px;
-        border-radius: var(--tl-r-sm);
-        background: var(--tl-muted);
+        border-radius: var(--tl-radius-sm);
+        background: var(--tl-bg-muted);
         flex: none;
         display: grid;
         place-items: center;
@@ -808,11 +845,11 @@
       /* ── OVERLAY DEMO ─────────────────────────────────── */
       .video-frame {
         position: relative;
-        border-radius: var(--tl-r-lg);
+        border-radius: var(--tl-radius-lg);
         overflow: hidden;
         border: 1px solid var(--tl-line);
         aspect-ratio: 16 / 7;
-        box-shadow: var(--tl-shadow);
+        box-shadow: var(--ref-shadow);
         background:
           repeating-linear-gradient(120deg, #1b3a2e 0 40px, #173228 40px 80px),
           radial-gradient(circle at 30% 40%, #2e5a45, #0f221a);
@@ -847,7 +884,7 @@
         font-size: 1.7rem;
         text-transform: uppercase;
         letter-spacing: var(--tl-overlay-heading-tracking);
-        color: var(--tl-ink-on);
+        color: var(--tl-ink-on-brand);
         text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
       }
       .vs-demo {
@@ -870,7 +907,7 @@
         font-weight: 700;
         font-size: 2.6rem;
         letter-spacing: var(--tl-overlay-heading-tracking);
-        color: var(--tl-ink-on);
+        color: var(--tl-ink-on-brand);
         text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
       }
       .overlay-lower {
@@ -881,7 +918,7 @@
         align-items: center;
         gap: 18px;
         padding: 14px 22px;
-        border-radius: var(--tl-r-track);
+        border-radius: var(--tl-radius-track-curve);
         background: linear-gradient(90deg, rgba(51, 60, 78, 0.94), rgba(51, 60, 78, 0.62));
         border-left: 3px solid var(--tl-teal);
         backdrop-filter: blur(3px);
@@ -946,7 +983,7 @@
         text-transform: uppercase;
         letter-spacing: 0.06em;
         padding: 5px 10px;
-        border-radius: var(--tl-r-sm);
+        border-radius: var(--tl-radius-sm);
       }
       nav.toc a:hover {
         color: var(--tl-teal-dark);
@@ -955,12 +992,12 @@
 
       .twocol {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 22px;
       }
       @media (max-width: 820px) {
         .twocol {
-          grid-template-columns: 1fr;
+          grid-template-columns: minmax(0, 1fr);
         }
       }
       footer {
@@ -975,6 +1012,56 @@
       }
       footer a {
         color: var(--tl-teal-dark);
+      }
+      /* Phone widths: after every component rule so these win on source order. */
+      @media (max-width: 600px) {
+        .sec-head {
+          flex-wrap: wrap;
+        }
+        h2.sec-title {
+          flex: 1 1 0;
+          min-width: 0;
+        }
+        .sec-sub {
+          flex-basis: 100%;
+          margin-left: 0;
+          max-width: none;
+          text-align: left;
+        }
+        .row {
+          grid-template-columns: 40px minmax(0, 1fr) auto;
+          gap: 10px;
+          padding: 12px;
+        }
+        .vs {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .vs .mid {
+          justify-content: center;
+        }
+        .video-frame {
+          aspect-ratio: 4 / 3;
+        }
+        .ovr-heading {
+          font-size: 1.1rem;
+        }
+        .vs-demo {
+          gap: 16px;
+        }
+        .vs-demo .vs-glyph {
+          font-size: 1.6rem;
+        }
+        .overlay-lower {
+          gap: 10px;
+          padding: 8px 12px;
+        }
+        .overlay-lower .ovr-name {
+          font-size: 0.95rem;
+        }
+        .overlay-lower .ovr-time {
+          font-size: 1.3rem;
+          margin-left: 0;
+        }
       }
     </style>
   </head>
@@ -1039,8 +1126,8 @@
           </div>
           <div class="state-card" style="--c: var(--tl-set)">
             <div class="dot"></div>
-            <div class="st">Set / Armed</div>
-            <div class="where">Start-light tree warming · get-ready</div>
+            <div class="st">Set</div>
+            <div class="where">Start light's two SET phases · get-ready</div>
           </div>
           <div class="state-card" style="--c: var(--tl-running)">
             <div class="dot"></div>
@@ -1055,7 +1142,7 @@
           <div class="state-card" style="--c: var(--tl-stop)">
             <div class="dot"></div>
             <div class="st">Fault</div>
-            <div class="where">False start · DNF · slower lane</div>
+            <div class="where">Armed start light · false start · DNF · slower lane</div>
           </div>
         </div>
       </section>
@@ -1084,6 +1171,56 @@
           Overlay plates — composited over slate, the video stand-in
         </div>
         <div class="swatch-grid" id="sw-overlay"></div>
+
+        <div class="label grp-label">Overlay plates — on a chroma ground, flattened</div>
+        <div class="swatch-grid tl-chroma-ground" id="sw-chroma">
+          <div class="swatch">
+            <div class="chipfill chip-composite chip-key">
+              <div class="chip-layer chip-plate" style="background: var(--tl-overlay-plate)"></div>
+              <span class="chip-value"></span>
+            </div>
+            <div class="body">
+              <div class="nm">Plate</div>
+              <div class="use">30% white, flattened</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="chipfill chip-composite chip-key">
+              <div
+                class="chip-layer chip-plate"
+                style="background: var(--tl-overlay-plate-name)"
+              ></div>
+              <span class="chip-value"></span>
+            </div>
+            <div class="body">
+              <div class="nm">Plate name</div>
+              <div class="use">35% white, flattened</div>
+            </div>
+          </div>
+          <div class="swatch">
+            <div class="chipfill chip-composite chip-key">
+              <div
+                class="chip-layer chip-plate"
+                style="background: var(--tl-overlay-plate-strip)"
+              ></div>
+              <span class="chip-value"></span>
+            </div>
+            <div class="body">
+              <div class="nm">Plate strip</div>
+              <div class="use">48% white, flattened</div>
+            </div>
+          </div>
+        </div>
+        <p class="note">
+          Under a chroma
+          <code>?bg=</code>
+          (<code>key</code>/<code>magenta</code>/<code>green</code>/<code>blue</code>) the ground
+          carries no alpha, so a translucent plate would blend into the key (48% white over magenta
+          airs #FF7AFF) and a tolerant keyer half-erases it. The <code>tl-chroma-ground</code> body
+          class flattens each plate to the opaque neutral its alpha gives over slate, so the keyer
+          sees one deterministic band. Spec: the <code>?bg=</code> section of
+          <code>doc/dev/broadcast-overlays.md</code>.
+        </p>
       </section>
 
       <!-- TYPE -->
@@ -1105,7 +1242,7 @@
             <div
               class="spec-num"
               style="
-                font-size: 3.4rem;
+                font-size: clamp(1.75rem, 7.5vw, 3.4rem);
                 font-weight: 600;
                 letter-spacing: -0.02em;
                 color: var(--tl-teal-dark);
@@ -1119,14 +1256,16 @@
               <div class="nm">Display 1</div>
               <div class="det">Oswald · 700 · 3rem</div>
             </div>
-            <div class="spec-disp" style="font-size: 3rem">Women's Final</div>
+            <div class="spec-disp" style="font-size: clamp(1.75rem, 8vw, 3rem)">Women's Final</div>
           </div>
           <div class="type-row">
             <div class="type-meta">
               <div class="nm">Heading 2</div>
               <div class="det">Oswald · 600 · 1.5rem</div>
             </div>
-            <div class="spec-disp" style="font-size: 1.5rem">Quarterfinal · Lane Assignment</div>
+            <div class="spec-disp" style="font-size: clamp(1rem, 4.5vw, 1.5rem)">
+              Quarterfinal · Lane Assignment
+            </div>
           </div>
           <div class="type-row">
             <div class="type-meta">
@@ -1165,10 +1304,9 @@
               <div class="big" id="timeA">0<span class="ms">.000</span></div>
               <div class="verdict">Win</div>
             </div>
-            <div class="tree">
-              <div class="light" id="lt1"></div>
-              <div class="light" id="lt2"></div>
-              <div class="light" id="lt3"></div>
+            <div class="signal" id="signal">
+              <div class="light"></div>
+              <div class="light"></div>
             </div>
             <div class="lane" id="laneB">
               <div class="laneid"><span class="who">Marković</span><span class="num">L2</span></div>
@@ -1180,7 +1318,7 @@
           <div class="controls">
             <button class="btn btn-go" id="btnStart">Start sequence</button>
             <button class="btn btn-ghost" id="btnStop">Stop lanes</button>
-            <button class="btn btn-danger" id="btnFalse">False start</button>
+            <button class="btn btn-danger" id="btnAbort">Abort start</button>
             <button class="btn btn-ghost" id="btnReset">Reset</button>
           </div>
         </div>
@@ -1315,7 +1453,7 @@
             <div class="ovr-time">6.842</div>
           </div>
         </div>
-        <p style="color: var(--tl-ink-low); font-size: 0.88rem; margin-top: 14px; max-width: 760px">
+        <p class="note">
           The LAAX plate treatment: an optional full-bleed <code>--tl-overlay-backdrop</code> dim
           (#231f20 at 60%) behind the composition, VS/photo panels as
           <code>--tl-overlay-plate</code> (30% white; empty name bars use
@@ -1343,47 +1481,49 @@
 
     <script>
       // ── Color swatch rendering ──────────────────────────
+      // Each chip names a --tl-* var and paints what it computes to, so the page
+      // :root (pinned to tokens.css by tokens.parity.test.ts) is the only copy.
       const surfaces = [
-        ['Slate / Void', '#333C4E', 'Deep contrast · overlays'],
-        ['Canvas', '#F5F7F8', 'Page background'],
-        ['Base / Panel', '#FFFFFF', 'Cards, surfaces'],
-        ['Muted', '#EDF1F2', 'Input fills, wells'],
-        ['Line', '#E1E6E8', 'Borders, dividers'],
-        ['Line strong', '#C7D0D3', 'Emphasis borders'],
+        ['Slate / Void', '--tl-bg-void', 'Deep contrast · overlays'],
+        ['Canvas', '--tl-bg-canvas', 'Page background'],
+        ['Base / Panel', '--tl-bg-base', 'Cards, surfaces'],
+        ['Muted', '--tl-bg-muted', 'Input fills, wells'],
+        ['Line', '--tl-line', 'Borders, dividers'],
+        ['Line strong', '--tl-line-strong', 'Emphasis borders'],
       ];
       const ink = [
-        ['Ink hi', '#333C4E', 'Headlines, numerals'],
-        ['Ink mid', '#5B6776', 'Body, secondary'],
-        ['Ink low', '#8A939D', 'Meta, captions'],
-        ['Ink faint', '#B7BFC6', 'Disabled, hints'],
+        ['Ink hi', '--tl-ink-hi', 'Headlines, numerals'],
+        ['Ink mid', '--tl-ink-mid', 'Body, secondary'],
+        ['Ink low', '--tl-ink-low', 'Meta, captions'],
+        ['Ink faint', '--tl-ink-faint', 'Disabled, hints'],
       ];
       const accent = [
-        ['ISA Teal', '#13A89E', 'Primary · running · links'],
-        ['Teal dark', '#0E837B', 'Hover · text on light'],
-        ['Orange-red', '#F04E34', 'Accent · false start · DNF'],
-        ['Orange dark', '#C73A23', 'Pressed accent'],
-        ['Go (green)', '#65BC7B', 'GO light · winner fill'],
-        ['Go dim', '#2E8F50', 'Winner numerals on light'],
-        ['Set (amber)', '#F2A93B', 'Armed · SET light'],
-        ['Stop', '#F04E34', 'Loser · fault'],
-        ['Idle', '#8A939D', 'Not started'],
-        ['Running bright', '#45E5D8', 'Running on dark grounds (athlete display)'],
-        ['Set bright', '#FFC75E', 'Break / armed on dark grounds'],
-        ['Stop bright', '#FF9B82', 'Expiry / fault on dark grounds'],
-        ['Running text', '#0B6B65', 'RUNNING word / digits on light (4.5:1 tier)'],
-        ['Go text', '#1F7A40', 'Go-state words on light (4.5:1 tier)'],
-        ['Set text', '#8F5E12', 'BREAK / CHANGEOVER words on light (4.5:1 tier)'],
+        ['ISA Teal', '--tl-teal', 'Primary · running · links'],
+        ['Teal dark', '--tl-teal-dark', 'Hover · text on light'],
+        ['Orange-red', '--tl-orange', 'Accent · false start · DNF'],
+        ['Orange dark', '--tl-orange-dark', 'Pressed accent'],
+        ['Go (green)', '--tl-go', 'GO light · winner fill'],
+        ['Go dim', '--tl-go-dim', 'Winner numerals on light'],
+        ['Set (amber)', '--tl-set', 'SET light · break'],
+        ['Stop', '--tl-stop', 'Armed light · loser · fault'],
+        ['Idle', '--tl-idle', 'Not started · unlit bulb'],
+        ['Running bright', '--tl-running-bright', 'Running on dark grounds (athlete display)'],
+        ['Set bright', '--tl-set-bright', 'Break / armed on dark grounds'],
+        ['Stop bright', '--tl-stop-bright', 'Expiry / fault on dark grounds'],
+        ['Running text', '--tl-running-text', 'RUNNING word / digits on light (4.5:1 tier)'],
+        ['Go text', '--tl-go-text', 'Go-state words on light (4.5:1 tier)'],
+        ['Set text', '--tl-set-text', 'BREAK / CHANGEOVER words on light (4.5:1 tier)'],
       ];
-      // Same literals as tokens.css --tl-overlay-* (DESIGN_SYSTEM §3 plate table).
       const overlay = [
-        ['Plate', 'rgba(255, 255, 255, 0.3)', 'Empty profile box · VS frame'],
-        ['Plate name', 'rgba(255, 255, 255, 0.35)', 'Empty name bar · TBD plate'],
-        ['Plate filled', '#FFFFFF', 'Filled named plate · dark name ink'],
-        ['Stroke', '#FFFFFF', 'Plate border · connectors (6px @1080p)'],
-        ['Name ink', '#231F20', 'Name on a filled plate · the card masters' ink'],
-        ['Label', '#FFFFFF', 'Structural / section labels'],
-        ['Scrim', 'rgba(51, 60, 78, 0.9)', 'Per-text slate backing for captions'],
-        ['Backdrop', 'rgba(35, 31, 32, 0.6)', 'Full-bleed frame dim (LAAX 60% black)'],
+        ['Plate', '--tl-overlay-plate', 'Empty profile box · VS frame'],
+        ['Plate name', '--tl-overlay-plate-name', 'Empty name bar · TBD plate'],
+        ['Plate strip', '--tl-overlay-plate-strip', 'Stat-label row band · VS tables'],
+        ['Plate filled', '--tl-overlay-plate-filled', 'Filled named plate · dark name ink'],
+        ['Stroke', '--tl-overlay-stroke', 'Plate border · connectors (6px @1080p)'],
+        ['Name ink', '--tl-overlay-name-ink', "Name on a filled plate · the card masters' ink"],
+        ['Label', '--tl-overlay-label', 'Structural / section labels'],
+        ['Scrim', '--tl-overlay-scrim', 'Per-text slate backing for captions'],
+        ['Backdrop', '--tl-overlay-backdrop', 'Full-bleed frame dim (LAAX 60% black)'],
       ];
       function parseColor(v) {
         if (v.startsWith('#')) {
@@ -1405,22 +1545,26 @@
           c / 255 <= 0.03928 ? c / 255 / 12.92 : Math.pow((c / 255 + 0.055) / 1.055, 2.4);
         return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
       }
-      // `over`: opaque color the chips composite onto (the slate video stand-in
-      // for the overlay tokens). rgba values are flattened over it before the
-      // lum() ink pick, so translucent chips still get a readable value label.
+      // `over`: the var of the opaque color the chips composite onto (the slate
+      // video stand-in for the overlay tokens). rgba values are flattened over it
+      // before the lum() ink pick, so translucent chips still get a readable label.
+      // Vars resolve on the grid itself, so a scoped override reaches its chips.
       function render(id, arr, over) {
-        const bg = over && parseColor(over);
         const el = document.getElementById(id);
+        const style = getComputedStyle(el);
+        const token = (name) => style.getPropertyValue(name).trim();
+        const bg = over && parseColor(token(over));
         el.innerHTML = arr
-          .map(([nm, value, use]) => {
-            const c = parseColor(value);
-            const txt = lum(bg ? blend(c, bg) : c) > 0.4 ? '#333C4E' : '#FFFFFF';
-            const shown = c.a < 1 ? `${hexOf(c)} ${Math.round(c.a * 100)}%` : value;
+          .map(([nm, name, use]) => {
+            const c = parseColor(token(name));
+            const txt =
+              lum(bg ? blend(c, bg) : c) > 0.4 ? 'var(--tl-ink-hi)' : 'var(--tl-ink-on-brand)';
+            const shown = c.a < 1 ? `${hexOf(c)} ${Math.round(c.a * 100)}%` : hexOf(c);
             const layer = bg
-              ? `<div class="chip-layer${/^plate/i.test(nm) ? ' chip-plate' : ''}" style="background:${value}"></div>`
+              ? `<div class="chip-layer${/^plate/i.test(nm) ? ' chip-plate' : ''}" style="background:var(${name})"></div>`
               : '';
             return `<div class="swatch">
-        <div class="chipfill${bg ? ' chip-composite' : ''}" style="${bg ? '' : `background:${value};`}color:${txt}">${layer}<span style="font-family:var(--tl-font-numerals);font-size:.7rem;font-weight:600">${shown}</span></div>
+        <div class="chipfill${bg ? ' chip-composite' : ''}" style="${bg ? '' : `background:var(${name});`}color:${txt}">${layer}<span style="font-family:var(--tl-font-numerals);font-size:.7rem;font-weight:600">${shown}</span></div>
         <div class="body"><div class="nm">${nm}</div><div class="use">${use}</div></div>
       </div>`;
           })
@@ -1429,14 +1573,28 @@
       render('sw-surfaces', surfaces);
       render('sw-ink', ink);
       render('sw-accent', accent);
-      render('sw-overlay', overlay, '#333C4E');
+      render('sw-overlay', overlay, '--tl-bg-void');
+      // The chroma row's plates are styled by the scoped vars, so label each with
+      // the colour it actually computes to.
+      document.querySelectorAll('#sw-chroma .chip-plate').forEach((plate) => {
+        plate.nextElementSibling.textContent = hexOf(
+          parseColor(getComputedStyle(plate).backgroundColor),
+        );
+      });
 
-      // ── Live race simulation: light tree + dual timer ───
-      const lts = [
-        document.getElementById('lt1'),
-        document.getElementById('lt2'),
-        document.getElementById('lt3'),
-      ];
+      // ── Live race simulation: start light + dual timer ───
+      // The §6 phase table and the real schedule (architecture.md): armed holds
+      // 3 s, then set 1 / set 2 / GO a second apart, cleared a second after GO.
+      const signal = document.getElementById('signal');
+      const bulbs = signal.querySelectorAll('.light');
+      const PHASES = {
+        idle: ['', ''],
+        armed: ['stop', 'stop'],
+        set1: ['set', ''],
+        set2: ['set', 'set'],
+        go: ['go', 'go'],
+        cleared: ['', ''],
+      };
       const phaseEl = document.getElementById('phase');
       const laneA = document.getElementById('laneA'),
         laneB = document.getElementById('laneB');
@@ -1444,6 +1602,7 @@
         timeB = document.getElementById('timeB');
       let raf = null,
         t0 = 0,
+        started = false,
         runningA = false,
         runningB = false,
         finishA = null,
@@ -1458,8 +1617,12 @@
         const main = m > 0 ? `${m}:${sec}` : (s % 60).toString();
         return `${main}<span class="ms">.${cs.toString().padStart(3, '0')}</span>`;
       }
-      function clearLights() {
-        lts.forEach((l) => (l.className = 'light'));
+      function showPhase(name) {
+        signal.classList.toggle('cleared', name === 'cleared');
+        PHASES[name].forEach((state, i) => (bulbs[i].className = 'light ' + state));
+      }
+      function at(ms, fn) {
+        seq.push(setTimeout(fn, ms));
       }
       function clearSeq() {
         seq.forEach(clearTimeout);
@@ -1475,9 +1638,9 @@
       function reset() {
         clearSeq();
         cancelAnimationFrame(raf);
-        runningA = runningB = false;
+        started = runningA = runningB = false;
         finishA = finishB = null;
-        clearLights();
+        showPhase('idle');
         laneA.className = 'lane';
         laneB.className = 'lane';
         timeA.innerHTML = '0<span class="ms">.000</span>';
@@ -1495,50 +1658,44 @@
 
       document.getElementById('btnStart').onclick = () => {
         reset();
-        phaseEl.textContent = 'PHASE 1 · ARMED';
-        lts[0].className = 'light set';
-        seq.push(
-          setTimeout(() => {
-            lts[1].className = 'light set';
-            phaseEl.textContent = 'PHASE 2 · SET';
-          }, 900),
-        );
-        seq.push(
-          setTimeout(() => {
-            clearLights();
-            lts[2].className = 'light go';
-            phaseEl.textContent = 'PHASE 3 · GO';
-            t0 = performance.now();
-            runningA = runningB = true;
-            laneA.className = 'lane running';
-            laneB.className = 'lane running';
-            raf = requestAnimationFrame(tick);
-          }, 1800),
-        );
-        seq.push(
-          setTimeout(() => {
-            lts[2].className = 'light';
-          }, 2500),
-        );
+        showPhase('armed');
+        phaseEl.textContent = 'PHASE · ARMED';
+        at(3000, () => {
+          showPhase('set1');
+          phaseEl.textContent = 'PHASE · SET 1';
+        });
+        at(4000, () => {
+          showPhase('set2');
+          phaseEl.textContent = 'PHASE · SET 2';
+        });
+        at(5000, () => {
+          showPhase('go');
+          phaseEl.textContent = 'PHASE · GO';
+          t0 = performance.now();
+          started = runningA = runningB = true;
+          laneA.className = 'lane running';
+          laneB.className = 'lane running';
+          raf = requestAnimationFrame(tick);
+        });
+        at(6000, () => {
+          showPhase('cleared');
+          phaseEl.textContent = 'PHASE · CLEARED — lanes running';
+        });
         // auto finish for demo flavor
-        seq.push(
-          setTimeout(() => {
-            if (runningA) {
-              runningA = false;
-              finishA = Math.floor(performance.now() - t0);
-              resolve();
-            }
-          }, 6842),
-        );
-        seq.push(
-          setTimeout(() => {
-            if (runningB) {
-              runningB = false;
-              finishB = Math.floor(performance.now() - t0);
-              resolve();
-            }
-          }, 7114),
-        );
+        at(10042, () => {
+          if (runningA) {
+            runningA = false;
+            finishA = Math.floor(performance.now() - t0);
+            resolve();
+          }
+        });
+        at(10314, () => {
+          if (runningB) {
+            runningB = false;
+            finishB = Math.floor(performance.now() - t0);
+            resolve();
+          }
+        });
       };
       document.getElementById('btnStop').onclick = () => {
         const now = performance.now();
@@ -1552,15 +1709,13 @@
         }
         resolve();
       };
-      document.getElementById('btnFalse').onclick = () => {
+      // Abort is pre-GO only and stops no lane; the light carries no fault state
+      // (ADR 0035 flags a false start on its lane), it just goes out.
+      document.getElementById('btnAbort').onclick = () => {
+        if (started || !seq.length) return;
         clearSeq();
-        cancelAnimationFrame(raf);
-        runningA = runningB = false;
-        clearLights();
-        lts.forEach((l) => (l.className = 'light stop'));
-        laneA.className = 'lane lose';
-        laneB.className = 'lane lose';
-        phaseEl.textContent = 'PHASE · FALSE START — recall';
+        showPhase('cleared');
+        phaseEl.textContent = 'PHASE · CLEARED — START ABORTED';
       };
       document.getElementById('btnReset').onclick = reset;
     </script>

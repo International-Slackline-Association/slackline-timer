@@ -42,11 +42,11 @@ const verdict = (reason: string | null, action: string): HandsetOutcome =>
 /**
  * What pressing `button` would do on this board, right now.
  *
- * Two keys answer to no lock because the handler gives them none: **Reset**
- * raises the confirm instead of being held by the run (it is the way out of a
- * run gone wrong, so the question guards it, not a lock), and the **false-start
- * flags** are always armed — a jump may be reviewed on video after the run
- * (rule S4).
+ * The **false-start flags** answer to no lock because the handler gives them
+ * none: a jump may be reviewed on video after the run (rule S4). **Reset**
+ * reads `locks.reset`, which only the link ever holds — mid-run it raises the
+ * confirm instead (the way out of a run gone wrong is guarded by the question,
+ * not a lock).
  */
 export const speedlineHandsetOutcome = (
   button: number,
@@ -62,6 +62,8 @@ export const speedlineHandsetOutcome = (
   switch (button) {
     case 0:
       return verdict(locks.start, row.action);
+    case 1:
+      return verdict(locks.reset, row.action);
     case 5:
       return verdict(locks.abort, row.action);
     case 10:

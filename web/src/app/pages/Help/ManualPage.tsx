@@ -16,6 +16,7 @@ import { Link as RouterLink, useLocation, useParams } from 'react-router-dom';
 
 import { Markdown } from 'app/components/Markdown';
 import { manualArticle, manualArticles, manualHref } from 'app/manual/manual';
+import { fieldWidths } from 'app/theme/tokens';
 
 import { ManualGate } from './ManualGate';
 
@@ -29,7 +30,7 @@ import { ManualGate } from './ManualGate';
 
 /** Left-hand contents, shared by both routes so navigation never dead-ends. */
 const ManualNav = ({ activeSlug }: { activeSlug?: string }) => (
-  <Stack spacing={0.5} sx={{ minWidth: 220 }}>
+  <Stack spacing={0.5} sx={{ minWidth: fieldWidths.wide }}>
     <Typography variant="overline" color="text.secondary">
       Manual
     </Typography>
@@ -120,7 +121,7 @@ export const ManualArticlePage = () => {
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={4}>
           <ManualNav activeSlug={slug} />
           <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', md: 'block' } }} />
-          <Box sx={{ flex: 1, minWidth: 0, maxWidth: 820 }}>
+          <Box sx={{ flex: 1, minWidth: 0, maxWidth: fieldWidths.prose }}>
             {article ? (
               <Markdown resolveHref={manualHref}>{article.body}</Markdown>
             ) : (

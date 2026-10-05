@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CHROMA_GROUND_CLASS,
   KEY_COMPOSITE_CLASS,
   applyOverlayBodyStyle,
   isChromaBackground,
   isKeyCompositeOverlay,
   resolveOverlayBackground,
 } from 'app/pages/Stream/overlayBg';
+import { colors } from 'app/theme/tokens';
 
 describe('resolveOverlayBackground', () => {
   it('returns the default transparent fallback when no bg param is present', () => {
@@ -33,9 +35,14 @@ describe('resolveOverlayBackground', () => {
     expect(resolveOverlayBackground('?bg=magenta')).toBe('var(--tl-chroma-key)');
   });
 
-  it('resolves green and blue to their hex presets', () => {
-    expect(resolveOverlayBackground('?bg=green')).toBe('#00B140');
-    expect(resolveOverlayBackground('?bg=blue')).toBe('#0047BB');
+  it('resolves green and blue to their chroma-key tokens', () => {
+    expect(resolveOverlayBackground('?bg=green')).toBe(colors.chromaKeyGreen);
+    expect(resolveOverlayBackground('?bg=blue')).toBe(colors.chromaKeyBlue);
+  });
+
+  it('keeps the green and blue grounds at their keyer preset values', () => {
+    expect(colors.chromaKeyGreen).toBe('#00B140');
+    expect(colors.chromaKeyBlue).toBe('#0047BB');
   });
 
   it('passes an arbitrary CSS color through unchanged', () => {
@@ -46,7 +53,7 @@ describe('resolveOverlayBackground', () => {
   it('is case-insensitive for aliases', () => {
     expect(resolveOverlayBackground('?bg=KEY')).toBe('var(--tl-chroma-key)');
     expect(resolveOverlayBackground('?bg=Transparent')).toBe('transparent');
-    expect(resolveOverlayBackground('?bg=Green')).toBe('#00B140');
+    expect(resolveOverlayBackground('?bg=Green')).toBe(colors.chromaKeyGreen);
   });
 
   it('resolves the key-composite mode to a transparent ground', () => {
@@ -95,6 +102,36 @@ describe('applyOverlayBodyStyle', () => {
   });
 });
 
+describe('applyOverlayBodyStyle chroma-ground class', () => {
+  it.each(['?bg=key', '?bg=magenta', '?bg=green', '?bg=blue', '?bg=%23FF00FF'])(
+    'sets the chroma-ground class for %s and removes it on cleanup',
+    (search) => {
+      const cleanup = applyOverlayBodyStyle(search);
+      expect(document.body.classList.contains(CHROMA_GROUND_CLASS)).toBe(true);
+      cleanup();
+      expect(document.body.classList.contains(CHROMA_GROUND_CLASS)).toBe(false);
+      document.body.style.background = '';
+    },
+  );
+
+  it('sets it for a chroma-key fallback when no bg param is given (projector display)', () => {
+    const cleanup = applyOverlayBodyStyle('', colors.chromaKey);
+    expect(document.body.classList.contains(CHROMA_GROUND_CLASS)).toBe(true);
+    cleanup();
+    document.body.style.background = '';
+  });
+
+  it.each(['', '?bg=transparent', '?bg=h2r', '?bg=%23123456'])(
+    'leaves the alpha-carrying / custom grounds unflattened for %j',
+    (search) => {
+      const cleanup = applyOverlayBodyStyle(search);
+      expect(document.body.classList.contains(CHROMA_GROUND_CLASS)).toBe(false);
+      cleanup();
+      document.body.style.background = '';
+    },
+  );
+});
+
 describe('isChromaBackground', () => {
   it('recognises every resolved chroma-key ground', () => {
     expect(isChromaBackground(resolveOverlayBackground('?bg=key'))).toBe(true);
@@ -103,6 +140,7 @@ describe('isChromaBackground', () => {
     expect(isChromaBackground(resolveOverlayBackground('?bg=blue'))).toBe(true);
     // A raw magenta passed as a custom colour is still the chroma key.
     expect(isChromaBackground('#FF00FF')).toBe(true);
+    expect(isChromaBackground(resolveOverlayBackground('?bg=%23ff00ff'))).toBe(true);
   });
 
   it('treats transparent and custom colours as non-chroma', () => {

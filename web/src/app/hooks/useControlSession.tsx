@@ -226,11 +226,12 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
   // holds its live state, and re-applying an older copy over it would be a
   // rollback, not a recovery.
   const selfRestoreDoneRef = useRef<boolean>(false);
-  // The board as it stood the moment the socket opened (`boardFingerprint`). The
-  // restore waits out the peer grace, and in those two seconds the operator can
-  // already be setting the board up — picking athletes, re-arming a budget. Any
-  // of that outranks a copy of an older run, and the live-frame gate does not
-  // see it (setup moves no timer). So a board that moved at all since open is no
+  // The board as it stood at mount, re-taken the moment the socket opens
+  // (`boardFingerprint`). The restore waits out a grace — the peer answer's, or
+  // the link's when the relay never opens — and in it the operator can already
+  // be setting the board up: picking athletes, re-arming a budget. Any of that
+  // outranks a copy of an older run, and the live-frame gate does not see it
+  // (setup moves no timer). So a board that moved at all since then is no
   // longer a candidate for recovery.
   const pristineRef = useRef<string | null>(null);
 
@@ -297,10 +298,11 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
   // selection over the peers' converged board — the blast races the
   // request_state answers, and since a value-CHANGING peer application re-pushes
   // (the overlay-follow contract), the room can oscillate and converge to the
-  // joiner's defaults, wiping the live selection. Mount state is always default
-  // (nothing is persisted), so the first socket-OPEN fire of each push effect
-  // carries no information and is consumed silently; every later change and
-  // every re-open (reconnect) pushes as before.
+  // joiner's defaults, wiping the live selection. Mount state is default unless
+  // a self-restore landed before the first OPEN (`restoreSelfSnapshot` lifts
+  // the skip), so the first socket-OPEN fire of each push effect carries no
+  // information and is consumed silently; every later change and every re-open
+  // (reconnect) pushes as before.
   const namesAnnouncedRef = useRef<boolean>(false);
   const selectionAnnouncedRef = useRef<boolean>(false);
 
@@ -432,10 +434,11 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
 
   /**
    * The solo panel's catch-up, offered when the mirror-on-open ask went
-   * unanswered (ADR 0047). Deliberately the LAST resort: a peer answer or any
-   * live frame since open means the room is speaking for itself, and the stored
-   * copy is not applied at all. Selection first, then the snapshot — the same
-   * order a peer answers in (`request_state` below), so the board's derived
+   * unanswered, or when the relay never opened at all — no peer can be in a
+   * room this panel cannot reach (ADR 0047). The LAST resort: a peer answer or
+   * any live frame since open means the room is speaking for itself, and the
+   * stored copy is not applied at all. Selection first, then the snapshot — the
+   * same order a peer answers in (`request_state` below), so the board's derived
    * selection deps hydrate against the room's values in either path.
    */
   const restoreSelfSnapshot = () => {
@@ -453,7 +456,22 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
     if (!applySnapshot(stored.snapshot)) return;
     applyPreviewEnabled(stored.snapshot.isPreviewEnabled);
     setSelfRecovered(true);
+    // A board restored before its first OPEN is no longer the mount default the
+    // announce skip assumes, so that OPEN announces it — under the Lamport-low
+    // stamp, which any live peer drops on sight.
+    namesAnnouncedRef.current = true;
+    selectionAnnouncedRef.current = true;
   };
+
+  useEffect(() => {
+    pristineRef.current = boardFingerprint();
+  }, []);
+
+  // Restore on `unreachable`, not at mount: a healthy room's peer answer stays
+  // first, and a normal open shows no flash of the stored board.
+  useEffect(() => {
+    if (link === 'unreachable') restoreSelfSnapshot();
+  }, [link]);
 
   // Mirror-on-open (ADR 0038): a control panel joining a session where a peer
   // panel is already live must catch up, so it requests state exactly like a
@@ -558,7 +576,11 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
         break;
       case 'state_snapshot':
         if (liveSinceOpenRef.current || !applySnapshot) break;
-        if (applySnapshot(message.data)) applyPreviewEnabled(message.data.isPreviewEnabled);
+        if (applySnapshot(message.data)) {
+          applyPreviewEnabled(message.data.isPreviewEnabled);
+          // The room's board replaced any self-restored one.
+          setSelfRecovered(false);
+        }
         break;
     }
   }, [peerMessage]);

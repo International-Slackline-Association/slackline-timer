@@ -17,41 +17,30 @@ import { type RecoveredLane } from './useFreestyleTimerFeed';
  * absolute overlays and the caller mounts at most one (best trick takes
  * precedence over a stale warm-up — see the mounting sites). The warm-up hero
  * serves both surfaces; the best-trick hero is athlete-display-only — the
- * broadcast band renders best trick in-band via `BestTrickTally` + the side
- * try clock instead.
+ * broadcast band prints each lane's tries on its banner and rides the try clock
+ * on the turn lane instead (`FreestyleTimerDisplay`).
  */
 
-// The tally's two render scales: `hero` fills the athlete display's screen
-// (clamp/vw, DESIGN_SYSTEM §4); `band` sits inside the broadcast band's bottom
-// strip, so it uses fixed px like the plate clocks beside it.
+// Screen-filling scale (clamp/vw, DESIGN_SYSTEM §4).
 const TALLY_SIZES = {
-  hero: {
-    title: 'clamp(1.5rem, 5vw, 4rem)',
-    row: 'clamp(1.25rem, 4vw, 3rem)',
-    rowBig: 'clamp(2rem, 7vw, 6rem)',
-    gap: 'clamp(1rem, 4vw, 3rem)',
-  },
-  band: { title: '32px', row: '28px', gap: '32px', rowBig: '32px' },
+  title: 'clamp(1.5rem, 5vw, 4rem)',
+  row: 'clamp(2rem, 7vw, 6rem)',
+  gap: 'clamp(1rem, 4vw, 3rem)',
 } as const;
 
-/** The BEST TRICK title + per-athlete tries tally (battle part 2, rule F6),
- * shared by the athlete display's full-screen hero and the broadcast band's
- * centre pause panel. The tally row's teal highlight marks whose turn it is. */
+/** The BEST TRICK title + per-athlete tries tally (battle part 2, rule F6) of
+ * the athlete display's full-screen hero. The tally row's teal highlight marks
+ * whose turn it is. */
 export const BestTrickTally = ({
   bestTrick,
   laneNames,
-  variant,
 }: {
   bestTrick: NonNullable<FreestyleSelection['bestTrick']>;
   laneNames: { lane1: string; lane2: string };
-  variant: 'hero' | 'band';
 }) => {
-  const sizes = TALLY_SIZES[variant];
-  // The turn highlight: base running teal in the broadcast band (composited
-  // over footage, matching the plate clocks beside it); the on-dark
-  // runningBright on the hero, whose slate void ground washes the base teal
-  // to ~3.8:1 (the two-tier race contract, tokens.ts).
-  const turnHue = variant === 'hero' ? colors.race.runningBright : colors.race.running;
+  // The on-dark tier: the hero's slate void ground washes the base teal to
+  // ~3.8:1 (the two-tier race contract, tokens.ts).
+  const turnHue = colors.race.runningBright;
   return (
     <Box
       sx={{
@@ -68,7 +57,7 @@ export const BestTrickTally = ({
           fontWeight: 'bold',
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
-          fontSize: sizes.title,
+          fontSize: TALLY_SIZES.title,
           color: 'common.white',
           textShadow: overlayTextShadow,
         }}
@@ -78,10 +67,10 @@ export const BestTrickTally = ({
       <Box
         sx={{
           display: 'flex',
-          gap: sizes.gap,
+          gap: TALLY_SIZES.gap,
           fontFamily: fonts.display,
           fontWeight: 'bold',
-          fontSize: sizes.rowBig,
+          fontSize: TALLY_SIZES.row,
         }}
       >
         <Box
@@ -139,7 +128,7 @@ export const BestTrickHero = ({
       pointerEvents: 'none',
     }}
   >
-    <BestTrickTally bestTrick={bestTrick} laneNames={laneNames} variant="hero" />
+    <BestTrickTally bestTrick={bestTrick} laneNames={laneNames} />
     {/* Athlete-display-only hero, so the try clock always paints on the dark
         ground — on-dark hues at projector scale (Countdown onDark). */}
     <Countdown
@@ -296,6 +285,7 @@ export const WarmupBand = ({
       onExpire={onExpire}
       expiredLabel="WARM-UP OVER"
       size="plate"
+      plateAlign="left"
     />
   </TimerLaneBlock>
 );

@@ -1,7 +1,7 @@
 // Seed the local data plane with sample data for a competition: 8 athletes per
 // gender plus their training + qualification runs and freestyle scores, then a
 // full playoff bracket per discipline×gender played out to a winner and its
-// final-round results — so the demo comp comes up complete in one command:
+// final + small-final results — so the demo comp comes up complete in one command:
 //   node server/scripts/seedLocal.mjs [compId]   (default compId: demo)
 // Idempotent (it resets the competition first). Run against `npm run dev`.
 //
@@ -148,19 +148,22 @@ const playOutBracket = async (discipline, gender) => {
   for (const m of seed.body) await decideWinner(m);
   if (startRound === 'quarter')
     for (const m of await advance(discipline, gender, 'quarter')) await decideWinner(m);
-  let final = null;
+  // The half advance creates the final AND the small final (bronze, ranks 3–4).
+  const deciders = [];
   for (const m of await advance(discipline, gender, 'half')) {
     const decided = await decideWinner(m);
-    if (decided?.round === 'final') final = decided;
+    if (decided) deciders.push(decided);
   }
   console.log(`+ bracket ${discipline}/${gender} → final winner`);
-  return { final };
+  return { deciders };
 };
 
-// ── final-round results ──────────────────────────────────────────────────────
-// Without these the demo's VS cards render their stats boxes empty: the overlay
-// reads `final`-round Times (speed) and Scores (freestyle). The run order + DNF
-// rules live in lib/finalResults.mjs; only the randomness is here.
+// ── final + small-final results ──────────────────────────────────────────────
+// Without these the demo's VS cards render their stats boxes empty and overall
+// ranks 1–4 borrow quali results: both read the match round's Times (speed) and
+// Scores (freestyle). These are raw per-athlete draws; lib/finalResults.mjs
+// orders the runs, DNFs the loser and reshapes the pair to agree with the
+// stored winner.
 const finalLaps = () => [rand(5200, 6200), rand(5200, 6200), rand(5200, 6200)];
 
 const finalComponents = () => ({
@@ -173,10 +176,10 @@ const finalComponents = () => ({
   controlPenalty: rand(1, 4),
 });
 
-const recordFinalResults = async (discipline, final) => {
+const recordFinalResults = async (discipline, match) => {
   const { times, scores } = buildFinalResults({
     discipline,
-    match: final,
+    match,
     runsFor: finalLaps,
     scoreFor: finalComponents,
     // Land the runs in the recent past so the card reads as a just-run final.
@@ -190,7 +193,7 @@ const recordFinalResults = async (discipline, final) => {
     for (const row of rows) {
       const res = await call('POST', `/competitions/${compId}/${entity}`, row);
       if (res.status === 201 || res.status === 200) counts[entity] += 1;
-      else console.warn(`! final ${entity}: ${res.status}`, res.body);
+      else console.warn(`! ${match.round} ${entity}: ${res.status}`, res.body);
     }
   }
   return counts;
@@ -223,13 +226,15 @@ const run = async () => {
       const played = await playOutBracket(discipline, gender);
       if (!played) continue;
       brackets += 1;
-      const counts = await recordFinalResults(discipline, played.final);
-      finals.times += counts.times;
-      finals.scores += counts.scores;
+      for (const match of played.deciders) {
+        const counts = await recordFinalResults(discipline, match);
+        finals.times += counts.times;
+        finals.scores += counts.scores;
+      }
     }
   console.log(
     `brackets: ${brackets}/4 seeded to a final winner; ` +
-      `final results: ${finals.times} times, ${finals.scores} scores`,
+      `final + small-final results: ${finals.times} times, ${finals.scores} scores`,
   );
 };
 

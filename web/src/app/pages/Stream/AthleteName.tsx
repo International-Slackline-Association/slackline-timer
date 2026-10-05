@@ -1,7 +1,7 @@
 import { Box, Typography } from '@mui/material';
 
 import { type Athlete } from 'app/types';
-import { colors, fonts } from 'app/theme/tokens';
+import { colors, fonts, overlayArt } from 'app/theme/tokens';
 
 /**
  * The LAAX name split — given name **bold** abutting family name **light**, both
@@ -55,7 +55,7 @@ export const AthleteName = ({
             // 700, not 800: Oswald's heaviest bundled face is 700, so an 800
             // request just resolves back to it (see `fonts.display`).
             fontWeight: 700,
-            letterSpacing: '0.01em',
+            letterSpacing: overlayArt.nameTracking,
             // ≥1 so an uppercase diacritic (É/Ø/Ñ) sits inside the line box and
             // isn't shaved off by the card's overflow:hidden band on the smallest
             // profile card (overlay-typography-polish); the 700/300 weight split,
@@ -77,7 +77,7 @@ export const AthleteName = ({
               textTransform: 'uppercase',
               fontFamily: fonts.display, // see the given line
               fontWeight: 300,
-              letterSpacing: '0.01em',
+              letterSpacing: overlayArt.nameTracking,
               // Family : given = 1 : 1.25 (34 : 27.2cqh) — the card masters'
               // 35.62 : 44.6 cap ratio, keeping the 700/300 weight as the
               // given/family cue (ADR 0016). ≥1 leaves headroom for uppercase
@@ -100,7 +100,7 @@ export const AthleteName = ({
       sx={{
         fontFamily: fonts.display,
         textTransform: 'uppercase',
-        letterSpacing: '0.01em',
+        letterSpacing: overlayArt.nameTracking,
         lineHeight: 0.95,
         whiteSpace: 'nowrap',
         // Dark ink on a white plate everywhere this is used (bracket name plates,

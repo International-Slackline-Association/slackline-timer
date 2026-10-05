@@ -22,15 +22,25 @@ export type BoardStep = 'setup' | 'warmup' | 'selection' | 'run' | 'bestTrick' |
  */
 export type CurrentStep = Exclude<BoardStep, 'setup'>;
 
-/** The board, plus the one thing chronology needs that the holds do not carry:
- * whether anyone is being recorded yet (an empty selection is step 3). */
+/** The board, plus the two things chronology needs that the holds do not
+ * carry: whether every recorded slot has an athlete (an unfinished selection is
+ * step 3 — a battle with only Athlete 1 picked is still being picked), and
+ * whether every recorded slot's score is saved — once the clocks are re-armed
+ * over that, the next thing to do is pick the next athlete. */
 export interface StepBoard extends Board {
-  hasAthlete: boolean;
+  selectionComplete: boolean;
+  recordedDone: boolean;
 }
 
 /** The lanes a mode records — quali runs one athlete at a time (ADR 0036). */
-const recordedLanes = (mode: FreestyleMode): readonly (1 | 2)[] =>
+export const recordedLanes = (mode: FreestyleMode): readonly (1 | 2)[] =>
   mode === 'quali' ? [1] : [1, 2];
+
+/** `StepBoard.selectionComplete`: every lane the mode records has an athlete. */
+export const isSelectionComplete = (
+  mode: FreestyleMode,
+  athletes: Readonly<Record<1 | 2, string>>,
+): boolean => recordedLanes(mode).every((lane) => athletes[lane] !== '');
 
 const matchOver = (board: StepBoard): boolean =>
   recordedLanes(board.mode).every((lane) => board.battle[lane].phase === 'finished');
@@ -52,8 +62,10 @@ export const currentStep = (board: StepBoard): CurrentStep => {
     // in a battle Athlete 2 still has a turn to take.
     case 'spent':
       return matchOver(board) ? 'score' : 'run';
+    // Nothing held: a saved board is the loop's Save → Reset done, so the
+    // picker is next (the compact board opens on it); otherwise the run is.
     case undefined:
-      return board.hasAthlete ? 'run' : 'selection';
+      return board.selectionComplete && !board.recordedDone ? 'run' : 'selection';
   }
 };
 

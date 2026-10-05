@@ -17,6 +17,7 @@ import { useState } from 'react';
 
 import { blurOnClickProps } from 'app/components/RaceButton';
 import { useGamepadSelection } from 'app/state/gamepadSelection';
+import { marks } from 'app/theme/tokens';
 import {
   buzzButton,
   buzzSwatch,
@@ -96,11 +97,12 @@ export const BuzzerMappingDialog = ({ title, rows, triggerLabel = 'Buzzer button
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Box
                           sx={{
-                            width: 14,
-                            height: 14,
+                            width: marks.key,
+                            height: marks.key,
                             borderRadius: '50%',
                             bgcolor: buzzSwatch[color],
-                            border: '1px solid rgba(0,0,0,0.3)',
+                            border: 1,
+                            borderColor: 'divider',
                             flexShrink: 0,
                           }}
                         />

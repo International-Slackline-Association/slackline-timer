@@ -5,7 +5,7 @@ import { RaceButton } from 'app/components/RaceButton';
 import type { WarmupChannel } from 'app/hooks/useWarmupChannel';
 import type { WarmupCardTier } from 'app/util/warmupChannel';
 import { formatClock } from 'app/util/time';
-import { colors, fonts } from 'app/theme/tokens';
+import { boardGeometry, colors, controlTargets, fieldWidths, fonts } from 'app/theme/tokens';
 import { Countdown } from './Countdown';
 
 /** The §6 on-light text tier of each card state. `armed` is the quiet one — a
@@ -32,7 +32,11 @@ const WORD_SX = {
 /** The one reserved row the transport and the expiry re-arm share (§4.12): a
  * 44 px control swaps for a 44 px control, so the warm-up running out moves
  * nothing on the board (audit S19). */
-const SLOT_SX = { minHeight: 44, alignItems: 'center', justifyContent: 'center' } as const;
+const SLOT_SX = {
+  minHeight: controlTargets.live,
+  alignItems: 'center',
+  justifyContent: 'center',
+} as const;
 
 interface Props {
   /** The page's warm-up channel — derived state + stable actions, the one
@@ -62,13 +66,19 @@ export const WarmupCard = ({ warmup }: Props) => {
   const rearmLabel = `Re-arm ${formatClock(warmup.defaultSeconds * 1000)}`;
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, width: '100%', maxWidth: 360 }}>
+    <Paper variant="outlined" sx={{ p: 2, width: '100%', maxWidth: fieldWidths.card }}>
       <Stack direction="column" spacing={1} sx={{ alignItems: 'center' }}>
         {/* The state, said in a word (§6) — the redundant, non-colour half of
             the clock's frame tier, so the card survives a squint and direct
             sunlight. Reserved height, so ARMED → RUNNING → STOPPED →
             WARM-UP OVER never nudges the clock under it. */}
-        <Box sx={{ minHeight: 30, display: 'flex', alignItems: 'center' }}>
+        <Box
+          sx={{
+            minHeight: boardGeometry.freestyle.warmupWordRow,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
           {spent ? (
             <Chip
               size="small"

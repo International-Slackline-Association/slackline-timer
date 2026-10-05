@@ -3,8 +3,14 @@ import { Stack, Typography } from '@mui/material';
 import { ElapsedTime } from 'app/components/ElapsedTime';
 import { StopwatchWSMessage } from 'app/hooks/useWebSocket';
 import { Plate } from 'app/pages/Stream/Plate';
+import {
+  CLOCK_PLATE_PX,
+  CLOCK_PLATE_WIDTH,
+  laneEdge,
+  type LaneSide,
+} from 'app/pages/Stream/TimerLaneBlock';
 import { colors, fonts, overlayTextShadow } from 'app/theme/tokens';
-import { refVh, refVw } from 'app/util/overlayScale';
+import { refVh } from 'app/util/overlayScale';
 import type { SpeedlineLaneState } from 'app/util/timerSnapshot';
 
 // Race-state color for the hero numeral (DESIGN_SYSTEM §2 / "Hero timer
@@ -15,12 +21,14 @@ import type { SpeedlineLaneState } from 'app/util/timerSnapshot';
 // projector ground too. Idle keeps its recessive slate+halo placeholder (accepted
 // for the pre-race state, ADR 0041 §2).
 // `onPlate` is the timertimer-style white-plate variant (size="plate"): the
-// numeral sits on the solid white plate the component draws itself, so the
-// finished white flips to dark slate ink. Running teal reads on white as-is.
+// numeral sits on the solid white plate the component draws itself, so idle and
+// finished digits take `overlay.nameInk` — the one black of every filled stream
+// plate, including the SVO cards composited over this lower third. Running teal
+// reads on white as-is.
 const numeralColor = (isRunning: boolean, stopped: boolean, onPlate = false): string => {
   if (isRunning) return colors.race.running;
-  if (stopped) return onPlate ? colors.ink.hi : 'common.white';
-  return colors.ink.hi;
+  if (onPlate) return colors.overlay.nameInk;
+  return stopped ? 'common.white' : colors.ink.hi;
 };
 
 // Size variants of the hero block. `projector` fills a projector/broadcast
@@ -58,21 +66,21 @@ const SIZES = {
   // AthleteNameStrip banner. This variant draws its OWN white plate around the
   // time (only the time — the UNOFFICIAL marker sits below it on the bare
   // ground), a scoreboard figure rather than a keyed-ground hero: the reference
-  // draws the time at text-6xl (60px) on a 320px-wide plate — reference px on the
-  // 1920×1080 capture frame (`refVh`/`refVw`), like every other metric in the
-  // /stream/* set. The two variants above answer to a projector wall and an
-  // operator column instead, so they keep their clamp/vw sizing.
+  // draws the time at text-6xl (60px) on the shared lane clock plate
+  // (`OVERLAY_LANE.clockPlate`) — reference px on the 1920×1080 capture frame
+  // (`refVh`), like every other metric in the /stream/* set. The two variants
+  // above answer to a projector wall and an operator column instead, so they
+  // keep their clamp/vw sizing.
   plate: {
     numeral: refVh(60),
     marker: refVh(14),
   },
 } as const;
 
-// The plate variant's white time plate, matched to the reference (`w-80 p-3`).
-const PLATE_WIDTH = refVw(320);
-
 interface Props {
   lastJsonMessage: StopwatchWSMessage | undefined;
+  /** Shows the block. The preview gates it on its socket being OPEN; the control
+   * board's clocks are its own state and always show (`StopwatchControl`). */
   isReady: boolean;
   timerId: number;
   /**
@@ -101,6 +109,9 @@ interface Props {
    * the bare ground (white + the protection halo).
    */
   size?: 'projector' | 'control' | 'plate';
+  /** `plate` only: the lane edge the time hugs inside its plate, mirroring the
+   *  name strip above it. */
+  plateAlign?: LaneSide;
 }
 
 export const Stopwatch: React.FC<Props> = ({
@@ -110,6 +121,7 @@ export const Stopwatch: React.FC<Props> = ({
   recovery,
   laneState,
   size = 'projector',
+  plateAlign = 'right',
 }) => {
   const sizes = SIZES[size];
   const onPlate = size === 'plate';
@@ -347,7 +359,12 @@ export const Stopwatch: React.FC<Props> = ({
           bordered={false}
           fill={colors.overlay.plateFilled}
           data-testid="stopwatch-plate"
-          sx={{ width: PLATE_WIDTH, px: '.25em', display: 'flex', justifyContent: 'right' }}
+          sx={{
+            width: CLOCK_PLATE_WIDTH,
+            px: CLOCK_PLATE_PX,
+            display: 'flex',
+            justifyContent: laneEdge(plateAlign),
+          }}
         >
           <ElapsedTime
             ms={time}

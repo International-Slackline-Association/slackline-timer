@@ -2095,7 +2095,11 @@ compared only lane `startTime`s, which a `resume` does not move.
    younger than 15 minutes holding an actual run is applied through the existing
    `applySelection`/`applySnapshot` paths, and the header says so. Live beats it
    in every case: a peer answer or any live frame inside the grace cancels the
-   restore, which is the 0011/0038 precedence rule unchanged.
+   restore, which is the 0011/0038 precedence rule unchanged. A socket that
+   never opens offers the same copy once the link phase reads `unreachable` —
+   no peer can be in a room the panel cannot reach — and on a later open a peer
+   `state_snapshot` still overrides it (the board is fingerprinted at mount as
+   well as at open, so setup done before the link gives up still outranks it).
 
 `snapshotHasRun` is the gate in both directions — a board with no run stores
 nothing and drops any earlier copy, so a `reset` clears the record via its own
@@ -2192,3 +2196,43 @@ the web deploy path, and a fork must now supply its own config before it can
 build — which is the point. Supersedes the mechanism clause of ADR 0007 (the
 pool, client and group as `constants.ts` literals); 0007's decision to use the
 shared ISA Hosted UI and the `timeradmin` group is unchanged.
+
+## 0049 — The best-trick series carries a monotonic rev on the wire; a mirror drops a lower one
+
+**Accepted · 2026-10-04** (extends 0038 §4 for the one payload whose staleness
+the selection stamp cannot see)
+
+**Context.** `peer-mirroring`'s best-trick legs were red in ~2 runs of 5 after
+every 0038 §4 addendum had landed. The located mechanism: a mirror re-pushes its
+derived `bestTrick`, and an echo it sent BEFORE applying the acting panel's
+`start_countdown` carries `clockRunning: false` with the pre-start tally.
+`PEER_SELECTION`'s running-side clamp only fires when both ends say a window is
+open, so that echo rolled the acting panel back a try (`A=1 / 3` after the
+second start). Widening the clamp to every wire clock state was measured worse:
+a peer `RESET`'s all-zero wire is indistinguishable from a pre-start lag. The
+wire lacked the signal, not the guard.
+
+**Decision.**
+
+1. `updateSelection.bestTrick` carries `rev: number`. Every local series
+   transition bumps it by one (`reduce` stamps any state change, so no event
+   can move the series without it); `ARM` anchors it at the wall clock,
+   `max(prev + 1, at)` — a disarm drops the series, and a counter restarting at
+   1 would sit below the rev a mirror kept through a missed disarm (the
+   selection `seq`'s rule, 0038 §4).
+2. `PEER_SELECTION` drops a `bestTrick` whose rev is below the one held; an
+   equal or higher rev applies and is adopted verbatim (the value guard counts
+   it, so a mirror never keeps an older rev and sends its own next edit below
+   the room's). The other `PEER_*` actions never move it, so a mirror echoes
+   exactly the highest rev it applied. `RESET` bumps, so its zeros outrank the
+   lag they resemble.
+3. The running-side clamp stays for the equal-rev, both-open case.
+4. An absent rev (a pre-rev page during a deploy rollover) reads as 0.
+
+**Consequences.** Session-only relay state on the freestyle arm alone — the
+speed arm has no `rev` (pinned type-level in `selectionLww.test.ts`). Every
+local transition now re-pushes the selection, `SET_TRY_MS` included (its window
+was not on the wire before). Accepted: a pre-rev peer is ignored by an armed
+post-rev panel until it reloads, and a re-arm on a panel whose clock trails the
+old cycle's anchor by more than the elapsed time can still sit below a mirror
+that missed the disarm. The relay stays opaque; no server change.

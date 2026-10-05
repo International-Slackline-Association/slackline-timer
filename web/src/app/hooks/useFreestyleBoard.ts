@@ -51,6 +51,7 @@ import {
   boardLive,
   holdReason,
 } from 'app/util/boardState';
+import { recordedLanes } from 'app/util/boardStep';
 import { MAX_BREAKS, type PlayerId } from 'app/util/breakState';
 import { lockReason, type Lock } from 'app/util/lockReason';
 import { laneNamesInput } from 'app/util/raceNames';
@@ -164,11 +165,14 @@ export const useFreestyleBoard = (sessionId: string) => {
   // breakMs is a page input that rides on the TAKE_BREAK event (and ADVANCE,
   // which can open the quali advisory break); mirror it into a ref so the
   // dispatcher callbacks stay identity-stable across config loads. Same reason
-  // for the lanes: the Reset dispatcher reads the acting lane's `armedMs`.
+  // for the lanes: the Reset dispatcher reads the acting lane's `armedMs` — and
+  // for the mode, which picks the lanes the rail's re-arm touches.
   const breakMsRef = useRef(breakMs);
   breakMsRef.current = breakMs;
   const battleRef = useRef(battle);
   battleRef.current = battle;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   // Warm-up is a third, shared countdown channel (timerId 0) — independent of
   // the two performance lanes' mutual exclusion (ADR 0015 §1). Its state
@@ -473,10 +477,11 @@ export const useFreestyleBoard = (sessionId: string) => {
       // silently re-format it behind the operator's back.
       reset: (lane: PlayerId) =>
         dispatch({ type: 'RESET', lane, budgetMs: battleRef.current[lane].armedMs }),
-      // The rail-foot "next match" re-arm (§4.9) — the same per-lane RESET run
-      // over both lanes, so each comes back to what IT was armed to.
-      resetBoth: () =>
-        ([1, 2] as const).forEach((lane) =>
+      // The rail-foot "next match / next athlete" re-arm (§4.9) — the same
+      // per-lane RESET run over the lanes the mode records, so each comes back
+      // to what IT was armed to and quali never touches the lane it hides.
+      resetRecorded: () =>
+        recordedLanes(modeRef.current).forEach((lane) =>
           dispatch({ type: 'RESET', lane, budgetMs: battleRef.current[lane].armedMs }),
         ),
       takeBreak: (lane: PlayerId) =>
@@ -488,7 +493,7 @@ export const useFreestyleBoard = (sessionId: string) => {
   // ---- Best-trick action dispatchers (passed to the presentational panel) -----
   const tryActions = useMemo(
     () => ({
-      arm: (cap: number) => dispatchTry({ type: 'ARM', cap }),
+      arm: (cap: number) => dispatchTry({ type: 'ARM', cap, at: Date.now() }),
       disarm: () => dispatchTry({ type: 'DISARM' }),
       setCap: (cap: number) => dispatchTry({ type: 'SET_CAP', cap }),
       setTryMs: (tryMs: number) => dispatchTry({ type: 'SET_TRY_MS', tryMs }),

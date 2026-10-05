@@ -2,13 +2,13 @@ import { Box, Stack, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 
 import type { FreestyleMode } from 'app/state/freestyleModeMemory';
-import { radii } from 'app/theme/tokens';
+import { radii, strokes } from 'app/theme/tokens';
 import { stepCaption, stepName, type BoardStep } from 'app/util/boardStep';
 
 /** The marker gutter, held on every caption whether or not it carries the rule:
  * a mark that reflows the line it marks is read as a layout change, not a cue. */
 const RULE_SX = {
-  width: '4px',
+  width: strokes.rule,
   flexShrink: 0,
   alignSelf: 'stretch',
   borderRadius: `${radii.sm}px`,

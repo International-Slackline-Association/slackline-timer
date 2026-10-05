@@ -2,8 +2,8 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Athlete } from 'app/types';
-import { AthleteNameStrip, STRIP_HEIGHT } from 'app/pages/Stream/AthleteNameStrip';
-import { colors } from 'app/theme/tokens';
+import { AthleteNameStrip } from 'app/pages/Stream/AthleteNameStrip';
+import { colors, OVERLAY_NAME_STRIP } from 'app/theme/tokens';
 
 /** Resolve a hex token to the `rgb(...)` form jsdom reports for `color`. */
 const rgb = (hex: string) => {
@@ -70,7 +70,7 @@ describe('AthleteNameStrip (LAAX name lower-third)', () => {
     // The ref draws the flag at the FULL strip height, flush left — not a small
     // inset badge; assert it fills the strip vertically.
     const heightPx = parseFloat(window.getComputedStyle(flag).height);
-    expect(heightPx).toBe(STRIP_HEIGHT);
+    expect(heightPx).toBe(OVERLAY_NAME_STRIP.height);
   });
 
   it('sizes the name so its em box fits inside the strip (caps centred, never sheared)', () => {
@@ -84,8 +84,8 @@ describe('AthleteNameStrip (LAAX name lower-third)', () => {
     // overflow the 92px overflow:hidden plate vertically (the frame-clip bug the
     // old 1.25× em overshoot caused). Still large and legible beside the flag —
     // not the old small fixed 3.4rem (~54px).
-    expect(fontSizePx).toBeLessThanOrEqual(STRIP_HEIGHT);
-    expect(fontSizePx).toBeGreaterThanOrEqual(STRIP_HEIGHT * 0.7);
+    expect(fontSizePx).toBeLessThanOrEqual(OVERLAY_NAME_STRIP.height);
+    expect(fontSizePx).toBeGreaterThanOrEqual(OVERLAY_NAME_STRIP.height * 0.7);
   });
 
   it('leaves a short name at full size (no downscale)', () => {

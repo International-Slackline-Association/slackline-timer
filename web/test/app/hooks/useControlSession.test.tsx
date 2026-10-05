@@ -32,6 +32,7 @@ import {
   useControlSession,
   useSessionId,
 } from 'app/hooks/useControlSession';
+import { GRACE_MS } from 'app/hooks/useStaleAfterGrace';
 import {
   SELF_SNAPSHOT_MAX_AGE_MS,
   readSelfSnapshot,
@@ -194,7 +195,13 @@ describe('useControlSession', () => {
 
   it('re-pushes once when a nested tally member changes (structural signature)', () => {
     const params = baseParams();
-    const bestTrick = { cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: false } as const;
+    const bestTrick = {
+      cap: 3,
+      tries: { 1: 0, 2: 0 },
+      turn: 1,
+      clockRunning: false,
+      rev: 0,
+    } as const;
     const armed: LiveSelection = { ...selection, bestTrick: { ...bestTrick } };
     const { rerender } = renderHook((p) => useControlSession(p), {
       initialProps: { ...params, selection: armed },
@@ -212,7 +219,13 @@ describe('useControlSession', () => {
     // identity changed, so the re-push key must not move — otherwise the two
     // panels push each other's value back and forth forever.
     const params = baseParams();
-    const bestTrick = { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: true } as const;
+    const bestTrick = {
+      cap: 3,
+      tries: { 1: 1, 2: 0 },
+      turn: 2,
+      clockRunning: true,
+      rev: 0,
+    } as const;
     const armed: LiveSelection = { ...selection, bestTrick: { ...bestTrick } };
     const { rerender } = renderHook((p) => useControlSession(p), {
       initialProps: { ...params, selection: armed },
@@ -543,7 +556,7 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
     // retracting `bestTrick: undefined` never lands.
     const panel = mirroringPanel((sel) => ({
       ...sel,
-      bestTrick: { cap: 3, tries: { 1: 0, 2: 0 }, turn: 2, clockRunning: false },
+      bestTrick: { cap: 3, tries: { 1: 0, 2: 0 }, turn: 2, clockRunning: false, rev: 0 },
     }));
     const { rerender } = renderHook(() => useControlSession(panel.params));
     senderSend.mockClear(); // past the mount announce
@@ -599,7 +612,7 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
     // (the `fs series-reset` peer-mirroring leg).
     const panel = reactingPanel((message) =>
       message.type === 'reset_countdown'
-        ? { bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false } }
+        ? { bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false, rev: 0 } }
         : null,
     );
     deliver(panel.rerender, peerSelection); // anchors this panel on the room's stamp
@@ -625,7 +638,7 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
     const panel = mirroringPanel((sel) => sel);
     panel.edit({
       matchId: 'm1',
-      bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 1, clockRunning: true },
+      bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 1, clockRunning: true, rev: 0 },
     });
     const { rerender } = renderHook(() => useControlSession(panel.params));
     senderSend.mockClear(); // past the mount announce
@@ -674,7 +687,9 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
     const panel = mirroringPanel((sel) => sel);
     const { rerender } = renderHook(() => useControlSession(panel.params));
     deliver(rerender, peerSelection); // anchored on the room's stamp
-    panel.edit({ bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false } });
+    panel.edit({
+      bestTrick: { cap: 3, tries: { 1: 1, 2: 0 }, turn: 2, clockRunning: false, rev: 0 },
+    });
 
     deliver(rerender, { type: 'reset_countdown', timerId: 3, data: { remainingMs: 30_000 } });
 
@@ -907,7 +922,7 @@ describe.each([
     // to carry a fresher wall-clock stamp than A's retraction, which B then
     // dropped — leaving the mirror armed on the series of the match it had just
     // left, and re-arming A off the echo.
-    const tally = { cap: 3, tries: { 1: 1, 2: 0 }, clockRunning: false };
+    const tally = { cap: 3, tries: { 1: 1, 2: 0 }, clockRunning: false, rev: 0 };
     const a = makePanel(idA);
     const b = makePanel(idB, (sel) => ({
       ...sel,
@@ -948,8 +963,14 @@ describe.each([
     // adopted — an echo crossing A's follow-up, once per frame. The echo can
     // only tie A, and whether a tie outranked A's own authorship used to be the
     // coin flip: this leg is red in the order where B's id sorts higher.
-    const running = { cap: 3, tries: { 1: 2, 2: 1 }, turn: 1, clockRunning: true } as const;
-    const cleared = { cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: false } as const;
+    const running = { cap: 3, tries: { 1: 2, 2: 1 }, turn: 1, clockRunning: true, rev: 0 } as const;
+    const cleared = {
+      cap: 3,
+      tries: { 1: 0, 2: 0 },
+      turn: 1,
+      clockRunning: false,
+      rev: 0,
+    } as const;
     const a = makePanel(idA);
     const b = makePanel(idB, (sel) => ({
       ...sel,
@@ -1357,5 +1378,111 @@ describe('useControlSession self-snapshot (solo panel recovery)', () => {
     sendStart(result.current.sendWSMessage);
 
     expect(result.current.selfRecovered).toBe(false);
+  });
+
+  describe('while the relay is unreachable', () => {
+    const storeRun = (at = Date.now()) =>
+      storeSelfSnapshot('comp-1', 'freestyle', {
+        at,
+        snapshot: { isPreviewEnabled: true, at, signalPhase: 0, text: '', timers },
+        selection: { ...selection, round: 'quarter' },
+      });
+
+    const mountUnreachable = (overrides: Parameters<typeof selfParams>[0] = {}) => {
+      socketState = { readyState: ReadyState.CONNECTING, lastJsonMessage: null };
+      configureSocket();
+      return renderHook(() => useControlSession(selfParams(overrides)));
+    };
+
+    it('recovers the stored run once the link reads unreachable, with no OPEN at all', () => {
+      const applySnapshot = vi.fn().mockReturnValue(true);
+      const applySelection = vi.fn();
+      storeRun();
+
+      const { result } = mountUnreachable({ applySnapshot, applySelection });
+      act(() => vi.advanceTimersByTime(GRACE_MS - 1));
+      expect(result.current.link).toBe('connecting');
+      expect(applySnapshot).not.toHaveBeenCalled();
+
+      act(() => vi.advanceTimersByTime(1));
+
+      expect(result.current.link).toBe('unreachable');
+      expect(applySelection).toHaveBeenCalledWith({ ...selection, round: 'quarter' });
+      expect(applySnapshot).toHaveBeenCalledWith(expect.objectContaining({ timers }));
+      expect(result.current.selfRecovered).toBe(true);
+    });
+
+    it('lets a peer answer win once the link finally opens, and drops the notice', () => {
+      const applySnapshot = vi.fn().mockReturnValue(true);
+      storeRun();
+      const { result, rerender } = mountUnreachable({ applySnapshot });
+      act(() => vi.advanceTimersByTime(GRACE_MS));
+      expect(result.current.selfRecovered).toBe(true);
+
+      socketState = { readyState: ReadyState.OPEN, lastJsonMessage: null };
+      configureSocket();
+      rerender();
+      const peerSnapshot = { isPreviewEnabled: false, signalPhase: 0, text: '', timers: [] };
+      socketState = {
+        readyState: ReadyState.OPEN,
+        lastJsonMessage: { type: 'state_snapshot', senderId: 'peer-panel', data: peerSnapshot },
+      };
+      configureSocket();
+      rerender();
+
+      expect(applySnapshot).toHaveBeenLastCalledWith(peerSnapshot);
+      expect(result.current.enabledPreview).toBe(false);
+      expect(result.current.selfRecovered).toBe(false);
+
+      act(() => vi.advanceTimersByTime(PEER_ANSWER_MS));
+      expect(applySnapshot).toHaveBeenCalledTimes(2);
+    });
+
+    it('announces the recovered board when the link opens (it is no longer the default)', () => {
+      storeRun();
+      const { rerender } = mountUnreachable({ applySnapshot: () => true });
+      act(() => vi.advanceTimersByTime(GRACE_MS));
+
+      socketState = { readyState: ReadyState.OPEN, lastJsonMessage: null };
+      configureSocket();
+      rerender();
+
+      expect(selectionPushes()).toEqual([selection]);
+      // Lamport-low until the room's selection is seen: any live peer drops it.
+      expect(selectionStamps()).toEqual([1]);
+    });
+
+    it('restores nothing when no run was stored, or the copy is past the bound', () => {
+      const applySnapshot = vi.fn().mockReturnValue(true);
+      const fresh = mountUnreachable({ applySnapshot });
+      act(() => vi.advanceTimersByTime(GRACE_MS));
+      fresh.unmount();
+
+      storeRun(Date.now() - SELF_SNAPSHOT_MAX_AGE_MS - 1);
+      const aged = mountUnreachable({ applySnapshot });
+      act(() => vi.advanceTimersByTime(GRACE_MS));
+
+      expect(applySnapshot).not.toHaveBeenCalled();
+      expect(aged.result.current.selfRecovered).toBe(false);
+    });
+
+    it('stores nothing for a board that was never live', () => {
+      const { unmount } = mountUnreachable();
+      act(() => vi.advanceTimersByTime(GRACE_MS + PEER_ANSWER_MS));
+      unmount();
+
+      expect(stored()).toBeNull();
+    });
+
+    it('does not recover into a board the operator moved before the link gave up', () => {
+      const applySnapshot = vi.fn().mockReturnValue(true);
+      storeRun();
+      const { rerender } = mountUnreachable({ applySnapshot });
+      timers = [{ timerId: 1, startTime: null, stopTime: null }];
+      rerender();
+      act(() => vi.advanceTimersByTime(GRACE_MS));
+
+      expect(applySnapshot).not.toHaveBeenCalled();
+    });
   });
 });

@@ -18,6 +18,7 @@ import { CountryFlag } from 'app/components/CountryFlag';
 import { QueryStates } from 'app/components/QueryStates';
 import { SelectCompetitionGate } from 'app/components/SelectCompetitionGate';
 import { SelectField, enumOptions } from 'app/components/SelectField';
+import { fieldWidths } from 'app/theme/tokens';
 import {
   DISCIPLINE,
   GENDERS,
@@ -151,14 +152,14 @@ const RankingsView = ({ compId }: { compId: string }) => {
           label="Round"
           value={round}
           onChange={(e) => setRound(e.target.value as RoundOption)}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: fieldWidths.field }}
           options={enumOptions(roundOptions, roundLabel)}
         />
         <SelectField
           label="Gender"
           value={gender}
           onChange={(e) => setGender(e.target.value as Gender)}
-          sx={{ minWidth: 160 }}
+          sx={{ minWidth: fieldWidths.short }}
           options={enumOptions(GENDERS, genderLabel)}
         />
       </Stack>
@@ -225,7 +226,23 @@ const RankingsView = ({ compId }: { compId: string }) => {
                 athlete={entry.athlete}
               >
                 <TableCell align="right">{standingsResultLabel(discipline, entry)}</TableCell>
-                <TableCell>{roundLabel(entry.source)}</TableCell>
+                <TableCell>
+                  {roundLabel(entry.source)}
+                  {/* The overlay's `resultBorrowed` subordinate ink, in admin form. */}
+                  {entry.resultSource && (
+                    <>
+                      {' '}
+                      <Typography
+                        component="span"
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ whiteSpace: 'nowrap' }}
+                      >
+                        (result: {roundLabel(entry.resultSource)})
+                      </Typography>
+                    </>
+                  )}
+                </TableCell>
               </RankingRow>
             ))}
           </TableBody>

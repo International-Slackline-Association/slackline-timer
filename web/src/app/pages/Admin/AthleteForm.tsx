@@ -22,7 +22,7 @@ import { apiErrorMessage } from 'app/util/apiError';
 import { genderLabel } from 'app/util/gender';
 import { AthleteCard } from 'app/pages/Stream/AthleteCard';
 import { AthleteNameStrip } from 'app/pages/Stream/AthleteNameStrip';
-import { colors } from 'app/theme/tokens';
+import { adminPreview, colors, OVERLAY_NAME_STRIP, space } from 'app/theme/tokens';
 
 /** URL.createObjectURL guarded for jsdom (which doesn't implement it). */
 const safeObjectUrl = (file: File): string | undefined => {
@@ -156,7 +156,7 @@ export const AthleteForm = ({
         <Avatar
           src={previewUrl}
           alt={fullName(form.firstName, form.lastName)}
-          sx={{ width: 64, height: 64 }}
+          sx={{ width: space.unit * 8, height: space.unit * 8 }}
         />
         <Box>
           <input
@@ -264,10 +264,9 @@ export const AthleteForm = ({
  *  edge, not the ~0.4cqh default) reproduces the on-air card here, just smaller. */
 const CARD_EDGE_WIDTH = `${((9 / 498.02) * 100).toFixed(3)}cqh`;
 
-/** The name strip is authored at a fixed 720×92 (`AthleteNameStrip`); scaled to
- *  the available width so it stays crisp and never right-edge clips. */
-const STRIP_W = 720;
-const STRIP_H = 92;
+/** The name strip is authored at its native `OVERLAY_NAME_STRIP` size; scaled
+ *  to the available width so it stays crisp and never right-edge clips. */
+const { width: STRIP_W, height: STRIP_H } = OVERLAY_NAME_STRIP;
 /** Scale when the width can't be measured (jsdom has no ResizeObserver) — fills
  *  the `maxWidth="sm"` dialog. */
 const STRIP_FALLBACK_SCALE = 0.75;
@@ -304,7 +303,9 @@ const CardPreview = ({ athlete }: { athlete: Athlete }) => {
       >
         {/* Card at the LAAX panel aspect (Competitor's 298.81×498.02 box) with a
             fixed crisp height; container-query units scale the rest. */}
-        <Box sx={{ height: 240, aspectRatio: '298.81 / 498.02', flexShrink: 0 }}>
+        <Box
+          sx={{ height: adminPreview.cardHeight, aspectRatio: '298.81 / 498.02', flexShrink: 0 }}
+        >
           <AthleteCard athlete={athlete} edgeWidth={CARD_EDGE_WIDTH} />
         </Box>
         {/* Name strip at its native 720×92, scaled to the measured panel width

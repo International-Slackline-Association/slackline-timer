@@ -1,14 +1,4 @@
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  Divider,
-  useMediaQuery,
-} from '@mui/material';
+import { Box, Divider, useMediaQuery } from '@mui/material';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { Stack } from '@mui/system';
 import { StopwatchWSMessage } from 'app/hooks/useWebSocket';
@@ -41,6 +31,7 @@ import { genderLabel } from 'app/util/gender';
 import { handsetReadout } from 'app/util/handsetReadout';
 import { roundLabel } from 'app/util/rounds';
 import { SPEEDLINE_BUZZER_ROWS, speedlineHandsetOutcome } from 'app/util/speedlineHandset';
+import { BoardConfirmDialog } from 'app/components/BoardConfirmDialog';
 import { ControlStatusHeader } from 'app/components/ControlStatusHeader';
 import { HandsetCard } from 'app/components/HandsetCard';
 import { LockedControl } from 'app/components/LockedControl';
@@ -48,7 +39,8 @@ import { PreviewControls } from 'app/components/PreviewControls';
 import { RaceButton } from 'app/components/RaceButton';
 import { RecorderToast } from 'app/components/RecorderToast';
 import { WhyLine } from 'app/components/WhyLine';
-import { advanceOverlay, overlayOwnsBoard, useConfirmGuard } from 'app/hooks/useAdvanceInput';
+import { advanceOverlay, overlayOwnsBoard } from 'app/hooks/useAdvanceInput';
+import { boardGeometry, deskColumns, deskMedia } from 'app/theme/tokens';
 
 /**
  * The desk (`speedline-desk-layout`, after FREESTYLE_BOARD_UX §2): setup chrome
@@ -62,16 +54,14 @@ import { advanceOverlay, overlayOwnsBoard, useConfirmGuard } from 'app/hooks/use
  * what would put the transport under the fold — the exact failure the height
  * gate exists to prevent over there.
  */
-const DESK_MEDIA = '(min-width:1280px)';
-
 const DESK_SX = {
   width: '100%',
   display: 'grid',
   gap: 2,
   gridTemplateColumns: '1fr',
   alignItems: 'start',
-  [`@media ${DESK_MEDIA}`]: {
-    gridTemplateColumns: '248px minmax(0, 1fr) 360px',
+  [`@media ${deskMedia.speedline}`]: {
+    gridTemplateColumns: deskColumns,
   },
 } as const;
 
@@ -89,15 +79,15 @@ const DESK_SX = {
  */
 const LIVE_DECK_SX = {
   width: '100%',
-  maxWidth: 880,
+  maxWidth: boardGeometry.deckMax.speedline,
   mx: 'auto',
   display: 'grid',
   gap: 1.5,
-  gridTemplateColumns: '1fr',
-  '@media (min-width:900px)': {
-    gridTemplateColumns: 'minmax(0, 5fr) minmax(184px, 3fr) minmax(0, 5fr)',
-    alignItems: 'start',
+  gridTemplateColumns: {
+    xs: '1fr',
+    md: `minmax(0, 5fr) minmax(${boardGeometry.speedline.startStrip}px, 3fr) minmax(0, 5fr)`,
   },
+  alignItems: { md: 'start' },
 } as const;
 
 // The lane timers a start produces: the ignited lanes get the shared start
@@ -112,10 +102,11 @@ const startLaneTimers = (startTime: number, lanes: number[]) => {
 export const SpeedlineControlPage = () => {
   // The desk gate, asked once (`speedline-compact-setup-strip`). Below it the
   // three columns stack and the setup column goes FIRST — the order the manual
-  // promises — so it has to cost a row, not a column: a ~220 px card there put
-  // `False start` and `DNF` under a 768 px fold. One reading, not a CSS toggle:
-  // the handset card owns a pad listener and a per-second ticker.
-  const wideDesk = useMediaQuery(DESK_MEDIA);
+  // promises — as a one-line strip in the header's free column beside the
+  // health block, not a column or a row of its own: either put `Lane n DNF` on
+  // a 768 px fold. One reading, not a CSS toggle: the handset card owns a pad
+  // listener and a per-second ticker, and the strip changes parent with it.
+  const wideDesk = useMediaQuery(deskMedia.speedline);
   const sessionId = useSessionId();
 
   // Result recording (additive over the live timer; sessionId === compId).
@@ -322,10 +313,11 @@ export const SpeedlineControlPage = () => {
       }),
     [link, effectiveSignalPhase, effectiveAborted, resumeClock, laneState],
   );
-  // One reserved slot for the race pair and Reset: at most one of them carries
-  // a reason at a time — Start's lock outranks Abort's, and Reset is locked
-  // only by the board-wide holds that already word Start.
-  const raceWhy = locks.start ?? locks.abort;
+  // One reserved slot for the race pair and Reset: Start's lock outranks
+  // Abort's, except while a lane runs — then Abort's names what to do past GO
+  // and already implies Start's. Reset is locked only by the link, which words
+  // all three alike.
+  const raceWhy = runningTimerCount > 0 ? locks.abort : (locks.start ?? locks.abort);
 
   // What a handset press just did, for the card's readout — off the same lock
   // map the buttons read, and off the overlay standing at the instant of the
@@ -501,12 +493,10 @@ export const SpeedlineControlPage = () => {
     [locks, recorder, sendWSMessage],
   );
 
-  // Abort the start sequence (a jump during the lights). Pre-GO only — the UI
-  // button is disabled outside that window and the gamepad path is guarded here.
-  // Unlike the former false-start handler it NO LONGER stops the lanes: a false
-  // start never halts a live run (rule S4) — the run finishes and video review
-  // decides. Post-GO emergencies use Reset (confirm-guarded). The per-lane FALSE
-  // START attribution is a separate action (see `flagFs`).
+  // Abort the start sequence (a jump during the lights). Pre-GO only — the lock
+  // map ends it at GO, and the gamepad path is guarded here. A false start
+  // never halts a live run (rule S4): post-GO the jump is flagged per lane
+  // (`flagFs`) and an emergency uses Reset (confirm-guarded).
   const abortStart = useCallback(() => {
     if (locks.abort !== null) return;
     setText('START ABORTED');
@@ -578,14 +568,6 @@ export const SpeedlineControlPage = () => {
     reset();
   };
 
-  // The safe answer, issued by the guard that registers it: a handset press
-  // behind this question answers it and nothing else, and the marker it carries
-  // is what tells a press in MUI's exit transition that the question is gone.
-  const keepTiming = useConfirmGuard(resetConfirmOpen, () => setResetConfirmOpen(false), {
-    dialog: 'Reset',
-    safeAction: 'Keep timing',
-  });
-
   useEffect(() => {
     // A question owns the board while it stands (FREESTYLE_BOARD_UX §4.8): the
     // on-screen twins already sit behind the modal backdrop, so the handset is
@@ -598,7 +580,7 @@ export const SpeedlineControlPage = () => {
         if (locks.start === null) startWithSignal();
         break;
       case 1:
-        requestReset();
+        if (locks.reset === null) requestReset();
         break;
       case 5:
         abortStart();
@@ -675,7 +657,6 @@ export const SpeedlineControlPage = () => {
       recorder={recorder}
       athletes={athletes.data ?? []}
       laneState={laneState[lane]}
-      isReady={link === 'open'}
       onStop={() => stop(lane)}
       stopLock={locks.stop[lane]}
       onResume={() => resumeLane(lane)}
@@ -685,54 +666,64 @@ export const SpeedlineControlPage = () => {
     />
   );
 
-  return (
-    <Stack spacing={1.5} sx={{ width: '100%', padding: { xs: 1, sm: 2 } }}>
-      <ControlStatusHeader
-        context={{
-          mode: 'Speedline',
-          round: roundLabel(recorder.round),
-          gender: genderLabel(recorder.selectedGender),
-        }}
-        health={{
-          link,
-          audioBlocked,
-          peer: peerState,
-          recovered: selfRecovered,
-        }}
-        recording={{
-          // A lane records a Time only with an athlete assigned; no lane assigned
-          // means a stop saves nothing — surface that instead of failing silently.
-          active: Boolean(recorder.laneAthletes[1] || recorder.laneAthletes[2]),
-          detail: 'no athletes selected',
-        }}
+  const setup = (
+    <Stack
+      spacing={1.5}
+      data-testid="desk-left"
+      direction={wideDesk ? 'column' : 'row'}
+      useFlexGap
+      sx={{ flexWrap: 'wrap', alignItems: wideDesk ? 'stretch' : 'center' }}
+    >
+      <PreviewControls
+        enabled={enabledPreview}
+        onToggle={togglePreview}
+        links={[{ href: `/speedline/preview?sessionId=${sessionId}`, label: 'Preview' }]}
+        inline={!wideDesk}
       />
-      <Box sx={DESK_SX}>
-        <Stack
-          spacing={1.5}
-          data-testid="desk-left"
-          direction={wideDesk ? 'column' : 'row'}
-          useFlexGap
-          sx={{ flexWrap: 'wrap', alignItems: wideDesk ? 'stretch' : 'center' }}
-        >
-          <PreviewControls
-            enabled={enabledPreview}
-            onToggle={togglePreview}
-            links={[{ href: `/speedline/preview?sessionId=${sessionId}`, label: 'Preview' }]}
-          />
-          <HandsetCard
-            title="Speedline"
-            rows={SPEEDLINE_BUZZER_ROWS}
-            describe={describePress}
-            variant={wideDesk ? 'card' : 'strip'}
-          />
-        </Stack>
+      <HandsetCard
+        title="Speedline"
+        rows={SPEEDLINE_BUZZER_ROWS}
+        describe={describePress}
+        variant={wideDesk ? 'card' : 'strip'}
+      />
+    </Stack>
+  );
 
-        <Box sx={LIVE_DECK_SX} data-testid="desk-live">
-          {laneColumn(1)}
-          <Stack spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
-            <RaceStartSignal currentPhase={effectiveSignalPhase} size="small" />
+  return (
+    <>
+      <Stack
+        spacing={wideDesk ? 1.5 : 1}
+        sx={{ width: '100%', padding: { xs: 1, sm: wideDesk ? 2 : 1.5 } }}
+      >
+        <ControlStatusHeader
+          context={{
+            mode: 'Speedline',
+            round: roundLabel(recorder.round),
+            gender: genderLabel(recorder.selectedGender),
+          }}
+          health={{
+            link,
+            audioBlocked,
+            peer: peerState,
+            recovered: selfRecovered,
+          }}
+          recording={{
+            // A lane records a Time only with an athlete assigned; no lane assigned
+            // means a stop saves nothing — surface that instead of failing silently.
+            active: Boolean(recorder.laneAthletes[1] || recorder.laneAthletes[2]),
+            detail: 'no athletes selected',
+          }}
+          setup={wideDesk ? undefined : setup}
+        />
+        <Box sx={DESK_SX}>
+          {wideDesk && setup}
 
-            {/* One control dialect across both boards (FREESTYLE_BOARD_UX §6):
+          <Box sx={LIVE_DECK_SX} data-testid="desk-live">
+            {laneColumn(1)}
+            <Stack spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+              <RaceStartSignal currentPhase={effectiveSignalPhase} size="small" />
+
+              {/* One control dialect across both boards (FREESTYLE_BOARD_UX §6):
                 Start and Abort Start are the race pair — the two are never live
                 at the same time, so exactly one loud press exists per state —
                 and Reset is neutral behind a dashed divider rather than flush
@@ -741,87 +732,82 @@ export const SpeedlineControlPage = () => {
                 never swallows the next handset press. Each press carries its
                 lock reason as its accessible description (§4.7), so the words
                 the why-line prints reach a screen reader on the button itself. */}
-            <LockedControl reason={locks.start}>
-              <RaceButton
-                tone="go"
-                size="race"
-                disabled={locks.start !== null}
-                onClick={() => {
-                  startWithSignal();
-                }}
-              >
-                Start
-              </RaceButton>
-            </LockedControl>
-            <LockedControl reason={locks.abort}>
-              <RaceButton
-                tone="stop"
-                size="race"
-                disabled={locks.abort !== null}
-                onClick={() => {
-                  abortStart();
-                }}
-              >
-                Abort Start
-              </RaceButton>
-            </LockedControl>
-            <WhyLine reason={raceWhy} />
-            <Stack direction="row" spacing={1.5} sx={{ width: '100%', alignItems: 'center' }}>
-              <Divider sx={{ flexGrow: 1, borderStyle: 'dashed' }} />
-              <LockedControl reason={locks.reset}>
+              <LockedControl reason={locks.start}>
                 <RaceButton
-                  tone="neutral"
-                  startIcon={<RestartAltIcon />}
-                  disabled={locks.reset !== null}
+                  tone="go"
+                  size="race"
+                  disabled={locks.start !== null}
                   onClick={() => {
-                    requestReset();
+                    startWithSignal();
                   }}
                 >
-                  Reset
+                  Start
                 </RaceButton>
               </LockedControl>
+              <LockedControl reason={locks.abort}>
+                <RaceButton
+                  tone="stop"
+                  size="race"
+                  disabled={locks.abort !== null}
+                  onClick={() => {
+                    abortStart();
+                  }}
+                >
+                  Abort Start
+                </RaceButton>
+              </LockedControl>
+              <WhyLine reason={raceWhy} />
+              <Stack direction="row" spacing={1.5} sx={{ width: '100%', alignItems: 'center' }}>
+                <Divider sx={{ flexGrow: 1, borderStyle: 'dashed' }} />
+                <LockedControl reason={locks.reset}>
+                  <RaceButton
+                    tone="neutral"
+                    startIcon={<RestartAltIcon />}
+                    disabled={locks.reset !== null}
+                    onClick={() => {
+                      requestReset();
+                    }}
+                  >
+                    Reset
+                  </RaceButton>
+                </LockedControl>
+              </Stack>
             </Stack>
-          </Stack>
-          {laneColumn(2)}
-        </Box>
+            {laneColumn(2)}
+          </Box>
 
-        <Stack spacing={1.5} data-testid="desk-right">
-          <RaceRecorderControls
-            recorder={recorder}
-            athletes={athletes.data ?? []}
-            // Between runs the swap is safe — the tally is athlete-keyed (ADR 0044)
-            // — and is exactly the side-switch moment; under a live run it is the
-            // interlock table's call, like every other press on this board.
-            swapLock={locks.swap}
-          />
-        </Stack>
-      </Box>
+          <Stack spacing={1.5} data-testid="desk-right">
+            <RaceRecorderControls
+              recorder={recorder}
+              athletes={athletes.data ?? []}
+              // Between runs the swap is safe — the tally is athlete-keyed (ADR 0044)
+              // — and is exactly the side-switch moment; under a live run it is the
+              // interlock table's call, like every other press on this board.
+              swapLock={locks.swap}
+              voidLock={locks.void}
+            />
+          </Stack>
+        </Box>
+        <RecorderToast
+          open={recorder.toast !== null}
+          message={recorder.toast?.text ?? ''}
+          severity={recorder.toast?.severity ?? 'success'}
+          onClose={recorder.clearToast}
+        />
+        <BoardConfirmDialog
+          open={resetConfirmOpen}
+          titleId="reset-confirm-title"
+          title="Reset this run?"
+          body="A lane is still running or the start sequence is active. Resetting now wipes the run — this cannot be undone."
+          confirmLabel="Reset run"
+          safeAnswer="Keep timing"
+          onConfirm={confirmReset}
+          onCancel={() => setResetConfirmOpen(false)}
+        />
+      </Stack>
+      {/* Outside the spaced stack: the zero-height holder would still take a
+          spacing gap below the desk — the last 12 px of the 720 px fold. */}
       {audioElement}
-      <RecorderToast
-        open={recorder.toast !== null}
-        message={recorder.toast?.text ?? ''}
-        severity={recorder.toast?.severity ?? 'success'}
-        onClose={recorder.clearToast}
-      />
-      <Dialog
-        open={resetConfirmOpen}
-        onClose={() => setResetConfirmOpen(false)}
-        aria-labelledby="reset-confirm-title"
-      >
-        <DialogTitle id="reset-confirm-title">Reset this run?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            A lane is still running or the start sequence is active. Resetting now wipes the run —
-            this cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button {...keepTiming} />
-          <RaceButton tone="stop" onClick={confirmReset}>
-            Reset run
-          </RaceButton>
-        </DialogActions>
-      </Dialog>
-    </Stack>
+    </>
   );
 };

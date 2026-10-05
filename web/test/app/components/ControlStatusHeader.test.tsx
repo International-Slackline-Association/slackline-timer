@@ -9,12 +9,15 @@ import { chosenKey } from 'app/theme/tokens';
 import { px } from '../../util/computedUnits';
 import { deskMediaValue } from '../../util/deskGeometry';
 
-/** MUI's `md`/`lg` breakpoints — the two widths the health block folds at. */
+/** MUI's `md`/`lg` breakpoints — the two widths the health block folds at —
+ * and `xs`, which MUI emits as a media block of its own. */
+const XS_MEDIA = '(min-width:0px)';
 const MD_MEDIA = '(min-width:900px)';
 const LG_MEDIA = '(min-width:1200px)';
 
 /** The sentence the down phases print under the health row. */
 const LINK_DETAIL = 'clocks keep running; the preview is not receiving';
+const AUDIO_DETAIL = 'click anywhere to unlock audio';
 
 type ControlStatusHeaderProps = Parameters<typeof ControlStatusHeader>[0];
 
@@ -98,9 +101,11 @@ describe('ControlStatusHeader', () => {
     expect(screen.getByTestId('control-link-detail').textContent).toBe('\u00a0');
   });
 
-  it('says the panel recovered its own run, and yields the line to a link alarm', () => {
+  it('says the panel recovered its own run, and keeps saying it beside a link alarm', () => {
     // ADR 0047: the solo board's recovery notice rides the one reserved caption
-    // row, and a link alarm — the reading nothing else reports — outranks it.
+    // row. A board restored while the relay is unreachable is recovered AND
+    // down, so the row owes both sentences — the recovery leads, because the
+    // clipped tail stays in the title and the chip already reads the alarm.
     const { rerender } = render(
       <ControlStatusHeader {...baseProps} health={{ ...baseProps.health, recovered: true }} />,
     );
@@ -108,15 +113,36 @@ describe('ControlStatusHeader', () => {
       'recovered this panel’s last run',
     );
 
+    for (const link of ['unreachable', 'lost'] as const) {
+      rerender(
+        <ControlStatusHeader
+          {...baseProps}
+          health={{ ...baseProps.health, recovered: true, link }}
+        />,
+      );
+      const both = `recovered this panel’s last run · ${LINK_DETAIL}`;
+      expect(screen.getByTestId('control-link-detail')).toHaveTextContent(both);
+      expect(screen.getByTestId('control-link-detail')).toHaveAttribute('title', both);
+    }
+  });
+
+  it('keeps the blocked-audio plate to its alarm and puts the gesture in the caption', () => {
+    // A plate long enough to carry the instruction wrapped the health row to
+    // two lines at every desk width; the reserved caption row costs nothing.
+    const { rerender } = render(
+      <ControlStatusHeader {...baseProps} health={{ ...baseProps.health, audioBlocked: true }} />,
+    );
+    expect(screen.getByText('AUDIO LOCKED')).toBeInTheDocument();
+    expect(screen.getByTestId('control-link-detail')).toHaveTextContent(AUDIO_DETAIL);
+
     rerender(
       <ControlStatusHeader
         {...baseProps}
-        health={{ ...baseProps.health, recovered: true, link: 'lost' }}
+        health={{ ...baseProps.health, audioBlocked: true, recovered: true, link: 'lost' }}
       />,
     );
-    expect(screen.getByTestId('control-link-detail')).toHaveTextContent(
-      'clocks keep running; the preview is not receiving',
-    );
+    const all = `recovered this panel’s last run · ${AUDIO_DETAIL} · ${LINK_DETAIL}`;
+    expect(screen.getByTestId('control-link-detail')).toHaveAttribute('title', all);
   });
 
   // `control-health-slot-height`: the detail caption reserves ONE row
@@ -136,6 +162,10 @@ describe('ControlStatusHeader', () => {
       expect(style.whiteSpace).toBe('nowrap');
       expect(style.overflow).toBe('hidden');
       expect(style.textOverflow).toBe('ellipsis');
+      // The track is reserved on the blank readings too, so the health row is
+      // the same height with a sentence under it as without one.
+      expect(px(style.minHeight)).toBeGreaterThan(0);
+      expect(detail.textContent).not.toBe('');
       // A clipped line still has to be readable: the down phases hand the whole
       // sentence to the tooltip; the blank rows have nothing to say.
       const detailed = link === 'unreachable' || link === 'reconnecting' || link === 'lost';
@@ -237,13 +267,77 @@ describe('ControlStatusHeader', () => {
     expect(window.getComputedStyle(grid.children[3]).gridColumn).not.toBe('1 / -1');
   });
 
+  // speedline-compact-fold-lane-dnf-1024: below the Speedline desk the setup
+  // strip took a row of its own under a header whose plates and recording line
+  // left ~60 px of empty column beside the two-row health block — the ~100 px
+  // that put `Lane n DNF` on the 768 px fold. The strip now takes that column.
+  describe('with a setup slot', () => {
+    const renderWithSetup = () =>
+      render(
+        <ControlStatusHeader
+          {...baseProps}
+          recording={{ active: false, detail: 'no athletes selected' }}
+          setup={<div data-testid="setup-probe" />}
+        />,
+      );
+    const headerGrid = () => screen.getByTestId('control-health').parentElement as HTMLElement;
+
+    it('renders the setup inside the header', () => {
+      renderWithSetup();
+      expect(
+        within(screen.getByTestId('control-status-header')).getByTestId('setup-probe'),
+      ).toBeInTheDocument();
+    });
+
+    it('lays plates + recording over the setup, beside a health block spanning both', () => {
+      renderWithSetup();
+      const grid = headerGrid();
+
+      expect(deskMediaValue(grid, 'grid-template-areas', MD_MEDIA)).toBe(
+        '"meta recording health" "setup setup health"',
+      );
+      expect(deskMediaValue(grid, 'grid-template-columns', MD_MEDIA)).toBe(
+        'auto minmax(0,1fr) auto',
+      );
+      // The health block's surplus height lands in the setup row, never
+      // between the plates and the strip.
+      expect(deskMediaValue(grid, 'grid-template-rows', MD_MEDIA)).toBe('auto 1fr');
+
+      const area = (testId: string) =>
+        window.getComputedStyle(screen.getByTestId(testId)).gridArea.split(' ')[0];
+      expect(area('control-recording')).toBe('recording');
+      expect(area('control-health')).toBe('health');
+      expect(
+        window.getComputedStyle(screen.getByTestId('setup-probe').parentElement as HTMLElement)
+          .gridArea,
+      ).toMatch(/^setup/);
+    });
+
+    it('stacks setup last below md, in the order the desk reads', () => {
+      renderWithSetup();
+      expect(deskMediaValue(headerGrid(), 'grid-template-areas', XS_MEDIA)).toBe(
+        '"meta" "recording" "health" "setup"',
+      );
+    });
+
+    it('leaves the three-column header alone without one', () => {
+      render(<ControlStatusHeader {...baseProps} recording={{ active: true }} />);
+      const grid = headerGrid();
+      expect(deskMediaValue(grid, 'grid-template-columns', MD_MEDIA)).toBe(
+        'minmax(0,1fr) auto minmax(0,1fr)',
+      );
+      expect(window.getComputedStyle(grid).gridTemplateAreas).toBe('none');
+      expect(() => deskMediaValue(grid, 'grid-template-areas', MD_MEDIA)).toThrow();
+    });
+  });
+
   // The live desk pass (driver `realtime-recovery`, link-chip leg) read the
   // health slot at two different heights across the five readings at 1440x900:
   // the row sits right on its wrap threshold there, so a longer alarm label
   // ("Connection lost" over "Connecting…") took the few px the AUDIO LOCKED
   // plate beside it needed and tipped it into a second line — pushing the whole
   // desk down a row exactly when the operator is reading an alarm (§4.12, and
-  // the responsive contract's above-the-fold promise). Reserving the widest
+  // the above-the-fold promise of design-system §9 "Responsive contract"). Reserving the widest
   // label makes the row's geometry a function of the viewport, not of the phase.
   // Only a real layout can see the height; what jsdom can hold is the reserve.
   it('reserves the widest link label, so the reading cannot reflow the health row', () => {

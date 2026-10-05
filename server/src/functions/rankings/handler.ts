@@ -27,24 +27,24 @@ import type { Athlete, Discipline, MatchRound, TimeRound } from 'core/types';
 import { isDiscipline, isGender, isMatchRound, isTimeRound } from 'core/types';
 
 /**
- * The standings result for a placement together with the round it actually came
- * from. A bracket placement can predate its own result (an athlete placed in the
- * final who never ran it), so the value falls back to qualification — and the
- * reported `source` follows the VALUE, not the placement: an overlay captions the
- * row with this round, and `SMALL FINAL 0:06.60` over a qualification time is
- * wrong provenance on air. With no result anywhere there is nothing to
- * attribute, so the placement round stands and the client renders an em dash.
+ * The standings result for a placement. A bracket placement can predate its own
+ * result (an athlete placed in the final who never ran it), so the value falls
+ * back to qualification, and `resultSource` names that borrowed round. `source`
+ * stays the PLACING round: it is what explains a slower result ranked above a
+ * faster one on air. Absent when the value is the placing round's own, or when
+ * there is no value at all (the client renders an em dash).
  */
 const resultWithProvenance = <T>(
   placement: StandingsSource,
   lookup: (round: StandingsSource) => T | undefined,
-): { value: T | undefined; source: StandingsSource } => {
-  const placed = placement !== 'qualification' ? lookup(placement) : undefined;
-  if (placed !== undefined) return { value: placed, source: placement };
+): { value: T | undefined; resultSource?: StandingsSource } => {
+  if (placement === 'qualification') return { value: lookup(placement) };
+  const placed = lookup(placement);
+  if (placed !== undefined) return { value: placed };
   const quali = lookup('qualification');
   return quali === undefined
-    ? { value: undefined, source: placement }
-    : { value: quali, source: 'qualification' };
+    ? { value: undefined }
+    : { value: quali, resultSource: 'qualification' };
 };
 
 /**
@@ -58,8 +58,8 @@ const resultWithProvenance = <T>(
  * The pseudo-round `overall` (rule G3) is not a stored round: it merges the
  * bracket outcomes with the qualification ranking into final overall standings
  * (core/standings.ts). Each row carries the athlete's best result from its
- * placement's `source` round, falling back to qualification — a resultless
- * placement is still emitted (the client renders "—").
+ * placing `source` round, falling back to qualification (`resultSource`) — a
+ * resultless placement is still emitted (the client renders "—").
  *
  * The pseudo-round `combined` (rule G2) is the cross-discipline layer over the
  * same standings: (speed rank + freestyle rank) / 2 per gender, intersection
@@ -168,14 +168,15 @@ export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = a
           placements.flatMap((p) => {
             const a = byId.get(p.athleteId);
             if (!a) return [];
-            const { value: score, source } = resultWithProvenance(p.source, (r) =>
+            const { value: score, resultSource } = resultWithProvenance(p.source, (r) =>
               scoreOf(p.athleteId, r),
             );
             return [
               {
                 athlete: audience(a),
                 rank: p.rank,
-                source,
+                source: p.source,
+                ...(resultSource ? { resultSource } : {}),
                 ...(p.provisional ? { provisional: true } : {}),
                 ...(score
                   ? { overall: score.overall, score, ...(score.dnf === true ? { dnf: true } : {}) }
@@ -211,14 +212,15 @@ export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = a
         placements.flatMap((p) => {
           const a = byId.get(p.athleteId);
           if (!a) return [];
-          const { value: bestTimeMs, source } = resultWithProvenance(p.source, (r) =>
+          const { value: bestTimeMs, resultSource } = resultWithProvenance(p.source, (r) =>
             bestIn(p.athleteId, r),
           );
           return [
             {
               athlete: audience(a),
               rank: p.rank,
-              source,
+              source: p.source,
+              ...(resultSource ? { resultSource } : {}),
               ...(p.provisional ? { provisional: true } : {}),
               ...(bestTimeMs !== undefined ? { bestTimeMs } : {}),
             },

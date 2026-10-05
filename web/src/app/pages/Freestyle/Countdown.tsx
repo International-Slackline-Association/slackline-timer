@@ -16,8 +16,14 @@ import {
 import { countdownSkin, type CountdownSize } from 'app/util/countdownSkin';
 import { remainingFrom } from 'app/util/time';
 import { Plate } from 'app/pages/Stream/Plate';
+import {
+  CLOCK_PLATE_PX,
+  CLOCK_PLATE_WIDTH,
+  laneEdge,
+  type LaneSide,
+} from 'app/pages/Stream/TimerLaneBlock';
 import { colors, fonts, overlayTextShadow, radii } from 'app/theme/tokens';
-import { refVh, refVw } from 'app/util/overlayScale';
+import { refVh } from 'app/util/overlayScale';
 
 // Size variants of the hero numeral, mirroring the Speedline Stopwatch.
 // `projector` fills a projector/broadcast screen via clamp/vw (DESIGN_SYSTEM §4)
@@ -65,14 +71,6 @@ export const COUNTDOWN_SIZES = {
   },
   plate: { numeral: refVh(60), name: refVh(32) },
 } as const;
-
-// The plate variant's white time plate — a FIXED-width scoreboard box, the
-// Speedline Stopwatch twin (its plate is 320 reference px for the 7-glyph
-// `M:SS.CC`). It must NOT track the athlete-name width — a name-sized clock box
-// is unusable. Tuned narrower than Speedline's 320 because the countdown is a
-// 5-glyph `mm:ss`, so this width gives the same numeral size, plate height and
-// left/right breathing room the Speedline plate has around its longer time.
-const PLATE_WIDTH = refVw(256);
 
 /**
  * The on-deck marker (ADR 0037): a small amber "get set" arrow before a name,
@@ -170,6 +168,9 @@ interface CommonProps {
    * state word carries the same distinction redundantly.
    */
   held?: boolean;
+  /** `plate` only: the lane edge the time hugs inside its plate, mirroring the
+   *  name strip above it. */
+  plateAlign?: LaneSide;
 }
 
 /**
@@ -244,6 +245,7 @@ export const Countdown: React.FC<Props> = (props) => {
     reserveBreakRows = false,
     reserveCaptionRow = false,
     held = false,
+    plateAlign = 'center',
   } = props;
   // The mode-specific inputs, narrowed ONCE: hooks can't be conditional, so
   // each effect below takes the plain (possibly undefined) value as a dep.
@@ -365,7 +367,7 @@ export const Countdown: React.FC<Props> = (props) => {
 
   // The main clock slot's chrome — the name/break/caption rows stay outside it
   // on the bare ground. The plate variant wraps the TIME in the solid white
-  // broadcast plate; the framed grounds wrap it in the §6 state frame, stroke
+  // broadcast plate — the lane family's fixed width, never the name's; the framed grounds wrap it in the §6 state frame, stroke
   // ONLY: any fill lightens the ground exactly behind the digits and eats the
   // contrast the frame exists to protect.
   const boxed = (clock: React.ReactNode) => {
@@ -374,7 +376,13 @@ export const Countdown: React.FC<Props> = (props) => {
         <Plate
           bordered={false}
           fill={colors.overlay.plateFilled}
-          sx={{ width: PLATE_WIDTH, display: 'flex', justifyContent: 'center' }}
+          data-testid="countdown-plate"
+          sx={{
+            width: CLOCK_PLATE_WIDTH,
+            px: CLOCK_PLATE_PX,
+            display: 'flex',
+            justifyContent: laneEdge(plateAlign),
+          }}
         >
           {clock}
         </Plate>

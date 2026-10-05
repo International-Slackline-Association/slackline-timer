@@ -1,12 +1,12 @@
 import { useLocation, useParams } from 'react-router-dom';
 
-import { Stack, Typography } from '@mui/material';
+import { Stack } from '@mui/material';
 
 import { useAthletes } from 'app/api/athletes';
 import { useMatches } from 'app/api/matches';
 import { type LiveSelection } from 'app/hooks/useWebSocket';
 import { isGender, isMatchRound, type Discipline, type Gender, type MatchRound } from 'app/types';
-import { colors, fonts } from 'app/theme/tokens';
+import { OVERLAY_WINNER_GAP_PX, OVERLAY_WINNER_WORD_PX } from 'app/theme/tokens';
 import { refVh } from 'app/util/overlayScale';
 import { Competitor } from 'app/pages/Stream/Competitor';
 import { pickMatch } from 'app/pages/Stream/VsOverlay';
@@ -17,7 +17,8 @@ import { streamStatusFromQueries } from 'app/pages/Stream/streamStatus';
  * `/stream/winner/:round/:gender?compId=&token=&match=` — the match-result
  * lower-third, sibling of VS/SVO. It shows the **decided** match's winner from
  * control-board data: one large LAAX portrait card (the shared `AthleteCard`,
- * winner-styled `race.go` edge) under a WINNER banner.
+ * winner-styled `race.go` edge) under the card's own WINNER tag — the same
+ * element the VS lower-third paints, so the word never changes size on a cut.
  *
  * The winner is `Match.winnerId` — the single resolved output of both the
  * single-run path (ADR 0013) and best-of-3 (ADR 0017: `winnerId` is PUT only
@@ -87,24 +88,11 @@ const WinnerBody = ({
 
   if (status !== 'ready' || match == null || winner == null) return null;
 
+  // The tag is absolutely positioned above the card, so the word + its gap are
+  // reserved in flow — the centred block keeps the word inside the title-safe inset.
   return (
-    <Stack spacing={3} sx={{ alignItems: 'center' }}>
-      <Typography
-        sx={{
-          fontFamily: fonts.display,
-          // 700, not 800: Oswald's heaviest bundled face is 700, so an 800
-          // request just resolves back to it (see `fonts.display`).
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          fontSize: refVh(40),
-          color: colors.race.go,
-          lineHeight: 1,
-        }}
-      >
-        Winner
-      </Typography>
-      <Competitor athlete={winner} isWinner />
+    <Stack sx={{ alignItems: 'center', pt: refVh(OVERLAY_WINNER_WORD_PX + OVERLAY_WINNER_GAP_PX) }}>
+      <Competitor athlete={winner} isWinner winnerTag />
     </Stack>
   );
 };

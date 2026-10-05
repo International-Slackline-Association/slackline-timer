@@ -29,6 +29,7 @@ type SpeedlineLock =
   | { kind: 'offline' }
   | { kind: 'lights' }
   | { kind: 'racing' }
+  | { kind: 'goFired' }
   | { kind: 'aborted' }
   | { kind: 'spent' }
   | { kind: 'noSequence' }
@@ -44,6 +45,9 @@ const reason = (lock: SpeedlineLock): string => {
       return 'locked while the start sequence runs';
     case 'racing':
       return 'locked while a lane runs';
+    case 'goFired':
+      // Two lines in the 184 px start strip, where the race pair prints it.
+      return 'GO has fired — flag false starts per lane';
     case 'aborted':
       return 'start aborted — Reset to re-arm';
     case 'spent':
@@ -95,6 +99,11 @@ export interface SpeedlineLocks {
    * would attribute the running clocks to the wrong athletes at stop — and a
    * control the race locks owes the same why-line as the rest (§4.7). */
   swap: string | null;
+  /** The rail's Void run, graded exactly like `swap`: a void under a live run
+   * would leave the still-running lane's Stop to record a Time for a run
+   * already voided — or, made to reset the clocks, a second Reset that skips
+   * Reset's confirm. */
+  void: string | null;
   /** Per-lane undo of a mis-pressed Stop (`speedline-resume-stopped-lane`).
    * Graded by the run, like `stop` and `swap` — a dead link may not take it
    * either: the athlete it un-freezes is still on the line. */
@@ -135,10 +144,11 @@ export const speedlineLocks = ({
     2: line(isRunning(2) ? null : { kind: 'laneIdle', lane: 2 }),
   };
 
-  // Precedence is the operator's reading order: the sequence before the lanes,
-  // so a board mid-countdown never blames a clock that has not left yet.
+  // A running lane outranks the phase: no clock leaves before GO, and the GO
+  // light still holds a positive phase for a second after the clocks ignite —
+  // a press there is past GO, so it must not read (or Abort) as the lights.
   const live: SpeedlineLock | null =
-    signalPhase > 0 ? { kind: 'lights' } : isRunning(1) || isRunning(2) ? { kind: 'racing' } : null;
+    isRunning(1) || isRunning(2) ? { kind: 'racing' } : signalPhase > 0 ? { kind: 'lights' } : null;
   // Graded by the run alone: the swap sends nothing the relay owes an answer to
   // (the next selection broadcast carries it), so a dead link may no more take
   // it than it may take a lane's Stop — and an abort leaves it live, which is
@@ -158,11 +168,23 @@ export const speedlineLocks = ({
 
   if (!connected) {
     const offline = line({ kind: 'offline' });
-    return { start: offline, abort: offline, reset: offline, stop, swap, resume };
+    return { start: offline, abort: offline, reset: offline, stop, swap, void: swap, resume };
   }
 
   if (live !== null) {
-    return { start: line(live), abort: null, reset: line(live), stop, swap, resume };
+    return {
+      start: line(live),
+      // Abort stops the lights; past GO a jump never halts the run (rule S4).
+      abort: live.kind === 'racing' ? line({ kind: 'goFired' }) : null,
+      // The confirm guards a live Reset (`resetNeedsConfirm`), not a lock: a
+      // locked Reset leaves Stop-both-lanes, which POSTs Times, as the only way
+      // out of a run gone wrong.
+      reset: null,
+      stop,
+      swap,
+      void: swap,
+      resume,
+    };
   }
 
   return {
@@ -175,6 +197,7 @@ export const speedlineLocks = ({
     reset: null,
     stop,
     swap,
+    void: swap,
     resume,
   };
 };

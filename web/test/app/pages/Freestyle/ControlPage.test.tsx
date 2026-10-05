@@ -63,13 +63,18 @@ vi.mock('app/hooks/useGamepads', () => ({
 }));
 vi.mock('app/components/GamepadPicker', () => ({ GamepadPicker: () => null }));
 vi.mock('app/components/BuzzerMappingDialog', () => ({ BuzzerMappingDialog: () => null }));
-vi.mock('app/hooks/useSignalAudio', () => ({
-  useSignalAudio: () => ({
-    audioElement: null,
-    playAudio: vi.fn(),
-    audioBlocked: false,
-  }),
-}));
+vi.mock('app/hooks/useSignalAudio', async () => {
+  const { createElement } = await import('react');
+  // The real hook's zero-height holder, so the page's placement of it is testable.
+  const audioElement = createElement('div', { 'data-testid': 'signal-audio' });
+  return {
+    useSignalAudio: () => ({
+      audioElement,
+      playAudio: vi.fn(),
+      audioBlocked: false,
+    }),
+  };
+});
 vi.mock('app/state/selectedCompetition', () => ({
   useSelectedCompetition: () => ({ compId: 'c1' }),
 }));
@@ -230,6 +235,14 @@ const laneButton = (verb: string, lane: 1 | 2 = 1) =>
   screen.getByRole('button', { name: `${verb} Athlete ${lane}` }) as HTMLButtonElement;
 
 const warmupButton = (name: string) => screen.getByRole('button', { name }) as HTMLButtonElement;
+
+/** Type a judged component into a slot's panel — Save waits for a draft. */
+const typeScore = (slot: 1 | 2, difficulty = 20): void => {
+  const panel = screen.getByRole('form', { name: `Score Athlete ${slot}` });
+  fireEvent.change(within(panel).getByLabelText('Difficulty'), {
+    target: { value: String(difficulty) },
+  });
+};
 
 // ---------------------------------------------------------------------------
 
@@ -566,13 +579,21 @@ describe.each(LAYOUTS)(
         }),
       );
 
-      // The rail offers the re-arm only once both athlete slots are saved.
+      // The rail offers the re-arm only once both athlete slots are saved. Two
+      // saves over pristine clocks step the board Run -> Selection without
+      // passing Score, so the hand-picked Score tab holds and the rail stays in
+      // view.
       reach('Score');
+      typeScore(1);
       fireEvent.click(screen.getByRole('button', { name: 'Save Athlete 1' }));
+      typeScore(2, 18);
       fireEvent.click(screen.getByRole('button', { name: 'Save Athlete 2' }));
       const resetLanes = await screen.findByRole('button', {
         name: /reset lanes for the next match/i,
       });
+      if (!desk) {
+        expect(screen.getByRole('tab', { name: 'Score' })).toHaveAttribute('aria-selected', 'true');
+      }
 
       // Both lanes are pristine, so the press asks nothing and fires straight.
       fireEvent.click(resetLanes);
@@ -581,6 +602,145 @@ describe.each(LAYOUTS)(
         { type: 'reset_countdown', timerId: 1, data: { remainingMs: 150_000 } },
         { type: 'reset_countdown', timerId: 2, data: { remainingMs: 90_000 } },
       ]);
+    });
+  },
+);
+
+// A blank panel posted a judged 0.00, and in a battle that second Score was
+// enough to derive a winner and PUT the Match. Save waits for a draft, so a
+// stray Enter in the blank panel leaves the data plane alone.
+describe.each(LAYOUTS)(
+  'FreestyleControlPage stray Enter on a blank panel — $branch',
+  ({ width, desk }) => {
+    const reach = reacher(desk);
+    beforeEach(() => pinLayoutWidth(width));
+
+    it('writes no Score and no Match for Athlete 2 once Athlete 1 is saved', async () => {
+      const match = {
+        matchId: 'm1',
+        compId: 'c1',
+        discipline: 'freestyle',
+        round: 'quarter',
+        gender: 'male',
+        position: 1,
+        athlete1Id: 'a1',
+        athlete2Id: 'a2',
+      };
+      apiFetchMock.mockImplementation((path: string, opts?: { method?: string }) =>
+        Promise.resolve(
+          (opts?.method ?? 'GET') !== 'GET'
+            ? { overall: 28, dnf: false }
+            : path.endsWith('/athletes')
+              ? ATHLETES
+              : path.includes('/matches')
+                ? [match]
+                : [],
+        ),
+      );
+      window.localStorage.setItem('speedline.freestyleMode.c1', 'battle');
+      const { deliver } = renderPage();
+      await screen.findAllByRole('option', { name: 'Roe' });
+      deliver(
+        peerSelection({
+          round: 'quarter',
+          freestyleMode: 'battle',
+          matchId: 'm1',
+          athlete1Id: 'a1',
+          athlete2Id: 'a2',
+        }),
+      );
+
+      reach('Score');
+      typeScore(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Save Athlete 1' }));
+      await screen.findByText('SAVED 28.00');
+      expect(writeCalls()).toHaveLength(1);
+
+      fireEvent.submit(screen.getByRole('form', { name: 'Score Athlete 2' }));
+
+      await act(async () => {});
+      expect(writeCalls()).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'Save Athlete 2' })).toBeDisabled();
+    });
+  },
+);
+
+// A battle records both athletes, so the compact board steps to Run only once
+// both are picked: a lone Athlete 1 is half a selection, and leaving the picker
+// on it would send the operator hunting back for Athlete 2.
+describe('FreestyleControlPage battle selection completeness (compact)', () => {
+  beforeEach(() => pinLayoutWidth(COMPACT_PX, COMPACT_HEIGHT_PX));
+
+  const selectedTab = () =>
+    screen.getAllByRole('tab').find((tab) => tab.getAttribute('aria-selected') === 'true')
+      ?.textContent;
+  const recordingLine = () => screen.getByTestId('control-recording').textContent ?? '';
+  const pick = (slot: 1 | 2, athleteId: string) =>
+    fireEvent.change(
+      within(screen.getByTestId('selection-column')).getByLabelText(
+        new RegExp(`^Athlete ${slot}$`, 'i'),
+      ),
+      { target: { value: athleteId } },
+    );
+
+  it('holds Selection on Athlete 1 alone and steps to Run on Athlete 2', async () => {
+    window.localStorage.setItem('speedline.freestyleMode.c1', 'battle');
+    renderPage();
+    expect(selectedTab()).toBe('Selection');
+    await screen.findAllByRole('option', { name: 'Roe' });
+    expect(recordingLine()).toMatch(/no athletes selected/);
+
+    pick(1, 'a1');
+    expect(selectedTab()).toBe('Selection');
+    // The plate names a different fact — whether anyone is recorded at all.
+    expect(recordingLine()).not.toMatch(/no athletes selected/);
+
+    pick(2, 'a2');
+    await waitFor(() => expect(selectedTab()).toBe('Run'));
+  });
+});
+
+// Quali's loop between two athletes (ADR 0036): the run is spent, the score is
+// saved, the rail re-arms lane 1 alone, and the board hands back to Selection
+// until the next athlete is picked.
+describe.each(LAYOUTS)(
+  'FreestyleControlPage quali Save → Reset → pick loop — $branch',
+  ({ width, desk }) => {
+    const reach = reacher(desk);
+    beforeEach(() => pinLayoutWidth(width));
+
+    /** The step the board marks current: the desk's `aria-current` caption, or
+     * the tab the compact board opened. */
+    const currentStep = (): string | null =>
+      desk
+        ? (document.querySelector('section[aria-current="step"]')?.getAttribute('aria-label') ??
+          null)
+        : (screen.getAllByRole('tab').find((tab) => tab.getAttribute('aria-selected') === 'true')
+            ?.textContent ?? null);
+
+    it('re-arms lane 1 from the Score rail and lands on Selection', async () => {
+      const { deliver } = renderPage();
+      deliver(peerSelection({ round: 'qualification', freestyleMode: 'quali', athlete1Id: 'a1' }));
+      deliver(peerStart(1, 120_000));
+      deliver(peerStop(1, 0));
+      expect(currentStep()).toBe(desk ? 'Score entry' : 'Score');
+
+      reach('Score');
+      typeScore(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Save Athlete 1' }));
+      const resetLane = await screen.findByRole('button', {
+        name: /reset lane for the next athlete/i,
+      });
+      // The spent lane has nothing to lose, so the press asks nothing.
+      fireEvent.click(resetLane);
+
+      expect(resetSends()).toEqual([
+        { type: 'reset_countdown', timerId: 1, data: { remainingMs: 120_000 } },
+      ]);
+      expect(currentStep()).toBe('Selection');
+
+      deliver(peerSelection({ round: 'qualification', freestyleMode: 'quali', athlete1Id: 'a2' }));
+      await waitFor(() => expect(currentStep()).toBe('Run'));
     });
   },
 );
@@ -676,6 +836,20 @@ describe('FreestyleControlPage desk height gate', () => {
 // clock's held-run reserve is a QUALI row (ADR 0036 — battle never breaks)
 // that only the desk owes §4.12's no-shift promise for.
 describe('FreestyleControlPage fold budget', () => {
+  it('mounts the audio holder once, outside the spaced page stack', () => {
+    for (const [w, h] of [
+      [DESK_MIN_PX, undefined],
+      [COMPACT_PX, COMPACT_HEIGHT_PX],
+    ] as const) {
+      pinLayoutWidth(w, h);
+      const page = renderPage();
+      const stack = screen.getByTestId('control-status-header').parentElement!;
+      expect(screen.getAllByTestId('signal-audio')).toHaveLength(1);
+      expect(screen.getByTestId('signal-audio').parentElement).not.toBe(stack);
+      page.unmount();
+    }
+  });
+
   const laneRow = (numeral: string) =>
     within(screen.getByTestId('lane-card-1')).getAllByText(numeral).length;
 

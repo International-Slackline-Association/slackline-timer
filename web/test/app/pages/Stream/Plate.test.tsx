@@ -53,4 +53,29 @@ describe('Plate', () => {
     expect(style.borderTopWidth).toBe('6px');
     expect(style.boxShadow).toBe('none');
   });
+
+  it('recolors the edge stop-red with the outset ring for a decided loser', () => {
+    render(<Plate data-testid="p" loser strokeWidth="9px" />);
+    const style = window.getComputedStyle(screen.getByTestId('p'));
+    expect(style.borderTopColor).toBe(rgb(colors.race.stop));
+    expect(style.boxShadow).toContain('9px');
+    expect(style.boxShadow).toContain(colors.race.stop.toLowerCase());
+    expect(style.boxShadow).not.toContain('inset');
+  });
+
+  it('applies the same ring rule to a loser as to a winner', () => {
+    render(
+      <>
+        <Plate data-testid="flat" loser ring="flat" strokeWidth="6px" />
+        <Plate data-testid="inset" loser ring="inset" strokeWidth="5px" />
+      </>,
+    );
+    const flat = window.getComputedStyle(screen.getByTestId('flat'));
+    expect(flat.borderTopColor).toBe(rgb(colors.race.stop));
+    expect(flat.boxShadow).toBe('none');
+    const inset = window.getComputedStyle(screen.getByTestId('inset'));
+    expect(inset.borderTopColor).toBe(rgb(colors.overlay.stroke));
+    expect(inset.boxShadow).toContain('inset');
+    expect(inset.boxShadow).toContain(colors.race.stop.toLowerCase());
+  });
 });

@@ -8,6 +8,7 @@
  * truth instead of three drifting copies.
  */
 
+import { colors } from 'app/theme/tokens';
 import { type Discipline } from 'app/types';
 import { DNF_LABEL, formatMs } from 'app/util/time';
 
@@ -29,6 +30,15 @@ export const formatScore = (v: number): string => v.toFixed(2);
 /** Freestyle result label: DNF wins over any stored value; otherwise the judged overall to 2 decimals. */
 export const freestyleResultLabel = (score: { dnf?: boolean; overall?: number | null }): string =>
   score.dnf ? DNF_LABEL : formatScore(score.overall ?? 0);
+
+/**
+ * The ink for a displayed result on a white overlay plate: a DNF is a race-state
+ * word (design-system §2), so it takes `stopDim` — the stop tier that clears 4.5:1
+ * on white — and every finite result keeps the caller's `fallback`. Not for a
+ * dark ground (the near-black TOTAL box), where stopDim fails.
+ */
+export const resultInk = (result: string, fallback: string): string =>
+  result === DNF_LABEL ? colors.race.stopDim : fallback;
 
 /**
  * The result label for one athlete on the given plane: the freestyle judged

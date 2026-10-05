@@ -47,6 +47,7 @@ describe('DeskSection', () => {
     // offset whichever step the board is on.
     expect(ruleFill('Run')).toBe(UNPAINTED);
     expect(ruleFill('Setup')).not.toBe(UNPAINTED);
+    expect(window.getComputedStyle(section('Run').getByTestId('step-rule')).width).toBe('4px');
   });
 
   // freestyle-compact-run-tab-fold: the tab layout shows ONE section and names

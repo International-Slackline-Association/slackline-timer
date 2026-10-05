@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import { type FormEvent } from 'react';
+import { useId, type FormEvent } from 'react';
 
 import { BoardConfirmDialog } from 'app/components/BoardConfirmDialog';
 import { LockedControl } from 'app/components/LockedControl';
@@ -24,7 +24,7 @@ import { blurOnWheel } from 'app/components/SecondsField';
 import { WhyLine } from 'app/components/WhyLine';
 import { useLapsingConfirm } from 'app/hooks/useLapsingConfirm';
 import type { AthleteSlot, ScoreEntry } from 'app/hooks/useScoreRecorder';
-import { liveCaption } from 'app/theme/tokens';
+import { boardGeometry, fieldWidths, liveCaption } from 'app/theme/tokens';
 import {
   BATTLE_ONLY_SCORE_COMPONENTS,
   SCORE_COMPONENT_MAX,
@@ -32,13 +32,15 @@ import {
   type Athlete,
 } from 'app/types';
 import { type LaneState } from 'app/util/battleMachine';
+import { recordedLanes } from 'app/util/boardStep';
 import { athleteControlName } from 'app/util/controlName';
-import { resetBothLock } from 'app/util/lockReason';
+import { resetLanesLock } from 'app/util/lockReason';
 import { laneHoldsPhrase, laneResetNeedsConfirm } from 'app/util/resetGuard';
 import { formatScore } from 'app/util/resultLabel';
 import { scoreCorrectionHref } from 'app/util/scoresLink';
 import {
   entryDraft,
+  hasDraft,
   isScoreBoundElsewhere,
   overrideDraft,
   scoreEntryErrors,
@@ -81,32 +83,55 @@ const COMPONENT_GRID_SX = {
   gap: 0.75,
 } as const;
 
-/**
- * The reserved helper line under every judged field, at its own leading rather
- * than MUI's 1.66 body default. Three rows of it per panel and two panels per
- * battle rail is ~36 px between Athlete 2's Save and the fold, and the line
- * carries three words of error (`max 40`) — never a paragraph
- * (`freestyle-board-fold-budget`). Reserved as ever: an error appearing must
- * not shove Save out from under the hand (§4.12).
- */
-const COMPONENT_FIELD_SX = {
-  '& .MuiFormHelperText-root': { marginTop: '2px', lineHeight: 1.25 },
-} as const;
-
 /** Holds the status slot's height across all four states, so a save landing
  * never shifts the Save button out from under the operator's hand (§4.12):
- * the chip's row plus one caption line, the tallest of the four. Its contents
+ * the chip's row plus one caption line, the tallest of the four. It is also
+ * where a field's error is spelled out (`Difficulty: Max 40`): the fields
+ * reserve no helper line of their own, which on the 360 px rail was 17 px a
+ * row, six rows a battle, and the difference between the rail's Reset and the
+ * 900 px fold (`ftt-followup-freestyle-score-rail-foot-and-move-2`). Its contents
  * ride ONE wrapping row, so the `Move score to …` offer shares the chip's line
  * wherever the panel is wide enough — the compact Score tab, where a row of
  * its own is what pushed Save ~40 px under the fold
  * (`fsux-score-rail-move-row-fold`) — and drops under it on the 360 px rail. */
-const STATUS_SLOT_SX = { minHeight: 52, alignItems: 'center', alignContent: 'center' } as const;
+const STATUS_SLOT_SX = {
+  minHeight: boardGeometry.freestyle.statusSlot,
+  alignItems: 'center',
+  alignContent: 'center',
+} as const;
 
-/** The rail's whole-board re-arm, named once: the button that raises the
- * question, the question's own title, the button that carries it out, and how
- * the handset readout names it (§4.8/§4.14) — four places the operator reads
- * one control. */
-const RESET_LANES = 'Reset lanes';
+/**
+ * The panel width at which the rail foot (winner line + Reset lanes) stops
+ * stacking under the athlete panels and stands beside them as a column: two
+ * panels at a readable ~320 px plus the column. Beside the panels Reset sits
+ * level with Save, which is what keeps it above the fold on the compact Score
+ * tab (1280x720, 1024x768); the desk's 360 px rail never reaches the width and
+ * stacks. Keyed to the panel's width, not the viewport's — the rail is
+ * narrowest on the widest desk.
+ */
+const SIDE_FOOT = '@container (min-width: 920px)';
+
+const FOOT_SX = {
+  flex: '1 1 100%',
+  [SIDE_FOOT]: { flex: `0 0 ${boardGeometry.freestyle.footColumn}px` },
+} as const;
+
+/** The rail's re-arm, named once per mode: the button that raises the
+ * question, the question's own title, the button that carries it out, and
+ * what the press does — four places the operator reads one control. Quali
+ * records one athlete at a time, so its rail re-arms one lane (ADR 0036). */
+const RAIL_RESET = {
+  battle: {
+    verb: 'Reset lanes',
+    label: 'Reset lanes for the next match',
+    effect: 're-arms both lanes for the next match. The saved scores are not affected.',
+  },
+  quali: {
+    verb: 'Reset lane',
+    label: 'Reset lane for the next athlete',
+    effect: 're-arms the lane for the next athlete. The saved score is not affected.',
+  },
+} as const;
 /** Its safe answer — the lane cards' own word, for the one question that
  * stands over both of them. */
 const KEEP_TIMING = 'Keep timing';
@@ -134,10 +159,10 @@ export const FreestyleScoreControls = ({
   athletes: Athlete[];
   mode: 'quali' | 'battle';
   /**
-   * The rail-foot next-match action (§4.9), offered once both athlete slots are
-   * saved: re-arm both lanes for the next pair without hunting for the two
+   * The rail-foot next-match / next-athlete action (§4.9), offered once every
+   * slot the mode records is saved: re-arm those lanes without hunting for the
    * per-lane Resets. It answers to the same two rules they do — `laneLocks`
-   * via `resetBothLock` for whether it may fire at all, `laneResetNeedsConfirm`
+   * via `resetLanesLock` for whether it may fire at all, `laneResetNeedsConfirm`
    * for what it has to ask first — so the rail and the cards cannot diverge.
    */
   resetLanes?: {
@@ -164,16 +189,20 @@ export const FreestyleScoreControls = ({
     derivedWinner,
   } = scoring;
 
+  const recorded = recordedLanes(mode);
+  const railReset = RAIL_RESET[mode];
+  const errorBaseId = useId();
+
   // Lanes a re-arm would cost a turn (the per-lane rule) — the question names
-  // them, and an empty list is the case that needs no question at all: two
-  // spent lanes, the way every battle ends, re-arm in one press.
+  // them, and an empty list is the case that needs no question at all: spent
+  // lanes, the way every match ends, re-arm in one press.
   const holdingLanes = resetLanes
-    ? ([1, 2] as const).filter((lane) => laneResetNeedsConfirm(resetLanes.lanes[lane]))
+    ? recorded.filter((lane) => laneResetNeedsConfirm(resetLanes.lanes[lane]))
     : [];
 
   // The interlock behind the press (§4.7), through the one map: the rail cannot
-  // stay open on a board that has closed the two Resets it stands in for.
-  const resetLock = resetLanes ? resetBothLock(resetLanes) : null;
+  // stay open on a board that has closed the Resets it stands in for.
+  const resetLock = resetLanes ? resetLanesLock(resetLanes, recorded) : null;
 
   // Two things retire this question (`useLapsingConfirm`): a peer re-arming the
   // lane it names, which empties the list it would restate itself over, and a
@@ -199,24 +228,32 @@ export const FreestyleScoreControls = ({
       ? COMPONENTS.filter((c) => !battleOnly.includes(c.field))
       : COMPONENTS;
 
-  /** The always-rendered save state of one athlete slot (§4.9). */
-  const statusSlot = (slot: AthleteSlot, entry: SlotEntry) => {
+  /** The always-rendered save state of one athlete slot (§4.9). `errors` is
+   * why Save is blocked, spelled out here rather than under the fields
+   * (`STATUS_SLOT_SX`). */
+  const statusSlot = (slot: AthleteSlot, entry: SlotEntry, errors: string[]) => {
     const record = records[slot];
     // The slot's row is filed under someone else: the panel reopened under a
     // new athlete and the save stayed where it was POSTed.
     const boundElsewhere = isScoreBoundElsewhere(record, selected[slot]);
+    const rowAthlete = boundElsewhere && record ? record.input.athleteId : selected[slot];
+    // Only onto a blank panel: the move re-locks it on the moved values, so a
+    // draft typed for the new athlete would be discarded by the press.
+    const offerMove = boundElsewhere && !hasDraft(entry);
+
+    const savedChip = (result: ScoreResult) => (
+      <Chip
+        size="small"
+        label={`${savedLabel(result)}${boundElsewhere ? ` · ${athleteName(rowAthlete)}` : ''}`}
+        sx={{ bgcolor: 'success.main', color: 'success.contrastText', fontWeight: 600 }}
+      />
+    );
 
     /** A row that IS on the server: what it recorded, and what to do about it. */
     const savedRow = (result: ScoreResult) => (
       <>
-        <Chip
-          size="small"
-          label={`${savedLabel(result)}${
-            boundElsewhere && record ? ` · ${athleteName(record.input.athleteId)}` : ''
-          }`}
-          sx={{ bgcolor: 'success.main', color: 'success.contrastText', fontWeight: 600 }}
-        />
-        {boundElsewhere ? (
+        {savedChip(result)}
+        {offerMove ? (
           /* The recovery for a score entered against the wrong person — one
              tap, and explicit: a re-pick may be exploratory, so nothing moves
              until the operator says to (the lane card's own rule). It takes
@@ -232,14 +269,14 @@ export const FreestyleScoreControls = ({
             Move score to {athleteName(selected[slot])}
           </RaceButton>
         ) : (
-          /* The one correction path (manual §6), landing on the row it
+          /* The one correction path (manual §6), landing on the row the chip
              names (`scoresLink`) rather than the whole table. A new tab, not
              a route: the board is a live timing surface and navigating away
              would drop its socket mid-match. */
           <Typography variant="caption" sx={{ ...liveCaption, color: 'text.secondary' }}>
             locked — correct it on the{' '}
             <Link
-              href={scoreCorrectionHref(round, selected[slot])}
+              href={scoreCorrectionHref(round, rowAthlete)}
               target="_blank"
               rel="noopener"
               {...blurOnClickProps<HTMLAnchorElement>()}
@@ -254,6 +291,23 @@ export const FreestyleScoreControls = ({
     switch (entry.status) {
       case 'empty':
       case 'editing':
+        // A blocked Save says why before anything else. The chip of a row
+        // filed elsewhere stays beside it; its correction line returns once
+        // the value is fixed.
+        if (errors.length > 0) {
+          return (
+            <>
+              {record && boundElsewhere && savedChip(record.result)}
+              <Typography
+                id={`${errorBaseId}-${slot}`}
+                variant="caption"
+                sx={{ ...liveCaption, color: 'error.dark' }}
+              >
+                {errors.join(' · ')}
+              </Typography>
+            </>
+          );
+        }
         // The panel is free for the next athlete, but a row it already wrote
         // is not: it keeps its own status here until it is moved, rather than
         // reading `not entered` over a save that exists.
@@ -310,7 +364,22 @@ export const FreestyleScoreControls = ({
     // match via the overall.
     const boundErrors = scoreEntryErrors(round, fields, override);
     const hasBoundError = Object.keys(boundErrors).length > 0;
-    const canSave = Boolean(selected[slot]) && !locked && !pending && !hasBoundError;
+    // In tab order, each named the way its field is labelled.
+    const errorLines = [...visibleComponents, { field: 'overall' as const, label: 'Overall' }]
+      .filter(({ field }) => boundErrors[field])
+      .map(({ field, label }) => `${label}: ${boundErrors[field]}`);
+    const describedBy = (error: string | undefined) =>
+      error ? { 'aria-describedby': `${errorBaseId}-${slot}` } : {};
+    // An untouched panel posts a judged 0.00, so a stray Enter would score an
+    // athlete who never ran and could flip the match: Save waits for a number
+    // (an explicit 0 goes in as an Overall override; no run is a DNF). A failed
+    // POST carries its own result, which may be a DNF over an untouched draft.
+    const canSave =
+      Boolean(selected[slot]) &&
+      !locked &&
+      !pending &&
+      !hasBoundError &&
+      (failed || hasDraft(entry));
     // A failed DNF retries as a DNF: the entry carries what the POST was for,
     // so the retry re-posts that rather than silently turning it into a
     // judged 0.00. Editing a field reopens the panel and Save comes back.
@@ -343,7 +412,7 @@ export const FreestyleScoreControls = ({
         // `subtitle2` as an `<h6>` (`ControlPage`'s desk JSDoc).
         aria-label={athleteControlName('Score', slot)}
         spacing={0.75}
-        sx={{ flex: '1 1 220px', minWidth: 220 }}
+        sx={{ flex: `1 1 ${fieldWidths.wide}px`, minWidth: fieldWidths.wide }}
       >
         {/* One line, whatever the name (§4.12 — the lane card's identity row
             takes the same rule): a two-line title in the 360 px rail pushed
@@ -376,16 +445,13 @@ export const FreestyleScoreControls = ({
                 value={fields[field]}
                 onChange={(e) => setField(slot, field, +e.target.value)}
                 error={Boolean(fieldError)}
-                // Always rendered: an error appearing must not shove the Save
-                // button out from under the operator's hand (§4.12).
-                helperText={fieldError ?? ' '}
-                sx={COMPONENT_FIELD_SX}
                 slotProps={{
                   htmlInput: {
                     min: 0,
                     inputMode: 'decimal',
                     onWheel: blurOnWheel,
                     ...(max !== undefined ? { max } : {}),
+                    ...describedBy(fieldError),
                   },
                   input: lockAdornment ?? { endAdornment: capAdornment(max) },
                 }}
@@ -404,14 +470,11 @@ export const FreestyleScoreControls = ({
             size="small"
             value={override ?? computed}
             onChange={(e) => setOverride(slot, overrideDraft(e.target.value))}
+            // No `computed` / `overridden` helper: an untouched box shows the
+            // computed value itself, and an override carries `use computed`.
             error={Boolean(boundErrors.overall)}
-            helperText={
-              boundErrors.overall ??
-              (override === null ? `computed (${formatScore(computed)})` : 'overridden')
-            }
-            sx={COMPONENT_FIELD_SX}
             slotProps={{
-              htmlInput: { inputMode: 'decimal' },
+              htmlInput: { inputMode: 'decimal', ...describedBy(boundErrors.overall) },
               input:
                 lockAdornment ??
                 (override === null
@@ -449,7 +512,7 @@ export const FreestyleScoreControls = ({
           spacing={0.5}
           sx={{ ...STATUS_SLOT_SX, flexWrap: 'wrap' }}
         >
-          {statusSlot(slot, entry)}
+          {statusSlot(slot, entry, errorLines)}
         </Stack>
         {/* A reserved slot (§4.12), dead on a locked panel: dropping the row
             shortened the panel, sliding Athlete 2's own Save, the winner line and
@@ -484,7 +547,7 @@ export const FreestyleScoreControls = ({
     );
   };
 
-  const bothSaved = ([1, 2] as const).every((slot) => entries[slot].status === 'saved');
+  const recordedSaved = recorded.every((slot) => entries[slot].status === 'saved');
 
   const requestReset = (): void => {
     if (!resetLanes) return;
@@ -501,41 +564,66 @@ export const FreestyleScoreControls = ({
     resetLanes?.onReset();
   };
 
+  const showWinner = mode === 'battle' && Boolean(selectedMatchId);
+  const showReset = resetLanes !== undefined && recordedSaved;
+  // The battle foot is a column beside the panels on a wide Score tab, mounted
+  // from the first render so the panels do not narrow sideways when the second
+  // save lands and Reset fills it. Quali's lone panel never reaches the side
+  // form, and stacks its foot only once there is something in it.
+  const showFoot = showWinner || showReset || (mode === 'battle' && resetLanes !== undefined);
+
   return (
-    <Paper variant="outlined" sx={{ p: 1.5, width: '100%', maxWidth: 720 }}>
-      <Stack spacing={1.5}>
-        <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          {athletePanel(1)}
-          {mode === 'battle' && athletePanel(2)}
-        </Stack>
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.5,
+        width: '100%',
+        // Wide enough for the side column; a lone quali panel keeps the narrower cap.
+        maxWidth: boardGeometry.freestyle.paperMax[mode],
+        containerType: 'inline-size',
+      }}
+    >
+      <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        {athletePanel(1)}
+        {mode === 'battle' && athletePanel(2)}
 
-        {mode === 'battle' && selectedMatchId && (
-          <MatchWinnerLine
-            derivedWinner={derivedWinner?.winnerId ?? null}
-            source={derivedWinner?.source}
-            awaiting={winnerAwaiting(entries)}
-            athleteName={athleteName}
-            update={
-              updateMatch.isError ? { error: updateMatch.error, onRetry: retryMatchUpdate } : null
-            }
-          />
-        )}
+        {showFoot && (
+          <Stack spacing={1.5} useFlexGap data-testid="score-rail-foot" sx={FOOT_SX}>
+            {showWinner && (
+              <MatchWinnerLine
+                derivedWinner={derivedWinner?.winnerId ?? null}
+                source={derivedWinner?.source}
+                awaiting={winnerAwaiting(entries)}
+                athleteName={athleteName}
+                update={
+                  updateMatch.isError
+                    ? { error: updateMatch.error, onRetry: retryMatchUpdate }
+                    : null
+                }
+              />
+            )}
 
-        {mode === 'battle' && resetLanes && bothSaved && (
-          <Box>
-            <Divider sx={{ borderStyle: 'dashed', mb: 1.5 }} />
-            <LockedControl lock={resetLock}>
-              <RaceButton
-                tone="neutral"
-                startIcon={<RestartAltIcon />}
-                onClick={requestReset}
-                disabled={resetLock !== null}
-              >
-                {RESET_LANES} for the next match
-              </RaceButton>
-            </LockedControl>
-            <WhyLine lock={resetLock} />
-          </Box>
+            {showReset && (
+              // Bottom of the side column, so the winner line above it never
+              // moves when it appears.
+              <Box sx={{ mt: 'auto' }}>
+                <Divider
+                  sx={{ borderStyle: 'dashed', mb: 1.5, [SIDE_FOOT]: { display: 'none' } }}
+                />
+                <LockedControl lock={resetLock}>
+                  <RaceButton
+                    tone="neutral"
+                    startIcon={<RestartAltIcon />}
+                    onClick={requestReset}
+                    disabled={resetLock !== null}
+                  >
+                    {railReset.label}
+                  </RaceButton>
+                </LockedControl>
+                <WhyLine lock={resetLock} />
+              </Box>
+            )}
+          </Stack>
         )}
       </Stack>
 
@@ -545,18 +633,18 @@ export const FreestyleScoreControls = ({
       <BoardConfirmDialog
         open={asking !== null}
         titleId="reset-lanes-title"
-        title={`${RESET_LANES}?`}
+        title={`${railReset.verb}?`}
         body={
           asking !== null && resetLanes ? (
             <>
               {holdingLanes
                 .map((lane) => laneHoldsPhrase(lane, resetLanes.lanes[lane], asking))
                 .join(' · ')}{' '}
-              — resetting re-arms both lanes for the next match. The saved scores are not affected.
+              — resetting {railReset.effect}
             </>
           ) : null
         }
-        confirmLabel={RESET_LANES}
+        confirmLabel={railReset.verb}
         safeAnswer={KEEP_TIMING}
         onConfirm={confirmReset}
         onCancel={cancelReset}

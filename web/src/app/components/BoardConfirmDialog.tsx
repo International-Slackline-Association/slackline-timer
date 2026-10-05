@@ -12,11 +12,12 @@ import { RaceButton } from 'app/components/RaceButton';
 import { useConfirmGuard } from 'app/hooks/useAdvanceInput';
 
 /**
- * The board's one confirm shell (FREESTYLE_BOARD_UX §4.8). Every question the
- * control boards raise stands over a press with no undo — a lane's Reset, the
- * rail's whole-board re-arm, a best-trick tally, a selection change that
- * orphans a match — and each is the same object: a titled dialog, the safe
- * answer autoFocused, and one destructive `RaceButton tone="stop"`.
+ * The operator surfaces' one confirm shell (FREESTYLE_BOARD_UX §4.8), shared by
+ * the control boards and the admin pages. Every question it carries stands over
+ * a press with no undo — a lane's Reset, the rail's whole-board re-arm, a
+ * best-trick tally, a selection change that orphans a match, revoking every
+ * overlay link — and each is the same object: a titled dialog, the safe answer
+ * autoFocused, and one destructive `RaceButton tone="stop"`.
  *
  * It registers `useConfirmGuard` itself, so an ADVANCE press behind the
  * question answers it safely instead of stepping the board, and the handset

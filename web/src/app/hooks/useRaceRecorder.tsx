@@ -56,9 +56,12 @@ export interface LaneFeedback {
   /**
    * The persisted Time's id + the body it was saved with, captured on a
    * successful save so the operator can post-correct `timeMs` against the
-   * existing record (hand-timer correction). Absent while pending / on error.
+   * existing record (hand-timer correction). Absent until the POST lands; a
+   * failed correction keeps it.
    */
   saved?: { timeId: string; input: TimeInput };
+  /** The body a rejected POST sent — what `retrySave` re-sends. */
+  failed?: { input: TimeInput };
 }
 
 const NO_FEEDBACK: Record<LaneId, LaneFeedback | null> = { 1: null, 2: null };
@@ -446,12 +449,22 @@ export const useRaceRecorder = (compId: string) => {
    * its saved timeId (breaking correction and voidRun for that lane). The
    * per-call promise keeps each lane's feedback independent.
    */
-  const saveTime = (lane: LaneId, input: ReturnType<typeof finishTimeInput>): void => {
+  const saveTime = (
+    lane: LaneId,
+    input: ReturnType<typeof finishTimeInput>,
+    { retry = false } = {},
+  ): void => {
     if (!input) return;
     // An accepted result closes the lane's attempt: the next start zeroes its FS
     // counter (a fresh attempt), unless a void reopens it for a rerun.
     closeAttempt(lane);
-    setLaneStatus(lane, { status: 'pending', valueMs: input.timeMs });
+    // A retry in flight keeps `failed`, so the board holds its Retry (disabled)
+    // in place instead of collapsing the row until the reply.
+    setLaneStatus(lane, {
+      status: 'pending',
+      valueMs: input.timeMs,
+      ...(retry && { failed: { input } }),
+    });
     const generation = saveGeneration.current[lane];
     const withdrawn = (): boolean => saveGeneration.current[lane] !== generation;
     createTime.mutateAsync(input).then(
@@ -471,10 +484,27 @@ export const useRaceRecorder = (compId: string) => {
       },
       () => {
         if (withdrawn()) return;
-        setLaneStatus(lane, { status: 'error', valueMs: input.timeMs });
+        setLaneStatus(lane, { status: 'error', valueMs: input.timeMs, failed: { input } });
         setToast({ text: `Lane ${lane} time not saved`, severity: 'error' });
       },
     );
+  };
+
+  /**
+   * Re-send a lane's rejected POST, body unchanged. Re-posts, never re-scores:
+   * the stop already fed `recordLaneResult` (the tally, `runTallied`, a clinch)
+   * whether or not its Time reached the server. The generation bump makes this
+   * reply the only one the lane honours. No-op unless the lane holds a failed
+   * POST — a resume, void or new start clears the feedback, and the offer.
+   */
+  const retrySave = (lane: LaneId): void => {
+    const fb = laneFeedback[lane];
+    if (fb?.status !== 'error' || !fb.failed) return;
+    saveGeneration.current = {
+      ...saveGeneration.current,
+      [lane]: saveGeneration.current[lane] + 1,
+    };
+    saveTime(lane, fb.failed.input, { retry: true });
   };
 
   /**
@@ -809,6 +839,7 @@ export const useRaceRecorder = (compId: string) => {
     applySelection,
     notePeerFinish,
     notePeerResume,
+    retrySave,
     editLaneTime,
     moveTime,
     voidRun,

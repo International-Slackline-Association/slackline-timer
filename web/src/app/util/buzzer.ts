@@ -29,8 +29,8 @@ export const buzzButton = (index: number): { handset: number; color: BuzzColor }
   color: BUZZ_COLORS[index % 5],
 });
 
-/** CSS swatch colour for a physical button colour (the real object colour, not
- *  a theme token — it must match the hardware the operator is looking at). */
+/** Swatch per physical key colour. Matches the handset, not the palette, so it
+ *  stays out of the tokens (a real-world-colour exemption in `noRawColour`). */
 export const buzzSwatch: Record<BuzzColor, string> = {
   Red: '#e53935',
   Yellow: '#fdd835',

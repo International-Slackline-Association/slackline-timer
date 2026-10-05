@@ -194,7 +194,7 @@ describe('FreestyleSelectionPanel', () => {
   // The Match select carried a permanent helper line under it. What it fills is
   // the manual's own sentence and the two pickers beside it show the answer, so
   // on a fold-bound live board the hint is setup chrome the live path paid 20 px
-  // for (the responsive contract's collapse order).
+  // for (the collapse order of design-system §9 "Responsive contract").
   it('carries no helper line under the match select', () => {
     renderPanel(makeRecorder(), 'battle');
 

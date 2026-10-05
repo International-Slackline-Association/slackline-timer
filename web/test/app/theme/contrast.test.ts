@@ -22,9 +22,9 @@ import { colors } from 'app/theme/tokens';
  * keeps the contract or fails here. Fix the token, never the floor.
  */
 
-// tokens.css :root is the canonical value for the two tokens that defer to a
-// CSS var (`race.running`, `race.stopDim` — the colour-adaptation override, see
-// tokens.css); resolve them the same way the parity test does.
+// tokens.css :root is the canonical value for the tokens that defer to a CSS
+// var (the body-class overrides, see tokens.css); resolve them the same way the
+// parity test does.
 const CSS = readFileSync(resolve(process.cwd(), 'src/app/theme/tokens.css'), 'utf8');
 const ROOT = CSS.slice(CSS.indexOf(':root'), CSS.indexOf('}', CSS.indexOf(':root')));
 
@@ -49,7 +49,7 @@ function ratio(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-const { surface, ink, brand, race } = colors;
+const { surface, ink, brand, race, overlay } = colors;
 
 // Brief §6, "Every live-path pair, named" — plus the per-ground rows of the new
 // `*Text` tier table. `min` is the WCAG floor the row owes, not its measured
@@ -148,6 +148,40 @@ describe('live-path contrast (FREESTYLE_BOARD_UX §6)', () => {
     expect(ratio(brand.teal, ink.onBrand)).toBeLessThan(4.5);
     expect(ratio(surface.panel, brand.teal)).toBeLessThan(4.5);
     expect(ratio(surface.canvas, brand.tealDark)).toBeLessThan(4.5);
+  });
+});
+
+/**
+ * The broadcast overlays' filled plate (`overlay.plateFilled`, solid white) and
+ * the inks that write on it. The subordinate tier (the QUALI/FINAL source tag,
+ * the PTS unit) steps down from `nameInk` by colour, not by opacity: `nameInk`
+ * at 0.6 alpha composited to 4.33:1, under the text floor.
+ */
+const OVERLAY_PAIRS: [surface: string, ground: string, foreground: string, min: number][] = [
+  ['athlete name on a filled plate', overlay.plateFilled, overlay.nameInk, 4.5],
+  ['source tag / PTS unit on a filled plate', overlay.plateFilled, overlay.nameInkSubordinate, 4.5],
+  ['winner result numeral on a filled plate', overlay.plateFilled, race.goDim, 3],
+  ['winner source tag / PTS unit on a filled plate', overlay.plateFilled, race.goText, 4.5],
+  ['DNF result word on a filled plate', overlay.plateFilled, race.stopDim, 4.5],
+];
+
+describe('overlay filled-plate contrast', () => {
+  it.each(OVERLAY_PAIRS)('%s clears its floor', (_surface, ground, foreground, min) => {
+    expect(ratio(ground, foreground)).toBeGreaterThanOrEqual(min);
+  });
+});
+
+// The VS stat label inks `nameInk` on the 48% strip; on a keyed ground that
+// strip is flattened to an opaque neutral (`body.tl-chroma-ground`), which must
+// still carry the label as text.
+const CHROMA_BLOCK_START = CSS.indexOf('body.tl-chroma-ground {');
+const CHROMA_BLOCK = CSS.slice(CHROMA_BLOCK_START, CSS.indexOf('}', CHROMA_BLOCK_START));
+const flattenedStrip = /--tl-overlay-plate-strip\s*:\s*([^;]+);/.exec(CHROMA_BLOCK)?.[1].trim();
+
+describe('chroma-ground flattened plate contrast', () => {
+  it('stat label nameInk on the flattened strip clears 4.5:1', () => {
+    expect(flattenedStrip).toBeDefined();
+    expect(ratio(flattenedStrip ?? '', overlay.nameInk)).toBeGreaterThanOrEqual(4.5);
   });
 });
 

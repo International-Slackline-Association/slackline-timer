@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import {
   Button,
@@ -21,10 +22,12 @@ import { QueryStates } from 'app/components/QueryStates';
 import { SelectCompetitionGate } from 'app/components/SelectCompetitionGate';
 import { SelectField, enumOptions } from 'app/components/SelectField';
 import { useAthleteLookup } from 'app/hooks/useAthleteLookup';
+import { fieldWidths } from 'app/theme/tokens';
 import { GENDERS, TIME_ROUNDS, type Athlete, type Time } from 'app/types';
 import { genderLabel } from 'app/util/gender';
 import { roundLabel } from 'app/util/rounds';
 import { formatMs } from 'app/util/time';
+import { timesFilterSeed } from 'app/util/timesLink';
 import { TimeForm } from 'app/pages/Admin/TimeForm';
 
 /**
@@ -49,22 +52,29 @@ const TimesManager = ({ compId }: { compId: string }) => {
 
   const [formTarget, setFormTarget] = useState<Time | 'new' | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Time | null>(null);
-  const [athleteFilter, setAthleteFilter] = useState<string>(ALL);
-  const [roundFilter, setRoundFilter] = useState<string>(ALL);
+  // Seeded from the URL, once — the Speedline lane link (`timesLink`) names
+  // its row, and from there the pickers are the operator's (as on ScoresPage).
+  const seed = timesFilterSeed(useLocation().search);
+  const [athleteFilter, setAthleteFilter] = useState<string>(seed.athleteId);
+  const [roundFilter, setRoundFilter] = useState<string>(seed.round);
   const [genderFilter, setGenderFilter] = useState<string>(ALL);
+
+  // An athlete the loaded roster lacks (a stale link, another competition in
+  // this tab) is dropped rather than emptying the table.
+  const athleteShown = !athletes.data || byId(athleteFilter) ? athleteFilter : ALL;
 
   const rows = useMemo(() => {
     const all = times.data ?? [];
     return all
       .filter(
         (t) =>
-          (athleteFilter === ALL || t.athleteId === athleteFilter) &&
+          (athleteShown === ALL || t.athleteId === athleteShown) &&
           (roundFilter === ALL || t.round === roundFilter) &&
           (genderFilter === ALL || byId(t.athleteId)?.gender === genderFilter),
       )
       .slice()
       .sort((a, b) => a.timeMs - b.timeMs);
-  }, [times.data, athleteFilter, roundFilter, genderFilter, byId]);
+  }, [times.data, athleteShown, roundFilter, genderFilter, byId]);
 
   const closeDelete = () => {
     setDeleteTarget(null);
@@ -88,9 +98,9 @@ const TimesManager = ({ compId }: { compId: string }) => {
       <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
         <SelectField
           label="Filter by athlete"
-          value={athleteFilter}
+          value={athleteShown}
           onChange={(e) => setAthleteFilter(e.target.value)}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: fieldWidths.field }}
           placeholder={{ value: ALL, label: 'All athletes' }}
           options={(athletes.data ?? []).map((a: Athlete) => ({
             value: a.athleteId,
@@ -101,7 +111,7 @@ const TimesManager = ({ compId }: { compId: string }) => {
           label="Filter by round"
           value={roundFilter}
           onChange={(e) => setRoundFilter(e.target.value)}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: fieldWidths.field }}
           placeholder={{ value: ALL, label: 'All rounds' }}
           options={enumOptions(TIME_ROUNDS, roundLabel)}
         />
@@ -109,7 +119,7 @@ const TimesManager = ({ compId }: { compId: string }) => {
           label="Filter by gender"
           value={genderFilter}
           onChange={(e) => setGenderFilter(e.target.value)}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: fieldWidths.field }}
           placeholder={{ value: ALL, label: 'All genders' }}
           options={enumOptions(GENDERS, (g) => genderLabel(g, 'subject'))}
         />

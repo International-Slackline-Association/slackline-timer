@@ -90,6 +90,13 @@ more than a local run can — LocalStack integration tests, the web build, and
 `cdk synth` — so run the gates yourself before pushing rather than relying on
 a hook to catch it.
 
+The web build gate needs env: `npm --prefix web run build` in a clean shell stops
+with `Refusing to build without VITE_APP_WS_URL, VITE_APP_API_URL,
+VITE_APP_COGNITO_USER_POOL_ID, VITE_APP_COGNITO_CLIENT_ID, VITE_APP_COGNITO_DOMAIN,
+VITE_APP_COGNITO_TIMER_GROUP — the bundle has no fallbacks.` Export the unreachable
+placeholders the web job's Build step sets in
+[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml); they are its only home.
+
 Bypass only in emergencies with `--no-verify`, and fix forward immediately.
 
 ## Commit messages — Conventional Commits
@@ -159,7 +166,7 @@ A change is done when:
       `display-signoff`, and `peer-mirroring` (the ADR 0038 two-tab pair) —
       not just the realtime/WS changes that own them.**
       A scenario is green on **zero FAIL, never on a fixed total** — most print
-      a stable count, but `realtime-recovery`'s floats (74-79) because its
+      a stable count, but `realtime-recovery`'s floats because its
       `request_state` handshake legs assert only when a control panel happened
       to be in the room to hear the ask (each page backs off independently, ADR
       0024; the room re-converges either way, since every sender queues its own

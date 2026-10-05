@@ -10,8 +10,9 @@ import { colors, overlayArt } from 'app/theme/tokens';
  * surface layers its own layout on top (positioned bracket boxes, flex rows,
  * container-query cards).
  *
- * `winner` marks the champion edge `race.go` green. The refs carry three ring
- * encodings, selected by `ring`:
+ * `winner` marks the champion edge `race.go` green; `loser` marks a decided
+ * head-to-head loser `race.stop` under the same ring rule (winner wins if both
+ * are set). The refs carry three ring encodings, selected by `ring`:
  *  - `outset` (large VS / winner photo cards): recolor the border green and lay
  *    a matching-width ring just outside it (a bold rim on the transparent/keyed
  *    ground) — the extra weight the big lower-third frame needs at venue distance;
@@ -28,6 +29,7 @@ export const Plate = ({
   strokeWidth = overlayArt.strokeWidth,
   bordered = true,
   winner = false,
+  loser = false,
   ring = 'outset',
   sx,
   children,
@@ -35,25 +37,27 @@ export const Plate = ({
 }: {
   /** Plate background. Omit for no fill. */
   fill?: string;
-  /** Border color (non-winner, or the winner border under `ring="inset"`). */
+  /** Border color (undecided, or every border under `ring="inset"`). */
   stroke?: string;
-  /** Border width and, for `ring="outset"`, the winner ring width. */
+  /** Border width and, for `ring="outset"`, the state ring width. */
   strokeWidth?: string;
   /** Draw the border. Off for the name strip, which is a fill-only plate. */
   bordered?: boolean;
   winner?: boolean;
+  loser?: boolean;
   ring?: 'outset' | 'inset' | 'flat';
 } & BoxProps) => {
-  // `inset` keeps the white edge (green sits inside); `outset`/`flat` recolor the
-  // edge green. Only `outset` also lays an outer ring — `flat` stops at the
-  // recoloured edge so green never exceeds the white edge width.
-  const edge = winner && ring !== 'inset' ? colors.race.go : stroke;
-  const winnerRing =
-    ring === 'inset'
-      ? `0 0 0 3px ${colors.race.go} inset`
-      : ring === 'flat'
-        ? 'none'
-        : `0 0 0 ${strokeWidth} ${colors.race.go}`;
+  const state = winner ? colors.race.go : loser ? colors.race.stop : undefined;
+  // `inset` keeps the white edge (the state colour sits inside); `outset`/`flat`
+  // recolor the edge. Only `outset` also lays an outer ring — `flat` stops at the
+  // recoloured edge so it never exceeds the white edge width.
+  const edge = state && ring !== 'inset' ? state : stroke;
+  const stateRing =
+    !state || ring === 'flat'
+      ? 'none'
+      : ring === 'inset'
+        ? `0 0 0 3px ${state} inset`
+        : `0 0 0 ${strokeWidth} ${state}`;
   return (
     <Box
       sx={[
@@ -64,7 +68,7 @@ export const Plate = ({
           ...(bordered
             ? { borderStyle: 'solid', borderWidth: strokeWidth, borderColor: edge }
             : {}),
-          boxShadow: winner ? winnerRing : 'none',
+          boxShadow: stateRing,
         },
         ...(Array.isArray(sx) ? sx : [sx]),
       ]}

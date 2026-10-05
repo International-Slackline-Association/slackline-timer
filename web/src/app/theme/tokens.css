@@ -72,6 +72,7 @@
   --tl-overlay-plate-filled: #ffffff; /* solid fill for a FILLED named plate */
   --tl-overlay-stroke: #ffffff; /* plate border + bracket connectors (width below) */
   --tl-overlay-name-ink: #231f20; /* near-black name text on a filled plate (= the card masters' #231f20) */
+  --tl-overlay-name-ink-subordinate: #737172; /* source tag / PTS unit on a filled plate (4.85:1) */
   --tl-overlay-label: #ffffff; /* structural / section labels (= ink-on-brand) */
   --tl-overlay-scrim: rgba(
     51,
@@ -90,10 +91,14 @@
      a 1080p baseline, don't hard-pin. */
   --tl-overlay-stroke-width: 6px; /* VS-box / plate border + bracket connectors */
   --tl-overlay-heading-tracking: -0.02em; /* tight display-caps tracking (art: −.01…−.03em) */
+  --tl-overlay-banner-tracking: 0.08em; /* open banner caps (WINNER, best-of-3 caption) */
+  --tl-overlay-name-tracking: 0.01em; /* athlete names + initials */
 
   /* Chroma-key fill for ALL overlay surfaces — MAGENTA not green; rationale at
      `chromaKey` in tokens.ts (the canonical copy). Retune both together. */
   --tl-chroma-key: #ff00ff;
+  --tl-chroma-key-green: #00b140; /* `?bg=green` keyer preset */
+  --tl-chroma-key-blue: #0047bb; /* `?bg=blue` keyer preset */
 
   /* Fonts */
   --tl-font-numerals: 'JetBrains Mono', ui-monospace, monospace;
@@ -106,6 +111,10 @@
   --tl-radius-lg: 14px;
   --tl-radius-pill: 999px;
   --tl-radius-track-curve: 14px 4px 14px 4px;
+
+  /* Console-chrome mark widths */
+  --tl-stroke-keyline: 2px;
+  --tl-stroke-rule: 4px;
 
   /* Spacing base unit */
   --tl-space-unit: 8px;
@@ -138,6 +147,18 @@
 body.tl-key-composite {
   --tl-running: #009083;
   --tl-stop-dim: #b10200;
+}
+
+/* Chroma-ground mode (`?bg=key|magenta|green|blue`, class set by
+   `app/pages/Stream/overlayBg.ts`): a solid key ground carries no alpha, so the
+   translucent white plates would blend with it (48% white over #ff00ff airs
+   #ff7aff) into a band a tolerant keyer half-erases. Each flattens to the colour
+   its alpha gives over --tl-bg-void, round(c + a·(255 − c)) per channel — one
+   fixed neutral for the keyer. Pinned by test/app/theme/tokens.parity.test.ts. */
+body.tl-chroma-ground {
+  --tl-overlay-plate: #707783; /* 30% */
+  --tl-overlay-plate-name: #7a808c; /* 35% */
+  --tl-overlay-plate-strip: #959aa3; /* 48% — nameInk on it 5.8:1 */
 }
 
 /* Tabular numerals — keeps timer/score digits from jittering. */

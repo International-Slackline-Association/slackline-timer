@@ -7,7 +7,7 @@ import { speedlineLocks } from 'app/util/speedlineLocks';
 
 import { EVERY_HOLD } from '../../util/boardHolds';
 import { px } from '../../util/computedUnits';
-import { LANE_CARD_CONTENT_PX } from '../../util/deskGeometry';
+import { LANE_CARD_CONTENT_PX, SPEEDLINE_START_STRIP_PX } from '../../util/deskGeometry';
 import {
   REQUIRED_SLACK_CHARS,
   charsPerLine,
@@ -38,41 +38,48 @@ const EVERY_LOCK = Object.values(LOCKS)
   .flat()
   .map((lock) => [lockReason(lock), lock] as const);
 
-/** Every reason the Speedline map can render, from the states that produce
- * them: offline (which words all three), the lights, a running lane, the abort
- * latch, the idle-lane Stop, and the resting board's Abort. */
-const SPEEDLINE_REASONS = [
-  ...new Set(
-    (
-      [
-        { connected: false, signalPhase: 0, aborted: false, now: 0, lanes: { 1: idle, 2: idle } },
-        { connected: true, signalPhase: 2, aborted: false, now: 0, lanes: { 1: idle, 2: idle } },
-        { connected: true, signalPhase: -1, aborted: true, now: 0, lanes: { 1: idle, 2: idle } },
-        { connected: true, signalPhase: -1, aborted: false, now: 0, lanes: { 1: idle, 2: idle } },
-        { connected: true, signalPhase: 0, aborted: false, now: 0, lanes: { 1: running, 2: idle } },
-        // A resolved run: the lane Resume's own two reasons.
-        {
-          connected: true,
-          signalPhase: -1,
-          aborted: false,
-          now: 1_000_000,
-          lanes: { 1: stopped, 2: idle },
-        },
-      ] as const
-    ).flatMap(({ lanes, ...input }) => {
-      const locks = speedlineLocks({ ...input, laneState: lanes });
-      return [
-        locks.start,
-        locks.abort,
-        locks.reset,
-        locks.stop[1],
-        locks.stop[2],
-        locks.resume[1],
-        locks.resume[2],
-      ];
-    }),
-  ),
-].filter((reason): reason is string => reason !== null);
+/** Every Speedline state that words a lock: offline (which words all three),
+ * the lights, a running lane, the abort latch, the idle-lane Stop, and the
+ * resting board's Abort. */
+const SPEEDLINE_STATES = (
+  [
+    { connected: false, signalPhase: 0, aborted: false, now: 0, lanes: { 1: idle, 2: idle } },
+    { connected: true, signalPhase: 2, aborted: false, now: 0, lanes: { 1: idle, 2: idle } },
+    { connected: true, signalPhase: -1, aborted: true, now: 0, lanes: { 1: idle, 2: idle } },
+    { connected: true, signalPhase: -1, aborted: false, now: 0, lanes: { 1: idle, 2: idle } },
+    { connected: true, signalPhase: 0, aborted: false, now: 0, lanes: { 1: running, 2: idle } },
+    // A resolved run: the lane Resume's own two reasons.
+    {
+      connected: true,
+      signalPhase: -1,
+      aborted: false,
+      now: 1_000_000,
+      lanes: { 1: stopped, 2: idle },
+    },
+  ] as const
+).map(({ lanes, ...input }) => speedlineLocks({ ...input, laneState: lanes }));
+
+const reasons = (lines: (string | null)[]): string[] =>
+  [...new Set(lines)].filter((reason): reason is string => reason !== null);
+
+const SPEEDLINE_REASONS = reasons(
+  SPEEDLINE_STATES.flatMap((locks) => [
+    locks.start,
+    locks.abort,
+    locks.reset,
+    locks.stop[1],
+    locks.stop[2],
+    locks.swap,
+    locks.void,
+    locks.resume[1],
+    locks.resume[2],
+  ]),
+);
+
+/** What the race pair's one shared slot can print, in the start strip. */
+const RACE_PAIR_REASONS = reasons(
+  SPEEDLINE_STATES.flatMap((locks) => [locks.start, locks.abort, locks.reset]),
+);
 
 describe('WhyLine', () => {
   it('reserves the same height with and without a reason', () => {
@@ -96,6 +103,19 @@ describe('WhyLine', () => {
 
     rerender(<WhyLine reason={null} />);
     expect(screen.getByTestId('why-line').textContent).not.toMatch(/why:/);
+  });
+
+  // The Speedline rail's Swap and Void (`reserve={false}`): nothing under them
+  // moves under a hand that is on them, so the slot is paid only while locked.
+  it('collapses to nothing without a reason when it reserves no slot', () => {
+    const { rerender } = render(<WhyLine reason={null} reserve={false} />);
+    expect(screen.queryByTestId('why-line')).toBeNull();
+
+    rerender(<WhyLine reason="locked while a lane runs" reserve={false} />);
+    const line = screen.getByTestId('why-line');
+    expect(line).toHaveTextContent('why: locked while a lane runs');
+    // The initial value — no slot held open.
+    expect(window.getComputedStyle(line).minHeight).toBe('auto');
   });
 
   it.each(EVERY_LOCK)('fits the reserved slot: %s', (_reason, lock) => {
@@ -130,5 +150,18 @@ describe('WhyLine', () => {
     expect(
       longestLine(screen.getByTestId('why-line').textContent ?? '', CHARS_PER_LINE),
     ).toBeLessThanOrEqual(CHARS_PER_LINE - REQUIRED_SLACK_CHARS);
+  });
+
+  // The race pair's line sits in the start strip, not a lane card: a reason
+  // that wraps to a third line there moves Reset the instant it appears.
+  it.each(RACE_PAIR_REASONS)('fits the start strip in two lines: %s', (reason) => {
+    render(<WhyLine reason={reason} />);
+
+    expect(
+      wrappedLines(
+        screen.getByTestId('why-line').textContent ?? '',
+        charsPerLine(SPEEDLINE_START_STRIP_PX),
+      ),
+    ).toBeLessThanOrEqual(WHY_RESERVED_LINES);
   });
 });

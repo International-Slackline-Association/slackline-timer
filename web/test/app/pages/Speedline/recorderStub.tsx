@@ -50,6 +50,7 @@ export const makeRecorder = (over: Partial<RaceRecorder> = {}): RaceRecorder =>
     onReset: vi.fn(),
     recordFinish: vi.fn(),
     recordDnf: vi.fn(),
+    retrySave: vi.fn(),
     editLaneTime: vi.fn(),
     moveTime: vi.fn(),
     voidRun: vi.fn(),

@@ -1,4 +1,5 @@
 import { Box, Stack } from '@mui/material';
+import { useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import { useCombinedRanking, useOverallStandings, useRankings } from 'app/api/rankings';
@@ -11,11 +12,11 @@ import {
   type RankedAthlete,
   type TimeRound,
 } from 'app/types';
-import { colors, fonts, overlayArt } from 'app/theme/tokens';
+import { colors, fonts, overlayArt, overlayTypeFloor } from 'app/theme/tokens';
 import { rankLabels, serverRankLabels } from 'app/util/rankLabels';
 import { standingsSourceTag } from 'app/util/rounds';
 import { refVh, refVw } from 'app/util/overlayScale';
-import { standingsResultLabel } from 'app/util/resultLabel';
+import { resultInk, standingsResultLabel } from 'app/util/resultLabel';
 import { Numeral } from 'app/components/Numeral';
 import { RankBadge } from 'app/components/RankBadge';
 import { AthleteCard } from 'app/pages/Stream/AthleteCard';
@@ -95,7 +96,7 @@ const ART = {
   numeralSize: 72.68,
   // The 49.79px numeral column splits into the digit box + its gap to the plate.
   // `numeralColumn` is ONE glyph; a field is laid out at its widest label (see
-  // `numeralColumnWidth`).
+  // `numeralGlyphs`).
   numeralColumn: 35.79,
   numeralGap: 14,
   strokeWidth: 5,
@@ -105,21 +106,26 @@ const ART = {
 
 const taperAt = (index: number) => ART.taper[Math.min(index, ART.taper.length - 1)];
 
+/** One display-face digit's advance per em of numeral size — the names art's
+ *  digit box over its numeral size, shared by both cuts. */
+const NUMERAL_ADVANCE = ART.numeralColumn / ART.numeralSize;
+
 /**
- * Freestyle results are judged points (a bare "31.0"); speed results are times
- * ("0:05.86"), self-evidently a clock. The unit rides row 1 only — enough to
- * name the column without repeating on every plate. The individual judged
- * components stay off the broadcast (overall only).
+ * A bare number needs a unit where it isn't self-evident: freestyle results are
+ * judged points ("31.0"), the combined result an averaged placement ("2.5",
+ * lower is better). Speed times ("0:05.86") read as a clock. The unit rides
+ * row 1 only — enough to name the column without repeating on every plate.
  */
-const FREESTYLE_RESULT_UNIT = 'PTS';
+const RESULT_UNITS: Partial<Record<Discipline | 'combined', string>> = {
+  freestyle: 'PTS',
+  combined: 'AVG',
+};
 
 /** The em-dash `standingsResultLabel` renders for a placement with no result yet. */
 const NO_RESULT = '—';
 
 const resultUnitAt = (discipline: Discipline | 'combined', index: number, result: string) =>
-  discipline === 'freestyle' && index === 0 && result !== NO_RESULT
-    ? FREESTYLE_RESULT_UNIT
-    : undefined;
+  index === 0 && result !== NO_RESULT ? RESULT_UNITS[discipline] : undefined;
 
 /**
  * The portrait-card cut, measured off the `LAAX 2026_Profile top 4.svg` master
@@ -230,10 +236,11 @@ export const StandingsBody = ({
       // The round that decided the placement — qualifies the result so a slower
       // time above a faster one reads as a bracket outcome, not a mis-sort (G3).
       sourceTag: standingsSourceTag(entry.source),
+      resultBorrowed: entry.resultSource !== undefined,
     };
   });
 
-  return <RankedField variant={variant} rows={rows} />;
+  return <RankedField variant={variant} rows={rows} standings />;
 };
 
 /**
@@ -262,13 +269,17 @@ export const CombinedBody = ({
   if (combined.isLoading || combined.isError || isEmpty) return null;
 
   const numerals = serverRankLabels(combined.data.map((entry) => entry.rank));
-  const rows = combined.data.map((entry, index) => ({
-    athlete: entry.athlete,
-    numeral: numerals[index],
-    result: entry.combined.toFixed(1),
-  }));
+  const rows = combined.data.map((entry, index) => {
+    const result = entry.combined.toFixed(1);
+    return {
+      athlete: entry.athlete,
+      numeral: numerals[index],
+      result,
+      resultUnit: resultUnitAt('combined', index, result),
+    };
+  });
 
-  return <RankedField variant={variant} rows={rows} />;
+  return <RankedField variant={variant} rows={rows} standings />;
 };
 
 /** One rendered row of a ranked field: identity, precomputed rank numeral + result. */
@@ -276,83 +287,121 @@ interface RankedRow {
   athlete: Athlete;
   numeral: string;
   result: string;
-  /** Freestyle top row only: the points unit microlabel riding the result
-   *  (both the names plate and the profile card). */
+  /** Top row only: the unit microlabel riding a bare-number result (see
+   *  {@link resultUnitAt}), on both the names plate and the profile card. */
   resultUnit?: string;
   /** Standings only: the round that placed this row (rule G3 result context). */
   sourceTag?: string;
+  /** Standings only: the result comes from another round than `sourceTag`'s,
+   *  so it renders in the subordinate ink. */
+  resultBorrowed?: boolean;
 }
 
 /**
  * The shared ranked-field presentation: the `variant`-selected recipe, titleless
- * like the LAAX masters.
+ * like the LAAX masters. `standings` marks the server-ranked cuts (overall,
+ * combined), whose names rows reserve a field-wide result column (see
+ * {@link ReservedColumn}).
  */
-const RankedField = ({ variant, rows }: { variant: RankingsVariant; rows: RankedRow[] }) => (
+const RankedField = ({
+  variant,
+  rows,
+  standings = false,
+}: {
+  variant: RankingsVariant;
+  rows: RankedRow[];
+  standings?: boolean;
+}) => (
   // The ranked plates sit LOWER-LEFT. Inside the flex-column StreamLayout the
   // growing column bottom-anchors the rows against the frame edge; the top
   // padding reserves headroom above a full-length (top-8) field. In a block parent (the
   // freestyle projector panel) `flexGrow` is inert and the rows sit in-flow.
   <Box
+    data-testid="ranked-field"
     sx={{
       width: '100%',
       flexGrow: 1,
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'flex-end',
-      pt: 6,
+      pt: refVh(48),
     }}
   >
     {variant === 'profile' ? (
-      // The Profile-top-4 cut (geometry in PROFILE_ART).
-      <Stack direction="row" sx={{ alignItems: 'flex-end' }}>
-        {rows.slice(0, PROFILE_ART.slots.length).map((row, index) => {
-          const slot = PROFILE_ART.slots[index];
-          return (
-            <Stack
-              key={row.athlete.athleteId}
-              direction="row"
-              sx={{
-                alignItems: 'flex-end',
-                columnGap: refVw(PROFILE_ART.numeralGap),
-                ml: index > 0 ? refVw(PROFILE_ART.unitGaps[index - 1]) : 0,
-              }}
-            >
-              <RankBadge label={row.numeral} fontSize={refVh(slot.numeralSize)} />
-              <Box
-                data-testid="ranking-profile-slot"
-                sx={{ width: refVw(slot.width), height: refVh(slot.height) }}
-              >
-                <AthleteCard
-                  athlete={row.athlete}
-                  result={row.result}
-                  resultUnit={row.resultUnit}
-                  sourceTag={row.sourceTag}
-                  edgeWidth={refVh(PROFILE_ART.strokeWidth)}
-                />
-              </Box>
-            </Stack>
-          );
-        })}
-      </Stack>
+      <ProfileCards rows={rows} />
     ) : (
-      <NameRows rows={rows} />
+      <NameRows rows={rows} standings={standings} />
     )}
   </Box>
 );
+
+/** The Profile-top-4 cut (geometry in `PROFILE_ART`). */
+const ProfileCards = ({ rows }: { rows: RankedRow[] }) => {
+  const topRows = rows.slice(0, PROFILE_ART.slots.length);
+  const glyphs = numeralGlyphs(topRows);
+  return (
+    <Stack direction="row" sx={{ alignItems: 'flex-end' }}>
+      {topRows.map((row, index) => {
+        const slot = PROFILE_ART.slots[index];
+        return (
+          <Stack
+            key={row.athlete.athleteId}
+            direction="row"
+            sx={{
+              alignItems: 'flex-end',
+              columnGap: refVw(PROFILE_ART.numeralGap),
+              ml: index > 0 ? refVw(PROFILE_ART.unitGaps[index - 1]) : 0,
+            }}
+          >
+            <Box
+              data-testid="ranking-profile-numeral"
+              sx={{
+                // The field's widest label on every slot (see numeralGlyphs);
+                // minWidth:0 stops the label's min-content from re-growing it.
+                flex: '0 0 auto',
+                width: refVh(slot.numeralSize * NUMERAL_ADVANCE * glyphs),
+                minWidth: 0,
+                display: 'flex',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <RankBadge label={row.numeral} fontSize={refVh(slot.numeralSize)} />
+            </Box>
+            <Box
+              data-testid="ranking-profile-slot"
+              sx={{ width: refVw(slot.width), height: refVh(slot.height) }}
+            >
+              <AthleteCard
+                athlete={row.athlete}
+                result={row.result}
+                resultUnit={row.resultUnit}
+                resultBorrowed={row.resultBorrowed}
+                sourceTag={row.sourceTag}
+                edgeWidth={refVh(PROFILE_ART.strokeWidth)}
+              />
+            </Box>
+          </Stack>
+        );
+      })}
+    </Stack>
+  );
+};
 
 /** The `Names top 4/8` recipe caps at 8 rows — the largest cut the art defines. */
 const NAMES_MAX_ROWS = 8;
 
 /**
- * The rank numeral column for a whole field: the art's one-glyph digit box times
- * the widest label in it (a tie renders `=1`, two glyphs). Sizing it ONCE per
- * field and applying it to every row keeps the plates on a single left edge —
- * the reason the box was fixed in the first place — while the widest numeral
- * now starts inside the title-safe inset instead of overflowing leftward out of
- * it. A field with no ties is one glyph wide, i.e. the art's own geometry.
+ * The widest rank label in a field, in glyphs (a tie renders `=1`, two). Both
+ * cuts reserve it ONCE per field on every row, so the plates/cards keep one
+ * geometry whatever a given row's label is and the widest numeral starts inside
+ * the title-safe inset instead of overflowing leftward. A field with no ties is
+ * one glyph wide, i.e. the art's own geometry.
  */
-const numeralColumnWidth = (rows: RankedRow[]): number =>
-  ART.numeralColumn * Math.max(1, ...rows.map((row) => row.numeral.length));
+const numeralGlyphs = (rows: RankedRow[]): number =>
+  Math.max(1, ...rows.map((row) => row.numeral.length));
+
+/** The names-cut rank numeral column for a whole field (see {@link numeralGlyphs}). */
+const numeralColumnWidth = (rows: RankedRow[]): number => ART.numeralColumn * numeralGlyphs(rows);
 
 /** The distinct source tags a field carries — the candidates each row's tag
  *  column reserves room for (see {@link SourceTag}). */
@@ -360,12 +409,18 @@ const fieldSourceTags = (rows: RankedRow[]): string[] => [
   ...new Set(rows.flatMap((row) => (row.sourceTag === undefined ? [] : [row.sourceTag]))),
 ];
 
+/** The field's widest result. The numeral face is monospace, so the longest
+ *  string is the widest whatever its glyphs. */
+const widestResult = (rows: RankedRow[]): string =>
+  rows.reduce((widest, row) => (row.result.length > widest.length ? row.result : widest), '');
+
 /** The names-variant ranked rows (the `Names top 4/8` recipe — see `ART`). */
-const NameRows = ({ rows }: { rows: RankedRow[] }) => {
+const NameRows = ({ rows, standings }: { rows: RankedRow[]; standings: boolean }) => {
   const topRows = rows.slice(0, NAMES_MAX_ROWS);
   const artScale = topRows.length <= 4 ? 1 : ART.top8Scale;
   const numeralColumn = numeralColumnWidth(topRows);
   const sourceTags = fieldSourceTags(topRows);
+  const resultSizer = standings ? widestResult(topRows) : undefined;
   return (
     <Stack sx={{ alignItems: 'flex-start', gap: refVh(ART.rowGap * artScale) }}>
       {topRows.map((row, index) => (
@@ -376,6 +431,7 @@ const NameRows = ({ rows }: { rows: RankedRow[] }) => {
           index={index}
           numeralColumn={numeralColumn}
           sourceTags={sourceTags}
+          resultSizer={resultSizer}
         />
       ))}
     </Stack>
@@ -389,6 +445,7 @@ const NameRow = ({
   index,
   numeralColumn,
   sourceTags,
+  resultSizer,
 }: {
   row: RankedRow;
   artScale: number;
@@ -397,9 +454,26 @@ const NameRow = ({
   numeralColumn: number;
   /** Every source tag in the field, so each row reserves the same tag column. */
   sourceTags: string[];
+  /** Standings cuts only: the field's widest result, reserved on every row. */
+  resultSizer?: string;
 }) => {
   const { slotRef, nameRef, fit } = useFitToWidth();
+  const { columnRef, sizerRef, surrendered } = useSurrenderedWidth();
   const plateHeight = ART.plateHeight * artScale * taperAt(index);
+  const plateWidth = refVw(ART.plateWidth * artScale * taperAt(index));
+  const result = (
+    <Numeral
+      fontWeight={700}
+      fontSize="0.82em"
+      color={resultInk(
+        row.result,
+        row.resultBorrowed ? colors.overlay.nameInkSubordinate : colors.overlay.nameInk,
+      )}
+      testId="ranking-result"
+    >
+      {row.result}
+    </Numeral>
+  );
   return (
     <Stack
       direction="row"
@@ -436,7 +510,9 @@ const NameRow = ({
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'stretch',
-          width: refVw(ART.plateWidth * artScale * taperAt(index)),
+          // A standings row gives back what its tag takes, so its name slot is
+          // the round cut's (see useSurrenderedWidth).
+          width: surrendered > 0 ? `calc(${plateWidth} + ${surrendered.toFixed(2)}px)` : plateWidth,
           color: colors.overlay.nameInk,
           // Dark ink on a white plate → cancel the inherited StreamLayout
           // footage shadow (the rank numeral outside the plate keeps it).
@@ -489,26 +565,32 @@ const NameRow = ({
             direction="row"
             sx={{ alignItems: 'baseline', columnGap: '0.5em', ml: '0.5em', flexShrink: 0 }}
           >
-            {row.sourceTag !== undefined && (
-              <SourceTag tag={row.sourceTag} candidates={sourceTags} />
+            {resultSizer === undefined ? (
+              result
+            ) : (
+              <ReservedColumn
+                sourceTag={row.sourceTag}
+                tagCandidates={sourceTags}
+                resultSizer={resultSizer}
+                columnRef={columnRef}
+                sizerRef={sizerRef}
+              >
+                {result}
+              </ReservedColumn>
             )}
-            <Numeral fontWeight={700} fontSize="0.82em" testId="ranking-result">
-              {row.result}
-            </Numeral>
-            {/* Points unit on the top freestyle row (see resultUnitAt) — the
-                same subordinate display-caps treatment as the source tag, so
-                the bare score reads as points, not a time. */}
+            {/* The top row's unit (see resultUnitAt), in the source tag's
+                subordinate display-caps treatment. */}
             {row.resultUnit !== undefined && (
               <Box
                 component="span"
                 data-testid="ranking-result-unit"
                 sx={{
+                  color: colors.overlay.nameInkSubordinate,
                   fontFamily: fonts.display,
                   fontWeight: 500,
-                  fontSize: '0.5em',
+                  fontSize: SUBORDINATE_SIZE,
                   letterSpacing: overlayArt.headingTracking,
                   whiteSpace: 'nowrap',
-                  opacity: 0.6,
                 }}
               >
                 {row.resultUnit}
@@ -520,6 +602,10 @@ const NameRow = ({
     </Stack>
   );
 };
+
+/** Half the plate font, held at the broadcast floor where the top-8 taper
+ *  would drop it below 20px (rows 3-8). */
+const SUBORDINATE_SIZE = `max(0.5em, ${overlayTypeFloor})`;
 
 /**
  * The placing-round tag left of a standings result, in the display caps face at
@@ -540,12 +626,12 @@ const SourceTag = ({ tag, candidates }: { tag: string; candidates: string[] }) =
     sx={{
       display: 'grid',
       justifyItems: 'end',
+      color: colors.overlay.nameInkSubordinate,
       fontFamily: fonts.display,
       fontWeight: 500,
-      fontSize: '0.5em',
+      fontSize: SUBORDINATE_SIZE,
       letterSpacing: overlayArt.headingTracking,
       whiteSpace: 'nowrap',
-      opacity: 0.6,
     }}
   >
     {candidates.map((candidate) => (
@@ -564,3 +650,78 @@ const SourceTag = ({ tag, candidates }: { tag: string; candidates: string[] }) =
     </Box>
   </Box>
 );
+
+/**
+ * A standings row's field-wide result column: the placing-round tag and the
+ * result, each padded to the field's widest by hidden sizers in one grid cell,
+ * so the column is one box (in the row's em) down the whole field — a DNF, an
+ * em dash or a short tag no longer hands its row extra name room. The tag's
+ * share is given back as plate width (see {@link useSurrenderedWidth}).
+ */
+const ReservedColumn = ({
+  sourceTag,
+  tagCandidates,
+  resultSizer,
+  columnRef,
+  sizerRef,
+  children,
+}: {
+  sourceTag?: string;
+  tagCandidates: string[];
+  resultSizer: string;
+  columnRef: Ref<HTMLDivElement>;
+  sizerRef: Ref<HTMLDivElement>;
+  /** The visible result numeral. */
+  children: ReactNode;
+}) => (
+  <Stack
+    ref={columnRef}
+    direction="row"
+    data-testid="ranking-reserved-col"
+    sx={{ alignItems: 'baseline', columnGap: '0.5em' }}
+  >
+    {sourceTag !== undefined && <SourceTag tag={sourceTag} candidates={tagCandidates} />}
+    <Box sx={{ display: 'grid', justifyItems: 'end' }}>
+      <Box
+        ref={sizerRef}
+        aria-hidden
+        data-testid="ranking-result-sizer"
+        sx={{ gridArea: '1 / 1', visibility: 'hidden' }}
+      >
+        <Numeral fontWeight={700} fontSize="0.82em">
+          {resultSizer}
+        </Numeral>
+      </Box>
+      <Box sx={{ gridArea: '1 / 1' }}>{children}</Box>
+    </Box>
+  </Stack>
+);
+
+/**
+ * The px a {@link ReservedColumn} takes beyond the field's widest result — the
+ * tag and its gap, which the round cut does not carry. Adding it to the plate
+ * leaves the name the round cut's slot, and is one value per taper step, so the
+ * plates still taper monotonically (a DNF row's pad to the widest result stays
+ * inside its plate). 0 until measured (and in jsdom, which has no layout).
+ */
+const useSurrenderedWidth = () => {
+  const columnRef = useRef<HTMLDivElement>(null);
+  const sizerRef = useRef<HTMLDivElement>(null);
+  const [surrendered, setSurrendered] = useState(0);
+  useLayoutEffect(() => {
+    const column = columnRef.current;
+    const sizer = sizerRef.current;
+    if (!column || !sizer) return undefined;
+    const measure = () => {
+      const extra = column.getBoundingClientRect().width - sizer.getBoundingClientRect().width;
+      setSurrendered(Math.max(0, Math.round(extra * 100) / 100));
+    };
+    measure();
+    document.fonts?.ready.then(measure).catch(() => undefined);
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(column);
+    return () => observer.disconnect();
+  }, []);
+  return { columnRef, sizerRef, surrendered };
+};

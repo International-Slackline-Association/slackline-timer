@@ -91,13 +91,20 @@ export const colors = {
   // (Names top 4/8, Name Brackets) at 35% — hence the plate/plateName pair. Caps
   // labels use fonts.display, numbers fonts.numerals. See DESIGN_SYSTEM §3
   // (overlay plates & chroma key) + §7 (broadcast/overlay rules).
+  // The three translucent fills resolve through their vars (alphas in
+  // tokens.css :root) so a chroma `?bg=` ground can flatten them to opaque
+  // neutrals — the tl-chroma-ground override block in tokens.css.
   overlay: {
-    plate: 'rgba(255, 255, 255, 0.3)', // empty PROFILE-box fill — VS frame / portrait card / profile bracket (art: 30% white)
-    plateName: 'rgba(255, 255, 255, 0.35)', // empty NAME-bar fill — name-bracket TBD plate (art: 35% white)
-    plateStrip: 'rgba(255, 255, 255, 0.48)', // row backing band behind a stat label — VS speed/freestyle tables (art cls-8/cls-16: 48% white)
+    plate: 'var(--tl-overlay-plate)', // empty PROFILE-box fill — VS frame / portrait card / profile bracket (art: 30% white)
+    plateName: 'var(--tl-overlay-plate-name)', // empty NAME-bar fill — name-bracket TBD plate (art: 35% white)
+    plateStrip: 'var(--tl-overlay-plate-strip)', // row backing band behind a stat label — VS speed/freestyle tables (art cls-8/cls-16: 48% white)
     plateFilled: '#FFFFFF', // solid fill for a FILLED named plate (dark name on white)
     stroke: '#FFFFFF', // solid plate border + bracket connectors (width = overlayArt.strokeWidth)
     nameInk: '#231f20', // near-black name text on a filled plate (= the card masters' #231f20, also overlay.backdrop)
+    // Subordinate words on a filled plate (source tag, PTS unit), 4.85:1 on
+    // plateFilled. Never nameInk + opacity: at 0.6 it composites to 4.33:1,
+    // under the text floor.
+    nameInkSubordinate: '#737172',
     label: '#FFFFFF', // structural / section labels (= ink.onBrand)
     // Slate legibility backing for white overlay text/captions: void (#333C4E)
     // at high alpha — caption-strip gradient + per-text shadow on transparent
@@ -115,6 +122,11 @@ export const colors = {
   // national flags, so everything keys cleanly. Single source of truth — retune
   // here to match the venue keyer.
   chromaKey: '#FF00FF',
+  // The `?bg=green` / `?bg=blue` grounds, at the common keyer preset values.
+  // Only for rigs whose keyer has no magenta preset: each erases our own
+  // greens/blues (see `chromaKey`).
+  chromaKeyGreen: '#00B140',
+  chromaKeyBlue: '#0047BB',
 } as const;
 
 export const fonts = {
@@ -138,6 +150,8 @@ export const fonts = {
 export const overlayArt = {
   strokeWidth: '6px', // VS-box / plate border + bracket connectors (9px clotted the dense bracket boxes; the heavier VS/winner card frame is Competitor's own PANEL_EDGE)
   headingTracking: '-0.02em', // tight display-caps letter-spacing (the art runs −.01…−.03em)
+  bannerTracking: '0.08em', // open banner caps: the WINNER banner/tag, the best-of-3 caption + tally names
+  nameTracking: '0.01em', // athlete names + initials, every plate and card
 } as const;
 
 // The broadcast "protection halo" (DESIGN_SYSTEM §7): a tight slate outline plus
@@ -186,6 +200,43 @@ export const OVERLAY_TYPE_FLOOR_PX = 20;
 // own measured width instead — see `PlayoffBracket`.
 export const overlayTypeFloor = refVh(OVERLAY_TYPE_FLOOR_PX);
 
+// The WINNER word over a winner lower-third card, in reference px on the 1080p
+// frame: its cap size and its gap to the card's outer edge. One element on both
+// homes (`AthleteCard`'s `winnerTag`, on the VS card and the /stream/winner
+// banner), so the broadcast never cuts between two sizes of the same word.
+// Numbers beside the type floor, not `overlayArt` entries: those are mirrored
+// as `--tl-*` CSS vars, and these only ever feed `refVh`.
+export const OVERLAY_WINNER_WORD_PX = 40;
+export const OVERLAY_WINNER_GAP_PX = 24;
+
+// The timer lower-thirds' shared geometry (reference px, design-system §7 "Lane
+// clock plates"), so SpeedlineTimerDisplay and FreestyleTimerDisplay cannot
+// drift apart:
+//  - `inset` — the lane blocks' side + bottom safe inset, and the one owner of
+//    that corner: the SVO cards composited over it derive their margin from it;
+//  - `gap` — between the name strip and the clock;
+//  - `nameStripHeight` — the compact lane banner (the full name lower-third is
+//    `OVERLAY_NAME_STRIP`);
+//  - `clockPlate` / `clockPlatePad` — the white time plate's width and its
+//    padding either side of the digits (the reference's `w-80 p-3`), one plate
+//    for both clocks: fixed so the digits never reflow when the minutes gain a
+//    glyph, and sized for the widest of them (Speedline's `MM:SS.CC` past ten
+//    minutes).
+export const OVERLAY_LANE = {
+  inset: 112,
+  gap: 16,
+  nameStripHeight: 56,
+  clockPlate: 320,
+  clockPlatePad: 12,
+} as const;
+
+// The LAAX name lower-third at its native size: `AthleteNameStrip`'s default,
+// which the admin `AthleteForm` preview draws 1:1 and scales to its panel.
+export const OVERLAY_NAME_STRIP = {
+  width: 720,
+  height: 92,
+} as const;
+
 export const radii = {
   sm: 4,
   md: 8,
@@ -195,9 +246,118 @@ export const radii = {
   trackCurve: '14px 4px 14px 4px',
 } as const;
 
+// Console-chrome mark widths (px). The overlay art's frame is
+// `overlayArt.strokeWidth`; these are the operator desk's.
+export const strokes = {
+  // The ground ring that keeps a state tier legible on any fill it lands on.
+  keyline: 2,
+  // The current-step gutter rule beside a desk caption.
+  rule: 4,
+} as const;
+
+// The operator desk's fixed rails (px) at its wide gate, one pair for both
+// control boards: setup left, the recording / score rail right, the live column
+// taking the rest (`deskColumns`).
+export const deskRails = {
+  setup: 248,
+  record: 360,
+} as const;
+export const deskColumns = `${deskRails.setup}px minmax(0, 1fr) ${deskRails.record}px`;
+
+// The viewport each board opens its desk at (design-system §9 "Desk gates"):
+// sized to what the desk was measured to hold, so off MUI's breakpoint scale.
+// Speedline gates on width alone, Freestyle on both axes; each ControlPage
+// carries its reason.
+export const deskGate = {
+  minWidth: 1280,
+  minHeight: 900,
+} as const;
+export const deskMedia = {
+  speedline: `(min-width:${deskGate.minWidth}px)`,
+  freestyle: `(min-width:${deskGate.minWidth}px) and (min-height:${deskGate.minHeight}px)`,
+} as const;
+
 // Base spacing unit (px). Matches MUI's default spacing(1) = 8.
 export const space = {
   unit: 8,
+} as const;
+
+// Control target sizes (px), design-system §6 "Buttons" and §9: `floor` for
+// general controls, `live` for every live-path press and field (MUI's `small`
+// field is 40), `race` / `raceWidth` for Start / Stop, `chip` for an icon toggle
+// sharing a row with the health plates.
+export const controlTargets = {
+  floor: 40,
+  live: 44,
+  race: 56,
+  raceWidth: 120,
+  chip: 32,
+} as const;
+
+// Field and panel widths (px): `minWidth` floors and `maxWidth` caps, never a
+// fixed track width (§9 "Responsive contract"). A floor used inside a desk rail
+// must fit it: the controller picker sits in the 248px setup rail. Px, not `ch`:
+// a Select's label and value fonts differ, so a `ch` width drifts per field.
+export const fieldWidths = {
+  compact: 140,
+  short: 160,
+  field: 200,
+  wide: 240,
+  card: 360,
+  prose: 820,
+} as const;
+
+// The athlete form's broadcast card preview height (design-system §5 "Admin
+// preview"); the width follows the card's aspect.
+export const adminPreview = {
+  cardHeight: 240,
+} as const;
+
+// A board's measured geometry (px): the floors, caps and reserved rows its brief
+// signed off at the fold budget (freestyle-board-ux §2/§6). Relocated values,
+// not a scale — each one is a measurement, so a retune re-measures the board.
+// The floors derive from the race width they are spent on.
+export const boardGeometry = {
+  // The live column's ceiling: two lane cards plus the changeover gutter; quali
+  // is the single card, capped where the TAKE BREAK verb still fits its slot.
+  // Speedline's is the same rule with its start strip between the lanes.
+  deckMax: { freestyle: 800, freestyleQuali: 500, speedline: 880 },
+  freestyle: {
+    // The armed best-trick panel: three race tracks, the deck's two 16 px
+    // gutters and the panel's hairlines.
+    panelFloor: 3 * controlTargets.raceWidth + 2 * 2 * space.unit + 2,
+    // A lane card: the race pair, the row's gutter and the hairlines.
+    cardFloor: 2 * controlTargets.raceWidth + 2 * space.unit + 2,
+    // Reserved rows (§4.12): the lane card's identity line and the warm-up
+    // card's state word, so neither moves the transport under it.
+    identityRow: 26,
+    warmupWordRow: 30,
+    // The score rail: its side foot column, the Paper's per-mode cap, and the
+    // save-status slot (the chip's row plus a caption line).
+    footColumn: 280,
+    paperMax: { battle: 1040, quali: 720 },
+    statusSlot: 52,
+    // The ADVANCE plate's height: tall on the compact tabs, one row on the desk.
+    tallyPlate: { xs: 120, lg: 76 },
+    // The best-trick `Try (s)` field.
+    tryField: 96,
+    // The selection row's flex bases: each field's longest option, so the row
+    // wraps at a field boundary rather than squeezing its option text.
+    selectionBasis: { round: 140, gender: 110, match: 210, athlete: 170, assignment: 480 },
+  },
+  speedline: {
+    // The start strip's floor between the lane columns: what it renders at on
+    // every desk width up to the deck ceiling, so the race pair's why-line
+    // wraps in it.
+    startStrip: 184,
+  },
+} as const;
+
+// Round indicator marks (px): the corner badge's status dot and the handset
+// map's key swatch.
+export const marks = {
+  dot: 10,
+  key: 14,
 } as const;
 
 // Type scale (rem). `label` is uppercase with widened tracking.
@@ -242,4 +402,5 @@ export type Fonts = typeof fonts;
 export type OverlayArt = typeof overlayArt;
 export type Radii = typeof radii;
 export type Space = typeof space;
+export type Strokes = typeof strokes;
 export type TypeScale = typeof typeScale;

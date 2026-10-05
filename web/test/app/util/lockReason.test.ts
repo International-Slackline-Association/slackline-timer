@@ -4,7 +4,7 @@ import {
   bestTrickLocks,
   laneLocks,
   lockReason,
-  resetBothLock,
+  resetLanesLock,
   type Lock,
 } from 'app/util/lockReason';
 import type { LaneState } from 'app/util/battleMachine';
@@ -244,14 +244,15 @@ describe('bestTrickLocks — the try series', () => {
   });
 });
 
-describe('resetBothLock — the rail-foot re-arm', () => {
+describe('resetLanesLock — the rail-foot re-arm', () => {
   const spentBattle = { 1: lane('finished'), 2: lane('finished') };
+  const BATTLE = [1, 2] as const;
 
   // The way every battle ends: two spent lanes and nothing else holding the
   // board, so the next match is armed in one press (§4.9).
   it('stays live at the ordinary end of a battle', () => {
     expect(
-      resetBothLock({ lanes: spentBattle, runningLane: null, bestTrickArmed: false }),
+      resetLanesLock({ lanes: spentBattle, runningLane: null, bestTrickArmed: false }, BATTLE),
     ).toBeNull();
   });
 
@@ -259,7 +260,9 @@ describe('resetBothLock — the rail-foot re-arm', () => {
   // Reset — the series' one exit is Leave best trick (§4.7), and the rail is
   // where the operator would otherwise reach the clocks from behind the tries.
   it('locks while a best-trick series is armed', () => {
-    expect(resetBothLock({ lanes: spentBattle, runningLane: null, bestTrickArmed: true })).toEqual({
+    expect(
+      resetLanesLock({ lanes: spentBattle, runningLane: null, bestTrickArmed: true }, BATTLE),
+    ).toEqual({
       kind: 'hold',
       hold: { kind: 'bestTrick' },
     });
@@ -267,11 +270,25 @@ describe('resetBothLock — the rail-foot re-arm', () => {
 
   it('locks while a lane runs, naming who', () => {
     expect(
-      resetBothLock({
-        lanes: { 1: lane('running'), 2: lane('finished') },
-        runningLane: 1,
-        bestTrickArmed: false,
-      }),
+      resetLanesLock(
+        {
+          lanes: { 1: lane('running'), 2: lane('finished') },
+          runningLane: 1,
+          bestTrickArmed: false,
+        },
+        BATTLE,
+      ),
     ).toEqual({ kind: 'hold', hold: { kind: 'running', lane: 1 } });
+  });
+
+  // Quali re-arms lane 1 alone, so it answers to lane 1's own Reset: live over
+  // its own run (the lane card asks first), where lane 2's rule would lock it.
+  it('takes only the recorded lanes into account in quali', () => {
+    expect(
+      resetLanesLock(
+        { lanes: { 1: lane('running'), 2: lane('idle') }, runningLane: 1, bestTrickArmed: false },
+        [1],
+      ),
+    ).toBeNull();
   });
 });

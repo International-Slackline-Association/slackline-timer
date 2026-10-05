@@ -303,7 +303,7 @@ export interface RankedAthlete {
   dnf?: boolean;
 }
 
-/** Where a standings placement comes from — also the round its result is read from. */
+/** The round a standings placement comes from (and, by default, its result). */
 export type StandingsSource = 'final' | 'small_final' | 'half' | 'quarter' | 'qualification';
 
 /**
@@ -315,7 +315,11 @@ export type StandingsSource = 'final' | 'small_final' | 'half' | 'quarter' | 'qu
 export interface StandingsEntry {
   athlete: Athlete;
   rank: number;
+  /** The placing round. */
   source: StandingsSource;
+  /** Set only when the shown result was borrowed from another round (the
+   *  placing round holds none). */
+  resultSource?: StandingsSource;
   /** Present while the rank can still change (an undecided bracket upstream). */
   provisional?: boolean;
   bestTimeMs?: number;

@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SecondsField } from 'app/components/SecondsField';
+import { controlTargets } from 'app/theme/tokens';
 
 import { px } from '../../util/computedUnits';
 
@@ -35,12 +36,12 @@ describe('SecondsField', () => {
     expect(document.activeElement).not.toBe(field());
   });
 
-  it('keeps the §6 44 px target — MUI sizes a `small` field at 40', () => {
+  it('keeps the §6 live target — MUI sizes a `small` field at 40', () => {
     render(<SecondsField label="Run (s)" value={75} onChange={vi.fn()} />);
 
     expect(
       px(getComputedStyle(field().parentElement as HTMLElement).minHeight),
-    ).toBeGreaterThanOrEqual(44);
+    ).toBeGreaterThanOrEqual(controlTargets.live);
   });
 
   it('locks and says why when the clock it tunes is running', () => {

@@ -6,7 +6,7 @@ import {
   isKeyCompositeOverlay,
   resolveOverlayBackground,
 } from 'app/pages/Stream/overlayBg';
-import { colors, fonts } from 'app/theme/tokens';
+import { colors, fonts, marks, space } from 'app/theme/tokens';
 
 /**
  * The shared corner status-cue chrome for the display surfaces — a fixed
@@ -32,15 +32,15 @@ export const CornerBadge = ({
     role="status"
     sx={{
       position: 'fixed',
-      top: 16,
-      [corner]: 16,
+      top: space.unit * 2,
+      [corner]: space.unit * 2,
       zIndex: 2000,
       display: 'flex',
       alignItems: 'center',
       gap: 1,
       px: 1.5,
       py: 0.5,
-      border: '2px solid',
+      border: 2,
       borderColor: 'common.white',
       borderRadius: 1,
       bgcolor: colors.overlay.scrim,
@@ -49,8 +49,8 @@ export const CornerBadge = ({
     <Box
       aria-hidden
       sx={{
-        width: 10,
-        height: 10,
+        width: marks.dot,
+        height: marks.dot,
         borderRadius: '50%',
         bgcolor: `${tone}.main`,
         '@keyframes cornerBadgePulse': {

@@ -3,6 +3,7 @@ import { type BoxProps } from '@mui/material';
 import { Numeral } from 'app/components/Numeral';
 import { colors } from 'app/theme/tokens';
 import { Plate } from 'app/pages/Stream/Plate';
+import { resultInk } from 'app/util/resultLabel';
 
 /**
  * One result value box of the LAAX tables — the VS stat rows
@@ -67,7 +68,11 @@ export const ScoreCell = ({
       {...boxProps}
     >
       {value !== null && (
-        <Numeral fontWeight={700} fontSize={fontSize}>
+        <Numeral
+          fontWeight={700}
+          fontSize={fontSize}
+          color={filled ? resultInk(value, colors.overlay.nameInk) : undefined}
+        >
           {value}
         </Numeral>
       )}

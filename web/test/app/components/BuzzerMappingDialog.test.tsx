@@ -1,9 +1,13 @@
+import { ThemeProvider } from '@mui/material/styles';
 import { render, screen, waitForElementToBeRemoved } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BuzzerMappingDialog } from 'app/components/BuzzerMappingDialog';
+import { telemetryTheme } from 'app/theme/theme';
 import { HANDSET_COLOUR_NOTE } from 'app/util/buzzer';
+
+const DIVIDER = 'rgb(225, 230, 232)'; // surface.line = palette.divider
 
 const { selectionMock } = vi.hoisted(() => ({ selectionMock: vi.fn() }));
 vi.mock('app/state/gamepadSelection', () => ({ useGamepadSelection: selectionMock }));
@@ -81,6 +85,23 @@ describe('BuzzerMappingDialog', () => {
     await user.click(screen.getByRole('button', { name: /Buzzer buttons/ }));
 
     expect(screen.getByText(HANDSET_COLOUR_NOTE)).toBeInTheDocument();
+  });
+
+  it('edges each colour swatch with the theme divider', async () => {
+    const user = userEvent.setup();
+    withPads([{ index: 0, id: 'Sony Buzz' }]);
+    render(
+      <ThemeProvider theme={telemetryTheme}>
+        <BuzzerMappingDialog title="Speedline" rows={rows} />
+      </ThemeProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: /Buzzer buttons/ }));
+
+    const swatch = screen.getByText('Yellow').firstElementChild as HTMLElement;
+    const style = window.getComputedStyle(swatch);
+    expect(style.borderTopStyle).toBe('solid');
+    expect(style.borderTopWidth).toBe('1px');
+    expect(style.borderTopColor).toBe(DIVIDER);
   });
 
   it('can be dismissed and reopened from the chip', async () => {

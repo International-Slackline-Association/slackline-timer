@@ -44,9 +44,15 @@ import { WinnerOverlay } from 'app/pages/Stream/WinnerOverlay';
 import { RoundsSummaryOverlay } from 'app/pages/Stream/RoundsSummaryOverlay';
 import { SvoOverlay } from 'app/pages/Stream/SvoOverlay';
 import { SvoLiveOverlay } from 'app/pages/Stream/SvoLiveOverlay';
-import { OVERLAY_LANE } from 'app/pages/Stream/TimerLaneBlock';
 import { STREAM_INSET_X_PX } from 'app/pages/Stream/StreamLayout';
-import { colors, overlayArt, overlayTypeFloor, OVERLAY_TYPE_FLOOR_PX } from 'app/theme/tokens';
+import {
+  colors,
+  overlayArt,
+  overlayTextShadow,
+  overlayTypeFloor,
+  OVERLAY_LANE,
+  OVERLAY_TYPE_FLOOR_PX,
+} from 'app/theme/tokens';
 import { refVh, refVw } from 'app/util/overlayScale';
 
 import { emPx, pinViewport, px, vhPx, vwPx } from '../../../util/computedUnits';
@@ -77,6 +83,32 @@ const renderOverlay = (path: string, routePattern: string, element: React.ReactN
     </QueryClientProvider>,
   );
 };
+
+/** Resolve a hex token to the `rgb(...)` form jsdom reports for a computed colour. */
+const rgb = (hex: string) => {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+};
+
+/** The subordinate tier on a filled plate steps down by colour at full opacity:
+ *  `nameInk` at 0.6 alpha composited under the 4.5:1 text floor. */
+const expectSubordinateInk = (el: HTMLElement) => {
+  const style = window.getComputedStyle(el);
+  expect(style.color).toBe(rgb(colors.overlay.nameInkSubordinate));
+  expect(Number(style.opacity || 1)).toBe(1);
+};
+
+/** A stat label on the 48% `plateStrip` band: plate ink, footage shadow off
+ *  (jsdom normalizes a declared `text-shadow: none` to `rgba(0, 0, 0, 0)`). */
+const expectBandLabelInk = (el: HTMLElement) => {
+  const style = window.getComputedStyle(el);
+  expect(style.color).toBe(rgb(colors.overlay.nameInk));
+  expect(style.textShadow).toBe('rgba(0, 0, 0, 0)');
+};
+
+/** The `overlayTextShadow` token as it computes off an `sx` declaration
+ *  (emotion's serializer drops the space after each layer's comma). */
+const TOKEN_HALO = overlayTextShadow.replace(/,\s+/g, ',');
 
 afterEach(() => {
   apiFetchMock.mockReset();
@@ -114,14 +146,37 @@ describe('RankingsOverlay', () => {
     expect(screen.getByText('1:23.45')).toBeInTheDocument();
 
     // A plain round ranking places by result, so no row carries a source tag —
-    // and no row reserves a tag column either.
+    // and no row reserves a tag or result column either.
     expect(screen.queryByTestId('ranking-source-tag-col')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ranking-reserved-col')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ranking-result-sizer')).not.toBeInTheDocument();
 
     const [path, opts] = apiFetchMock.mock.calls[0];
     expect(path).toContain(`/competitions/${COMP}/rankings/final`);
     // No discipline in the URL → the overlay defaults to speed.
     expect(path).toContain('discipline=speed');
     expect(opts).toMatchObject({ readToken: 'tok-1' });
+  });
+
+  it.each([
+    [1920, 1080],
+    [1280, 720],
+  ])('reserves the field headroom off the capture frame at %ix%i', async (width, height) => {
+    const restore = pinViewport(width, height);
+    apiFetchMock.mockResolvedValue([{ athlete: athlete('a1', 'Jane Doe'), bestTimeMs: 83_450 }]);
+    try {
+      renderOverlay(
+        `/stream/rankings/final/male?compId=${COMP}&token=tok-1`,
+        '/stream/rankings/:round/:gender',
+        <RankingsOverlay />,
+      );
+      await screen.findByText('Jane');
+      const field = window.getComputedStyle(screen.getByTestId('ranked-field'));
+      // 48 reference px: the old `pt: 6` at 1080p, two thirds of it at 720p.
+      expect(px(field.paddingTop)).toBeCloseTo((48 * height) / 1080, 1);
+    } finally {
+      restore();
+    }
   });
 
   it('renders the freestyle overall and passes discipline=freestyle from the URL', async () => {
@@ -164,6 +219,11 @@ describe('RankingsOverlay', () => {
     const units = screen.getAllByTestId('ranking-result-unit');
     expect(units).toHaveLength(1);
     expect(units[0].textContent).toBe('PTS');
+    expectSubordinateInk(units[0]);
+    // Held at the type floor like the source tag (no tag on this board, so the
+    // rule is the unit's own).
+    const css = [...document.querySelectorAll('style')].map((el) => el.textContent).join('');
+    expect(css).toContain(`font-size:max(0.5em, ${overlayTypeFloor})`);
     // Judged components must not leak onto the broadcast — overall only.
     expect(screen.queryByText(/difficulty|combo|control/i)).not.toBeInTheDocument();
   });
@@ -188,6 +248,7 @@ describe('RankingsOverlay', () => {
     const units = screen.getAllByTestId('athlete-card-result-unit');
     expect(units).toHaveLength(1);
     expect(units[0].textContent).toBe('PTS');
+    expectSubordinateInk(units[0]);
   });
 
   it('shows no result unit on a speed profile board (times are self-evident)', async () => {
@@ -375,6 +436,25 @@ describe('RankingsOverlay', () => {
     expect(screen.queryByText('R9')).toBeNull();
   });
 
+  it('inks a DNF row result in the stop tier, finite rows in the name ink', async () => {
+    const ranked: RankedAthlete[] = [
+      { athlete: athlete('a1', 'Jane Doe'), bestTimeMs: 83_450 },
+      { athlete: athlete('a2', 'John Roe'), bestTimeMs: 3_355_550 }, // DNF_SENTINEL
+    ];
+    apiFetchMock.mockResolvedValue(ranked);
+
+    renderOverlay(
+      `/stream/rankings/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/rankings/:round/:gender',
+      <RankingsOverlay />,
+    );
+
+    await screen.findByText('John');
+    // stopDim resolves through --tl-stop-dim, which jsdom leaves unresolved.
+    expect(window.getComputedStyle(screen.getByText('DNF')).color).toBe(colors.race.stopDim);
+    expect(window.getComputedStyle(screen.getByText('1:23.45')).color).toBe('rgb(35, 31, 32)');
+  });
+
   it('renders filled row plates solid white with dark name + result (two-tier)', async () => {
     const ranked: RankedAthlete[] = [{ athlete: athlete('a1', 'Jane Doe'), bestTimeMs: 83_450 }];
     apiFetchMock.mockResolvedValue(ranked);
@@ -476,6 +556,52 @@ describe('RankingsOverlay', () => {
     expect(px(numeral('2').fontSize)).toBeCloseTo(vhPx('9.907vh'), 2); // 107px
     expect(px(numeral('3').fontSize)).toBeCloseTo(vhPx('7.777vh'), 2); // 83.99px
     expect(px(numeral('4').fontSize)).toBeCloseTo(vhPx('6.111vh'), 2); // 66px
+  });
+
+  /** `glyphs` display-face digits at a profile numeral size: the names cut's
+   *  35.79px digit box per 72.68px numeral, as a `vh` length. */
+  const profileGlyphPx = (numeralSize: number, glyphs = 1) =>
+    vhPx(refVh((glyphs * numeralSize * 35.79) / 72.68));
+  const PROFILE_NUMERAL_SIZES = [156.12, 107, 83.99, 66];
+
+  const renderProfileField = async (bestTimes: number[]) => {
+    apiFetchMock.mockResolvedValue(
+      bestTimes.map((ms, i) => ({
+        athlete: athlete(`a${i + 1}`, `Racer R${i + 1}`),
+        bestTimeMs: ms,
+      })),
+    );
+    renderOverlay(
+      `/stream/rankings/final/male?compId=${COMP}&token=tok-1&variant=profile`,
+      '/stream/rankings/:round/:gender',
+      <RankingsOverlay />,
+    );
+    await screen.findByText('R1');
+    return screen.getAllByTestId('ranking-profile-numeral');
+  };
+
+  it('bounds a tie-free profile numeral to one glyph box per slot', async () => {
+    const boxes = await renderProfileField([83_000, 84_000, 85_000, 86_000]);
+    expect(boxes).toHaveLength(4);
+    boxes.forEach((box, index) => {
+      const cs = window.getComputedStyle(box);
+      expect(px(cs.width)).toBeCloseTo(profileGlyphPx(PROFILE_NUMERAL_SIZES[index]), 2);
+      expect(cs.minWidth).toBe('0px');
+      expect(cs.justifyContent).toBe('flex-end');
+    });
+  });
+
+  it('reserves the field’s widest profile numeral on every slot, not just the tied ones', async () => {
+    // `=1 =1 3 4`: every slot reserves two glyphs, so which row carries the tie
+    // never moves one card relative to the others.
+    const boxes = await renderProfileField([83_000, 83_000, 85_000, 86_000]);
+    expect(screen.getAllByText('=1')).toHaveLength(2);
+    boxes.forEach((box, index) => {
+      expect(px(window.getComputedStyle(box).width)).toBeCloseTo(
+        profileGlyphPx(PROFILE_NUMERAL_SIZES[index], 2),
+        2,
+      );
+    });
   });
 
   it('marks tied ranks with a shared "=" numeral and skips the consumed ranks', async () => {
@@ -598,8 +724,9 @@ describe('RankingsOverlay', () => {
     expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.queryByText('=1')).not.toBeInTheDocument();
-    expect(screen.getAllByText('1:23.45')).toHaveLength(2);
-    expect(screen.getByText('—')).toBeInTheDocument();
+    // The visible results; each row also carries the field's widest as a hidden sizer.
+    const results = screen.getAllByTestId('ranking-result').map((el) => el.textContent);
+    expect(results).toEqual(['1:23.45', '1:23.45', '—']);
     expect(screen.queryByText('0:00.00')).not.toBeInTheDocument();
     // Titleless — the overall board carries no self-naming sub-line; the
     // per-row source tags supply the result context instead.
@@ -631,6 +758,7 @@ describe('RankingsOverlay', () => {
     // One tag per row, each naming the placing round, top-down.
     const tags = screen.getAllByTestId('ranking-source-tag').map((el) => el.textContent);
     expect(tags).toEqual(['FINAL', 'FINAL', 'SMALL FINAL', 'SMALL FINAL', 'QF', 'QUALI']);
+    expectSubordinateInk(screen.getAllByTestId('ranking-source-tag-col')[0]);
 
     // Rank 3 shows a SLOWER time than rank 4, both under a SMALL FINAL tag —
     // the placement, not the clock, drove the order.
@@ -681,6 +809,163 @@ describe('RankingsOverlay', () => {
     expect(window.getComputedStyle(columns[0]).justifyItems).toBe('end');
   });
 
+  it('reserves the field-wide tag+result column on every standings row', async () => {
+    // A provisional placement ('—') and a DNF are narrower than a time; each
+    // row pads its result to the field's widest so the column — and the name
+    // room left of it — is one box down the field.
+    const standings = [
+      { athlete: athlete('a1', 'Ida Ace'), rank: 1, source: 'final', bestTimeMs: 84_000 },
+      { athlete: athlete('a2', 'Bea Bow'), rank: 2, source: 'final', bestTimeMs: 3_355_550 },
+      { athlete: athlete('a3', 'Mel Cox'), rank: 3, source: 'small_final', provisional: true },
+      { athlete: athlete('a4', 'Tan Dey'), rank: 4, source: 'qualification', bestTimeMs: 6_570 },
+    ];
+    apiFetchMock.mockResolvedValue(standings);
+
+    renderOverlay(
+      `/stream/rankings/overall/female?compId=${COMP}&token=tok-1`,
+      '/stream/rankings/:round/:gender',
+      <RankingsOverlay />,
+    );
+
+    await screen.findByText('Ida');
+    for (const plate of screen.getAllByTestId('ranking-plate')) {
+      const column = within(plate).getByTestId('ranking-reserved-col');
+      expect(column).toContainElement(within(plate).getByTestId('ranking-source-tag-col'));
+      expect(column).toContainElement(within(plate).getByTestId('ranking-result'));
+      const [sizer] = within(column).getAllByTestId('ranking-result-sizer');
+      expect(within(column).getAllByTestId('ranking-result-sizer')).toHaveLength(1);
+      expect(sizer.textContent).toBe('1:24.00');
+      expect(window.getComputedStyle(sizer).visibility).toBe('hidden');
+    }
+  });
+
+  it('widens each standings plate by the width its source tag takes', async () => {
+    // The plain cut's name slot is the plate minus its result; a standings row
+    // gives the tag's share of the reserved column back as plate width, so the
+    // name fit matches the round board's.
+    const restore = pinViewport(1920, 1080);
+    const widths: Record<string, number> = {
+      'ranking-reserved-col': 210,
+      'ranking-result-sizer': 90,
+    };
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        const width = widths[this.dataset.testid ?? ''] ?? 0;
+        return {
+          width,
+          height: 0,
+          top: 0,
+          left: 0,
+          right: width,
+          bottom: 0,
+          x: 0,
+          y: 0,
+        } as DOMRect;
+      });
+    apiFetchMock.mockResolvedValue([
+      { athlete: athlete('a1', 'Ida Ace'), rank: 1, source: 'final', bestTimeMs: 84_000 },
+      { athlete: athlete('a2', 'Bea Bow'), rank: 2, source: 'small_final', bestTimeMs: 83_000 },
+    ]);
+
+    try {
+      renderOverlay(
+        `/stream/rankings/overall/female?compId=${COMP}&token=tok-1`,
+        '/stream/rankings/:round/:gender',
+        <RankingsOverlay />,
+      );
+      await screen.findByText('Ida');
+      const css = [...document.querySelectorAll('style')].map((el) => el.textContent).join('');
+      expect(css).toContain('width:calc(43.150vw + 120.00px)');
+      expect(css).toContain('width:calc(40.751vw + 120.00px)');
+    } finally {
+      rect.mockRestore();
+      restore();
+    }
+  });
+
+  it('reserves the result column on the combined cut too', async () => {
+    apiFetchMock.mockResolvedValue([
+      {
+        athlete: athlete('a1', 'Jane Doe'),
+        rank: 1,
+        combined: 1.5,
+        speedRank: 1,
+        freestyleRank: 2,
+      },
+      {
+        athlete: athlete('a2', 'John Roe'),
+        rank: 2,
+        combined: 10,
+        speedRank: 9,
+        freestyleRank: 11,
+      },
+    ]);
+
+    renderOverlay(
+      `/stream/rankings/combined/male?compId=${COMP}&token=tok-1`,
+      '/stream/rankings/:round/:gender',
+      <RankingsOverlay />,
+    );
+
+    await screen.findByText('Jane');
+    const sizers = screen.getAllByTestId('ranking-result-sizer').map((el) => el.textContent);
+    expect(sizers).toEqual(['10.0', '10.0']);
+    expect(screen.queryByTestId('ranking-source-tag-col')).not.toBeInTheDocument();
+  });
+
+  it('flattens the filled plate while the rank numeral keeps the footage halo', async () => {
+    apiFetchMock.mockResolvedValue([{ athlete: athlete('a1', 'Jane Doe'), bestTimeMs: 83_450 }]);
+
+    renderOverlay(
+      `/stream/rankings/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/rankings/:round/:gender',
+      <RankingsOverlay />,
+    );
+
+    await screen.findByText('Jane');
+    expect(window.getComputedStyle(screen.getByTestId('ranking-numeral-col')).textShadow).toBe(
+      TOKEN_HALO,
+    );
+    expect(window.getComputedStyle(screen.getByTestId('ranking-plate')).textShadow).toBe(
+      'rgba(0, 0, 0, 0)',
+    );
+  });
+
+  it('holds the source tag at the broadcast type floor down the top-8 taper', async () => {
+    // `0.5em` of the tapering plate font is 22px on row 1 but 17.1px from row
+    // 5 of a top-8 board at 1080p — under the floor the profile cards hold.
+    const restore = pinViewport(1920, 1080);
+    const names = ['Ida Ace', 'Bea Bow', 'Mel Cox', 'Tan Dey', 'Eve Fox', 'Gia Hue', 'Kim Ivy'];
+    const standings = [...names, 'Lou Jay'].map((name, i) => ({
+      athlete: athlete(`a${i + 1}`, name),
+      rank: i + 1,
+      source: i < 2 ? 'final' : 'quarter',
+      bestTimeMs: 6_000 + i * 100,
+    }));
+    apiFetchMock.mockResolvedValue(standings);
+
+    renderOverlay(
+      `/stream/rankings/overall/female?compId=${COMP}&token=tok-1`,
+      '/stream/rankings/:round/:gender',
+      <RankingsOverlay />,
+    );
+
+    try {
+      await screen.findByText('Ida');
+      const columns = screen.getAllByTestId('ranking-source-tag-col');
+      expect(columns).toHaveLength(8);
+      const sizes = columns.map((column) => px(window.getComputedStyle(column).fontSize));
+      for (const size of sizes) expect(size).toBeGreaterThanOrEqual(20);
+      // Rows already above the floor keep their proportional half-em.
+      columns.slice(0, 2).forEach((column, row) => {
+        expect(sizes[row]).toBeCloseTo(emPx('0.5em', column.parentElement as HTMLElement), 2);
+      });
+    } finally {
+      restore();
+    }
+  });
+
   it('tags each profile-variant standings card with its placing round', async () => {
     // The profile cut must disambiguate the same way the names cut does (goal
     // g3): a slower time above a faster one is a bracket outcome, so each of the
@@ -715,7 +1000,70 @@ describe('RankingsOverlay', () => {
       emPx(overlayArt.headingTracking, tags[0]),
       2,
     );
+    expectSubordinateInk(tags[0]);
+    // The caption is the stack's last row, so the name block's foot stands a
+    // card-relative clearance off the divider rule instead of resting on it.
+    for (const block of screen.getAllByTestId('athlete-card-name')) {
+      expect(window.getComputedStyle(block).bottom).toMatch(/0\.8cqh \+ 1\.5cqh/);
+    }
   });
+
+  it.each([
+    { variant: 'names', resultId: 'ranking-result', tagId: 'ranking-source-tag' },
+    { variant: 'profile', resultId: 'athlete-card-result', tagId: 'athlete-card-source-tag' },
+  ])(
+    'captions a borrowed result by its placing round in subordinate ink ($variant)',
+    async ({ variant, resultId, tagId }) => {
+      // A decided small final with no small-final Times: both rows show quali
+      // values (`resultSource`) but stay captioned SMALL FINAL, the numeral
+      // stepping down to the subordinate tier so it reads as secondary.
+      const standings = [
+        { athlete: athlete('a1', 'Ida Ace'), rank: 1, source: 'final', bestTimeMs: 5_280 },
+        { athlete: athlete('a2', 'Bea Bow'), rank: 2, source: 'final', bestTimeMs: 5_400 },
+        {
+          athlete: athlete('a3', 'Mel Cox'),
+          rank: 3,
+          source: 'small_final',
+          resultSource: 'qualification',
+          bestTimeMs: 7_090,
+        },
+        {
+          athlete: athlete('a4', 'Tan Dey'),
+          rank: 4,
+          source: 'small_final',
+          resultSource: 'qualification',
+          bestTimeMs: 6_210,
+        },
+      ];
+      apiFetchMock.mockResolvedValue(standings);
+
+      renderOverlay(
+        `/stream/rankings/overall/female?compId=${COMP}&token=tok-1&variant=${variant}`,
+        '/stream/rankings/:round/:gender',
+        <RankingsOverlay />,
+      );
+
+      await screen.findByText('Ida');
+      expect(screen.getAllByTestId(tagId).map((el) => el.textContent)).toEqual([
+        'FINAL',
+        'FINAL',
+        'SMALL FINAL',
+        'SMALL FINAL',
+      ]);
+      expect(screen.queryByText('QUALI')).not.toBeInTheDocument();
+      const results = screen.getAllByTestId(resultId);
+      expect(results.map((el) => el.textContent)).toEqual([
+        '0:05.28',
+        '0:05.40',
+        '0:07.09',
+        '0:06.21',
+      ]);
+      expect(window.getComputedStyle(results[0]).color).toBe(rgb(colors.overlay.nameInk));
+      expect(window.getComputedStyle(results[1]).color).toBe(rgb(colors.overlay.nameInk));
+      expectSubordinateInk(results[2]);
+      expectSubordinateInk(results[3]);
+    },
+  );
 
   it('renders the combined ranking with =-prefixed server ranks and the average as result', async () => {
     // Combined (rule G2): the server assigns 1224-style shared ranks over the
@@ -755,13 +1103,20 @@ describe('RankingsOverlay', () => {
     // The tied pair shares =1; the average renders to one decimal as the result.
     expect(screen.getAllByText('=1')).toHaveLength(2);
     expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getAllByText('1.5')).toHaveLength(2);
-    expect(screen.getByText('3.0')).toBeInTheDocument();
+    expect(screen.getAllByTestId('ranking-result').map((el) => el.textContent)).toEqual([
+      '1.5',
+      '1.5',
+      '3.0',
+    ]);
     // The ranked field is titleless like the LAAX masters — no plane heading.
     expect(screen.queryByText('MEN’S COMBINED')).not.toBeInTheDocument();
-    // The average is a RANK (lower is better, opposite every other board) —
-    // no "PTS" unit that would imply points.
-    expect(screen.queryByTestId('ranking-result-unit')).not.toBeInTheDocument();
+    // The average is a RANK (lower is better, opposite every other board): row 1
+    // names it AVG, never PTS, which would imply points.
+    const units = screen.getAllByTestId('ranking-result-unit');
+    expect(units).toHaveLength(1);
+    expect(units[0].textContent).toBe('AVG');
+    expect(within(screen.getAllByTestId('ranking-plate')[0]).getByText('AVG')).toBe(units[0]);
+    expectSubordinateInk(units[0]);
   });
 
   it('fails safe (error status, nothing on camera) for an invalid round', () => {
@@ -905,6 +1260,8 @@ describe('ScoreCardOverlay (freestyle judged table)', () => {
     // components are irrelevant once dnf is set (the Score.dnf contract).
     expect(screen.getByText('DNF')).toBeInTheDocument();
     expect(screen.getAllByText('—')).toHaveLength(5);
+    // The near-black TOTAL box keeps its white numeral: stopDim fails there.
+    expect(window.getComputedStyle(screen.getByText('DNF')).color).toBe('rgb(255, 255, 255)');
   });
 
   it('caps the field at the art’s 8 rows', async () => {
@@ -1485,6 +1842,58 @@ describe('VsOverlay', () => {
     expect(within(johnCard).queryByTestId('athlete-card-winner-tag')).not.toBeInTheDocument();
   });
 
+  it.each([
+    { winnerId: 'a1', jane: colors.race.go, john: colors.race.stop },
+    { winnerId: undefined, jane: colors.overlay.stroke, john: colors.overlay.stroke },
+  ])(
+    'frames the cards winner-green / loser-red only once decided (winnerId=$winnerId)',
+    async ({ winnerId, jane, john }) => {
+      const matches: Match[] = [
+        {
+          matchId: 'm1',
+          compId: COMP,
+          discipline: 'speed',
+          round: 'final',
+          gender: 'male',
+          position: 0,
+          athlete1Id: 'a1',
+          athlete2Id: 'a2',
+          winnerId,
+        },
+      ];
+      apiFetchMock.mockImplementation((path: string) => {
+        if (path.includes('/matches')) return Promise.resolve(matches);
+        if (path.includes('/athletes'))
+          return Promise.resolve([athlete('a1', 'Jane Doe'), athlete('a2', 'John Roe')]);
+        if (path.includes('/times')) return Promise.resolve([]);
+        throw new Error(`unexpected ${path}`);
+      });
+
+      renderOverlay(
+        `/stream/vs/final/male?compId=${COMP}&token=tok-1`,
+        '/stream/vs/:round/:gender',
+        <VsOverlay />,
+      );
+
+      await screen.findByText('Jane');
+      const cards = screen
+        .getAllByTestId('athlete-card-photo')
+        .map((p) => p.parentElement as HTMLElement);
+      const edgeOf = (name: string) =>
+        window.getComputedStyle(cards.find((c) => within(c).queryByText(name)) as HTMLElement);
+      expect(edgeOf('Jane').borderTopColor).toBe(rgb(jane));
+      expect(edgeOf('John').borderTopColor).toBe(rgb(john));
+      // A decided side carries the outset state ring in its own colour; an
+      // undecided card has none.
+      if (winnerId) {
+        expect(edgeOf('Jane').boxShadow).toContain(colors.race.go.toLowerCase());
+        expect(edgeOf('John').boxShadow).toContain(colors.race.stop.toLowerCase());
+      } else {
+        expect(edgeOf('John').boxShadow).toBe('none');
+      }
+    },
+  );
+
   it('lists each athlete RUN 1/2/3 laps in chronological order, DNF and blanks included', async () => {
     const matches: Match[] = [
       {
@@ -1556,8 +1965,15 @@ describe('VsOverlay', () => {
     expect(await within(left).findByText('1:23.45')).toBeInTheDocument();
     expect(within(left).getByText('1:21.99')).toBeInTheDocument();
     expect(within(left).getByText('DNF')).toBeInTheDocument();
-    // Three RUN labels per side.
-    expect(within(left).getAllByText(/^RUN [123]$/)).toHaveLength(3);
+    // A DNF run is a race-state word on the filled cell, not a plain value.
+    expect(window.getComputedStyle(within(left).getByText('DNF')).color).toBe(colors.race.stopDim);
+    expect(window.getComputedStyle(within(left).getByText('1:23.45')).color).toBe(
+      'rgb(35, 31, 32)',
+    );
+    // Three RUN labels per side, inked on the band rather than white-on-48%-white.
+    const runLabels = within(left).getAllByText(/^RUN [123]$/);
+    expect(runLabels).toHaveLength(3);
+    runLabels.forEach(expectBandLabelInk);
 
     // a2 has a single run → RUN 1 filled, RUN 2/3 blank (no placeholder zeros).
     const right = screen.getByTestId('vs-stats-right');
@@ -1634,6 +2050,15 @@ describe('VsOverlay', () => {
     // Every battle round shows the two battle-only rows.
     expect(within(left).getByText('CONTROL PENALTY')).toBeInTheDocument();
     expect(within(left).getByText('BEST TRICK')).toBeInTheDocument();
+    // Every banded label takes the plate ink; TOTAL sits on bare footage (no
+    // band), so it keeps the layout's white caps + footage shadow.
+    for (const label of ['TRICK DIFFICULTY', 'COMBO', 'STYLE', 'CONTROL PENALTY', 'BEST TRICK']) {
+      expectBandLabelInk(within(left).getByText(label));
+    }
+    const total = window.getComputedStyle(within(left).getByText('TOTAL'));
+    expect(total.color).toBe('rgb(255, 255, 255)');
+    expect(total.textShadow).not.toBe('rgba(0, 0, 0, 0)');
+    expect(total.textShadow).toBe(window.getComputedStyle(left).textShadow);
     // Freestyle reads scores, never the times endpoint.
     const paths = apiFetchMock.mock.calls.map(([p]: string[]) => p);
     expect(paths.some((p) => p.includes('/times'))).toBe(false);
@@ -1795,6 +2220,25 @@ describe('StreamLayout title-safe frame', () => {
     await screen.findByTestId('playoff-bracket');
     const css = [...document.querySelectorAll('style')].map((el) => el.textContent).join('');
     expect(css).toContain('min(100%, calc((100vh - 2 * 5.000vh) * 16 / 9))');
+  });
+
+  it('protects footage-borne text with the six-layer overlay halo', () => {
+    // The WINNER word, series digit, rank numerals and bracket labels sit on
+    // footage, not a plate, and inherit the root shadow.
+    const { container } = renderBrackets();
+    expect(window.getComputedStyle(container.firstElementChild as HTMLElement).textShadow).toBe(
+      TOKEN_HALO,
+    );
+  });
+
+  it('keeps every Stream shadow on the token (no inline shadow strings)', () => {
+    const dir = resolve(process.cwd(), 'src/app/pages/Stream');
+    const offenders = readdirSync(dir)
+      .filter((f) => f.endsWith('.tsx'))
+      .filter((f) =>
+        /textShadow\s*[:=]\s*\{?\s*[`'"][^`'"]*\dpx/.test(readFileSync(resolve(dir, f), 'utf8')),
+      );
+    expect(offenders).toEqual([]);
   });
 });
 
@@ -2257,7 +2701,11 @@ describe('WinnerOverlay', () => {
     );
 
     // CSS uppercases the banner; the DOM text stays "Winner".
-    expect(await screen.findByText('Winner')).toBeInTheDocument();
+    const banner = await screen.findByText('Winner');
+    expect(px(window.getComputedStyle(banner).letterSpacing)).toBeCloseTo(
+      emPx(overlayArt.bannerTracking, banner),
+      2,
+    );
     // Captionless — the card no longer names the title that was won.
     expect(screen.queryByText('MEN’S SPEED — FINAL')).not.toBeInTheDocument();
     // The winner's card (bold first / light last); the loser is not on it.
@@ -2354,6 +2802,77 @@ describe('WinnerOverlay', () => {
   });
 });
 
+describe('WINNER word (one element on the VS card and the winner banner)', () => {
+  let restore: () => void = () => {};
+  afterEach(() => restore());
+
+  const decided: Match = {
+    matchId: 'm1',
+    compId: COMP,
+    discipline: 'speed',
+    round: 'final',
+    gender: 'male',
+    position: 0,
+    athlete1Id: 'a1',
+    athlete2Id: 'a2',
+    winnerId: 'a1',
+  };
+
+  const winnerTagOn = async (path: string, pattern: string, element: React.ReactNode) => {
+    apiFetchMock.mockImplementation((p: string) => {
+      if (p.includes('/matches')) return Promise.resolve([decided]);
+      if (p.includes('/athletes'))
+        return Promise.resolve([athlete('a1', 'Jane Doe'), athlete('a2', 'John Roe')]);
+      if (p.includes('/times')) return Promise.resolve([]);
+      throw new Error(`unexpected ${p}`);
+    });
+    const view = renderOverlay(path, pattern, element);
+    const tag = await screen.findByTestId('athlete-card-winner-tag');
+    const style = window.getComputedStyle(tag);
+    const metrics = { fontSize: style.fontSize, bottom: style.bottom };
+    view.unmount();
+    return metrics;
+  };
+
+  it('renders WINNER at one size and frame gap on /stream/vs and /stream/winner', async () => {
+    restore = pinViewport(1920, 1080);
+    const vs = await winnerTagOn(
+      `/stream/vs/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/vs/:round/:gender',
+      <VsOverlay />,
+    );
+    const banner = await winnerTagOn(
+      `/stream/winner/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/winner/:round/:gender',
+      <WinnerOverlay />,
+    );
+    expect(banner).toEqual(vs);
+    expect(px(vs.fontSize)).toBeCloseTo(40, 1);
+  });
+
+  it('reserves the word and its gap above the winner card so the tag stays in frame', async () => {
+    restore = pinViewport(1920, 1080);
+    apiFetchMock.mockImplementation((p: string) => {
+      if (p.includes('/matches')) return Promise.resolve([decided]);
+      if (p.includes('/athletes'))
+        return Promise.resolve([athlete('a1', 'Jane Doe'), athlete('a2', 'John Roe')]);
+      throw new Error(`unexpected ${p}`);
+    });
+    renderOverlay(
+      `/stream/winner/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/winner/:round/:gender',
+      <WinnerOverlay />,
+    );
+    // One WINNER on the banner, and it is the card's own tag.
+    expect(await screen.findAllByText('Winner')).toEqual([
+      screen.getByTestId('athlete-card-winner-tag'),
+    ]);
+    const frame = screen.getByTestId('athlete-card-photo').parentElement?.parentElement;
+    const reserve = window.getComputedStyle(frame?.parentElement as HTMLElement);
+    expect(px(reserve.paddingTop)).toBeCloseTo(40 + 24, 1);
+  });
+});
+
 describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
   const seriesMatch: Match[] = [
     {
@@ -2404,9 +2923,15 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
     expect(tally.textContent).toBe('Jane2–1John');
     // The "… — BEST OF 3" caption sits one step up from the old 24px
     // (overlay-typography-polish): refVh(32).
-    expect(
-      px(window.getComputedStyle(screen.getByTestId('rounds-summary-caption')).fontSize),
-    ).toBeCloseTo(vhPx('2.963vh'), 2);
+    const caption = screen.getByTestId('rounds-summary-caption');
+    expect(px(window.getComputedStyle(caption).fontSize)).toBeCloseTo(vhPx('2.963vh'), 2);
+    // Caption and tally names share the WINNER banner's tracking.
+    for (const banner of [caption, within(tally).getByText('Jane')]) {
+      expect(px(window.getComputedStyle(banner).letterSpacing)).toBeCloseTo(
+        emPx(overlayArt.bannerTracking, banner),
+        2,
+      );
+    }
     // The leading count is race.go green; the trailing count is overlay-label
     // white — ink.hi is the on-white-plate tier and vanished on keyed footage.
     expect(window.getComputedStyle(screen.getByTestId('series-wins-1')).color).toBe(
@@ -2428,6 +2953,78 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
       expect(px(frame.width)).toBeCloseTo(vwPx('15.563vw'), 2);
       expect(px(frame.height)).toBeCloseTo(vhPx('46.113vh'), 2);
     }
+    // Half the VS card gap (176.19 / 2 = 88px at 1920), frame-relative, so the
+    // 10px outset winner rim keeps clear ground to the other card.
+    const cards = window.getComputedStyle(screen.getByTestId('rounds-summary-cards'));
+    expect(px(cards.columnGap)).toBeCloseTo(vwPx('4.588vw'), 2);
+  });
+
+  it.each([
+    [1920, 1080],
+    [1280, 720],
+  ])('spaces the series off the capture frame at %ix%i', async (width, height) => {
+    const restore = pinViewport(width, height);
+    wsState.lastJsonMessage = {
+      type: 'updateSelection',
+      data: {
+        discipline: 'speed',
+        round: 'final',
+        gender: 'male',
+        matchId: 'm1',
+        athlete1Id: 'a1',
+        athlete2Id: 'a2',
+        runWins: { 1: 1, 2: 0 },
+      },
+    };
+    mockComp();
+    try {
+      renderOverlay(
+        `/stream/rounds-summary/final/male?compId=${COMP}&token=tok-1`,
+        '/stream/rounds-summary/:round/:gender',
+        <RoundsSummaryOverlay />,
+      );
+      const tally = await screen.findByTestId('series-tally');
+      // The old MUI spacing (24 / 16px) as reference px: equal at 1080p, scaled
+      // with the cards at 720p rather than staying device px.
+      const story = window.getComputedStyle(tally.parentElement as HTMLElement);
+      expect(px(story.rowGap)).toBeCloseTo((24 * height) / 1080, 1);
+      expect(px(window.getComputedStyle(tally).columnGap)).toBeCloseTo((16 * width) / 1920, 1);
+    } finally {
+      restore();
+    }
+  });
+
+  it('sets the tally separator in the numeral face at the digits’ size and weight', async () => {
+    wsState.lastJsonMessage = {
+      type: 'updateSelection',
+      data: {
+        discipline: 'speed',
+        round: 'final',
+        gender: 'male',
+        matchId: 'm1',
+        athlete1Id: 'a1',
+        athlete2Id: 'a2',
+        runWins: { 1: 1, 2: 0 },
+      },
+    };
+    mockComp();
+
+    renderOverlay(
+      `/stream/rounds-summary/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/rounds-summary/:round/:gender',
+      <RoundsSummaryOverlay />,
+    );
+
+    const separator = window.getComputedStyle(await screen.findByTestId('series-separator'));
+    for (const id of ['series-wins-1', 'series-wins-2']) {
+      const digit = window.getComputedStyle(screen.getByTestId(id));
+      expect(digit.fontSize).toBe(separator.fontSize);
+      expect(digit.fontFamily).toBe(separator.fontFamily);
+      // JetBrains Mono is bundled 300–700; an 800 silently fell back to 700.
+      expect(digit.fontWeight).toBe('700');
+    }
+    expect(separator.fontFamily).toContain('JetBrains Mono');
+    expect(separator.fontWeight).toBe('700');
   });
 
   it('reports empty (blank on camera) until the first run resolves', async () => {
@@ -2798,6 +3395,18 @@ describe('overlay card metrics (frame-relative rules)', () => {
         /\b(mt|mb|my|marginTop|marginBottom)\s*:\s*['"`][\d.]+%/.test(
           readFileSync(resolve(dir, f), 'utf8'),
         ),
+      );
+    expect(offenders).toEqual([]);
+  });
+
+  it('never requests a font weight the overlay faces do not ship', () => {
+    // Oswald and JetBrains Mono both top out at 700; an 800 resolves silently
+    // back to 700 in the browser, so the source would lie about the render.
+    const dir = resolve(process.cwd(), 'src/app/pages/Stream');
+    const offenders = readdirSync(dir)
+      .filter((f) => f.endsWith('.tsx'))
+      .filter((f) =>
+        /fontWeight\s*(:\s*|=\{\s*)['"]?[89]00\b/.test(readFileSync(resolve(dir, f), 'utf8')),
       );
     expect(offenders).toEqual([]);
   });
