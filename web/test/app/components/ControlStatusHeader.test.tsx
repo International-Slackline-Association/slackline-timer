@@ -17,6 +17,7 @@ const LG_MEDIA = '(min-width:1200px)';
 
 /** The sentence the down phases print under the health row. */
 const LINK_DETAIL = 'clocks keep running; the preview is not receiving';
+const AUDIO_DETAIL = 'click anywhere to unlock audio';
 
 type ControlStatusHeaderProps = Parameters<typeof ControlStatusHeader>[0];
 
@@ -123,6 +124,25 @@ describe('ControlStatusHeader', () => {
       expect(screen.getByTestId('control-link-detail')).toHaveTextContent(both);
       expect(screen.getByTestId('control-link-detail')).toHaveAttribute('title', both);
     }
+  });
+
+  it('keeps the blocked-audio plate to its alarm and puts the gesture in the caption', () => {
+    // A plate long enough to carry the instruction wrapped the health row to
+    // two lines at every desk width; the reserved caption row costs nothing.
+    const { rerender } = render(
+      <ControlStatusHeader {...baseProps} health={{ ...baseProps.health, audioBlocked: true }} />,
+    );
+    expect(screen.getByText('AUDIO LOCKED')).toBeInTheDocument();
+    expect(screen.getByTestId('control-link-detail')).toHaveTextContent(AUDIO_DETAIL);
+
+    rerender(
+      <ControlStatusHeader
+        {...baseProps}
+        health={{ ...baseProps.health, audioBlocked: true, recovered: true, link: 'lost' }}
+      />,
+    );
+    const all = `recovered this panel’s last run · ${AUDIO_DETAIL} · ${LINK_DETAIL}`;
+    expect(screen.getByTestId('control-link-detail')).toHaveAttribute('title', all);
   });
 
   // `control-health-slot-height`: the detail caption reserves ONE row

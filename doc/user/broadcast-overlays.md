@@ -73,7 +73,9 @@ choice on the Overlays page, and travels in the link.
 Magenta is the key colour because the graphics use green for winners and the GO
 light, and the athlete flags carry every other primary — magenta is the one
 colour that never appears in the content, so keying it can never punch a hole in
-a name plate or a flag.
+a name plate or a flag. The graphics carry two state colours to keep clear of
+when you pick a key: winners and the GO light are green `#65BC7B`, and a decided
+head-to-head frames the slower lane's plate in orange-red `#F04E34`.
 
 If your keyer only offers green or blue, those are available too — but only use
 them if nothing green or blue is ever on screen.
@@ -91,19 +93,19 @@ between matches composites away to nothing rather than showing an empty box.
 For active operation, keep to live-following overlays first; use pinned
 rankings/bracket/standings overlays mainly between heats.
 
-| Overlay                         | Shows                                                                                                          |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| **Rankings**                    | The round's ranked field as name plates                                                                        |
-| **Rankings (top-4 profiles)**   | The same data as photo cards for the top four                                                                  |
-| **Final standings**             | The event's final order, each row tagged with its placing round; a result borrowed from qualification is grey  |
-| **Head-to-head (VS)**           | The two athletes of a match, for a fixed round                                                                 |
-| **Head-to-head (VS, live)**     | The same card, but following the board through every round — **set this one up once and never touch it again** |
-| **Match winner**                | The decided match's winner card                                                                                |
-| **Rounds summary** (speed)      | The best-of-3 tally, one card per won run                                                                      |
-| **SVO side 1 / side 2**         | A single-athlete card per lane, following whoever the board has selected                                       |
-| **Bracket (photos / names)**    | The playoff tree, in a photo or a name-plate layout; a top-4 bracket shows semis onward                        |
-| **Score card** (freestyle)      | The judged table with the full component breakdown                                                             |
-| **Athlete display** (freestyle) | Full-screen athlete card(s): one hero in quali, split screen in battle                                         |
+| Overlay                         | Shows                                                                                                             |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Rankings**                    | The round's top eight as name plates                                                                              |
+| **Rankings (top-4 profiles)**   | The same data as photo cards, cut to the top four                                                                 |
+| **Final standings**             | The event's final top eight, each row tagged with its placing round; a result borrowed from qualification is grey |
+| **Head-to-head (VS)**           | The two athletes of a match, for a fixed round                                                                    |
+| **Head-to-head (VS, live)**     | The same card, but following the board through every round — **set this one up once and never touch it again**    |
+| **Match winner**                | The decided match's winner card                                                                                   |
+| **Rounds summary** (speed)      | The best-of-3 tally over one card per athlete, the series leader framed green                                     |
+| **SVO side 1 / side 2**         | A single-athlete card per lane, following whoever the board has selected                                          |
+| **Bracket (photos / names)**    | The playoff tree, in a photo or a name-plate layout; a top-4 bracket shows semis onward                           |
+| **Score card** (freestyle)      | The judged table with the full component breakdown                                                                |
+| **Athlete display** (freestyle) | Full-screen athlete card(s): one hero in quali, split screen in battle                                            |
 
 There are also two **timer** pages for putting the running clock on air:
 **Race timer (Speed)**, the speed race clock, and **Run clock (Freestyle)**, the

@@ -170,8 +170,8 @@ const overlayLinks = (
       url: `${origin()}/stream/winner/${round}/${gender}${suffix}`,
       pinned: true,
     },
-    // Best-of-3 rounds summary (speed only): accumulates a winner card per won
-    // run from the board's live `runWins` tally. Blank until the first run lands.
+    // Best-of-3 rounds summary (speed only): the board's live `runWins` tally
+    // over one card per athlete. Blank until the first run lands.
     ...(discipline === 'speed'
       ? [
           {

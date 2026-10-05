@@ -484,7 +484,8 @@ describe('SpeedlineControlPage health chips', () => {
     audio.blocked = true;
     renderPage();
 
-    expect(screen.getByText('AUDIO LOCKED — click anywhere')).toBeInTheDocument();
+    expect(screen.getByText('AUDIO LOCKED')).toBeInTheDocument();
+    expect(screen.getByTestId('control-link-detail')).toHaveTextContent('click anywhere');
   });
 
   it('reports the audio armed once a gesture has unblocked it', () => {

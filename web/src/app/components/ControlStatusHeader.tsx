@@ -52,6 +52,7 @@ interface ControlStatusHeaderProps {
 
 const LINK_DETAIL = 'clocks keep running; the preview is not receiving';
 const RECOVERED_DETAIL = 'recovered this panel’s last run';
+const AUDIO_DETAIL = 'click anywhere to unlock audio';
 
 const LINK_STATUS: Record<
   LinkPhase,
@@ -161,12 +162,17 @@ export const ControlStatusHeader = ({
   const LinkStatusIcon = linkStatus.icon;
   const soundLabel = health.sound?.on ? 'Sound on this panel' : 'Sound off on this panel';
   // The header's one reserved caption line (see its render comment) carries
-  // whichever sentences are owed. A board self-restored while the relay is
-  // unreachable owes both, and the recovery leads: the chip beside it already
-  // reads the alarm, and the clipped tail stays whole in the title.
+  // whichever sentences are owed. The recovery leads, then the audio gesture
+  // (the AUDIO LOCKED plate's only instruction); the link sentence trails
+  // because its chip already reads the alarm, and the clipped tail stays whole
+  // in the title.
   const linkDown =
     health.link === 'unreachable' || health.link === 'reconnecting' || health.link === 'lost';
-  const owed = [health.recovered && RECOVERED_DETAIL, linkDown && LINK_DETAIL].filter(Boolean);
+  const owed = [
+    health.recovered && RECOVERED_DETAIL,
+    health.audioBlocked && AUDIO_DETAIL,
+    linkDown && LINK_DETAIL,
+  ].filter(Boolean);
   const linkDetail = owed.length > 0 ? owed.join(' \u00b7 ') : '\u00a0';
 
   return (
@@ -261,8 +267,8 @@ export const ControlStatusHeader = ({
 
               The single row starts at `lg`, not `md`: the header splits the
               width three ways, so below ~1200 px the four cells share a third of
-              a tablet and the loud AUDIO LOCKED wording folds to four lines
-              inside its own plate — taller AND messier than two rows of two.
+              a tablet, which `5a69ad8` measured taller AND messier than two rows
+              of two.
               The desk itself starts at 1280, so `lg` is where the promise is
               owed. The reading tracks shrink (`minmax(0, auto)`) either way, so
               a long phrase wraps inside its plate instead of widening the
@@ -303,7 +309,7 @@ export const ControlStatusHeader = ({
                     <VolumeUpIcon fontSize="small" />
                   )
                 }
-                label={health.audioBlocked ? 'AUDIO LOCKED — click anywhere' : 'Audio armed'}
+                label={health.audioBlocked ? 'AUDIO LOCKED' : 'Audio armed'}
                 color={health.audioBlocked ? 'error.main' : 'text.secondary'}
               />
             </Box>

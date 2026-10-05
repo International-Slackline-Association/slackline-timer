@@ -86,9 +86,10 @@ show-stopper.
 Browsers refuse to play sound until someone interacts with the page, and a
 console opened straight from the login redirect has not been clicked yet.
 
-The screen says which one you are looking at: the Freestyle board's header
-carries a red **AUDIO LOCKED — click anywhere** chip instead of _Audio armed_,
-and the other pages show an **Audio muted — click to enable** badge.
+The screen says which one you are looking at: the Speedline and Freestyle
+boards' header carries a red **AUDIO LOCKED** chip instead of _Audio armed_, with
+_click anywhere to unlock audio_ on the line under it, and the other pages show
+an **Audio muted — click to enable** badge.
 
 **Click anywhere on the page once.** That unlocks the audio for the rest of the
 session; until you do, the page is silent — start-light beeps and clock run-outs

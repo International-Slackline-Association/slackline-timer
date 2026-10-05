@@ -48,7 +48,8 @@ the clocks and the stop buttons stay on screen without scrolling.
    browser sees the controller. See [Buzzer buttons](#buzzer-buttons).
 3. **Click the page once if it says AUDIO LOCKED.** A browser opened straight
    from the login screen blocks sound until it is clicked, and the start beeps
-   are the athletes' signal. The chip then reads _Audio armed_. The first chip in
+   are the athletes' signal; until then the line under the chips reads _click
+   anywhere to unlock audio_. The chip then reads _Audio armed_. The first chip in
    that row reads _Connecting…_ while the page reaches the relay, then
    _Connected_ — or _Reconnecting…_ / _Connection lost_ once a link it had goes
    down, and _Not connected_ if it never arrives. The clocks keep running

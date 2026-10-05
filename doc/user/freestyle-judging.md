@@ -361,8 +361,8 @@ on it.
   straight back never puts either there. The second says who else is on the
   board — **peer: awaiting**, **peer: answered** or **peer: none**, read in full
   under [Two panels on one board](#two-panels-on-one-board). The third reads
-  _Audio armed_, or a red
-  **AUDIO LOCKED — click anywhere** until you click the page once: a browser
+  _Audio armed_, or a red **AUDIO LOCKED** (with _click anywhere to unlock
+  audio_ on the line under the chips) until you click the page once: a browser
   opened straight from the login screen blocks sound until it is clicked, and
   the board is silent until you do (see
   [Troubleshooting](./troubleshooting.md#no-sound-audio-locked)). The fourth,
