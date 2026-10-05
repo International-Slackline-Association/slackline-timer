@@ -23,6 +23,7 @@ import { BrandMark } from 'app/components/BrandMark';
 import { useSelectedCompetition } from 'app/state/selectedCompetition';
 import { useQueryParams } from 'app/hooks/useQueryParams';
 import { AdminBreadcrumbs } from 'app/components/AdminBreadcrumbs';
+import { controlTargets } from 'app/theme/tokens';
 
 /**
  * The shared authenticated app shell: a persistent AppBar with the selected
@@ -216,7 +217,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           variant="scrollable"
           scrollButtons="auto"
           allowScrollButtonsMobile
-          sx={{ px: 1, borderTop: 1, borderColor: 'divider', minHeight: 40 }}
+          sx={{ px: 1, borderTop: 1, borderColor: 'divider', minHeight: controlTargets.floor }}
         >
           {NAV_SECTIONS.map((s) => (
             <Tab
@@ -225,7 +226,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               value={s.to}
               component={RouterLink}
               to={s.to}
-              sx={{ minHeight: 40, py: 0 }}
+              sx={{ minHeight: controlTargets.floor, py: 0 }}
             />
           ))}
         </Tabs>

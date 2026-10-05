@@ -2,7 +2,7 @@ import { Typography } from '@mui/material';
 
 import { SelectField } from 'app/components/SelectField';
 import { useGamepadSelection } from 'app/state/gamepadSelection';
-import { liveCaption } from 'app/theme/tokens';
+import { fieldWidths, liveCaption } from 'app/theme/tokens';
 
 /**
  * Operator control for choosing which connected game controller drives the
@@ -40,7 +40,7 @@ export const GamepadPicker = () => {
     <SelectField
       label="Controller"
       size="small"
-      sx={{ minWidth: 220 }}
+      sx={{ minWidth: fieldWidths.field }}
       value={value}
       onChange={(event) => {
         setSelectedPadId(event.target.value || null);

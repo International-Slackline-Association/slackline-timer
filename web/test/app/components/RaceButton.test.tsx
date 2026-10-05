@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { RaceButton, blurOnClickProps, type RaceTone } from 'app/components/RaceButton';
 import { telemetryTheme } from 'app/theme/theme';
-import { colors } from 'app/theme/tokens';
+import { colors, controlTargets } from 'app/theme/tokens';
 
 /**
  * The live-column control contract (FREESTYLE_BOARD_UX §4.4): a mouse press on
@@ -76,13 +76,13 @@ describe('blurOnClickProps', () => {
 
 describe('RaceButton target sizes (§6, rubric C05)', () => {
   it.each([
-    ['race' as const, '56px', '120px'],
-    ['aux' as const, '44px', '44px'],
-  ])('%s is %s tall and at least %s wide', (size, minHeight, minWidth) => {
+    ['race' as const, controlTargets.race, controlTargets.raceWidth],
+    ['aux' as const, controlTargets.live, controlTargets.live],
+  ])('%s is %ipx tall and at least %ipx wide', (size, minHeight, minWidth) => {
     render(<RaceButton size={size}>Start</RaceButton>);
     const style = getComputedStyle(screen.getByRole('button', { name: 'Start' }));
-    expect(style.minHeight).toBe(minHeight);
-    expect(style.minWidth).toBe(minWidth);
+    expect(style.minHeight).toBe(`${minHeight}px`);
+    expect(style.minWidth).toBe(`${minWidth}px`);
   });
 });
 

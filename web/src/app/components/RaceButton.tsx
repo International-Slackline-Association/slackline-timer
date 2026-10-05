@@ -1,7 +1,7 @@
 import { Button, type ButtonProps, type SxProps, type Theme } from '@mui/material';
 import type { MouseEvent } from 'react';
 
-import { colors } from 'app/theme/tokens';
+import { colors, controlTargets } from 'app/theme/tokens';
 
 /** The §6 state colours a live control may paint. */
 export type RaceTone = 'go' | 'goOutline' | 'stop' | 'neutral' | 'save' | 'dnf';
@@ -11,8 +11,8 @@ export type RaceTone = 'go' | 'goOutline' | 'stop' | 'neutral' | 'save' | 'dnf';
 export type RaceButtonSize = 'race' | 'aux';
 
 const SIZE_SX: Record<RaceButtonSize, { minHeight: number; minWidth: number }> = {
-  race: { minHeight: 56, minWidth: 120 },
-  aux: { minHeight: 44, minWidth: 44 },
+  race: { minHeight: controlTargets.race, minWidth: controlTargets.raceWidth },
+  aux: { minHeight: controlTargets.live, minWidth: controlTargets.live },
 };
 
 // The two hand-painted fills, as palette entries: go is `race.go` + `ink.hi`
