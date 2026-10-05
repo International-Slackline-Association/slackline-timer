@@ -806,6 +806,127 @@ describe('useRaceRecorder', () => {
    * withdrawing everything that stop RECORDED, so the lane's real finish is the
    * one that counts.
    */
+  /**
+   * `speedline-lane-save-retry`: a failed POST keeps the body it sent, so the
+   * board can re-send it. A retry re-POSTs; it never re-scores — the run was
+   * tallied at the stop, whether or not its Time reached the server.
+   */
+  describe('retrying a failed lane save (retrySave)', () => {
+    /** Reject the next `failures` Time POSTs, then answer like the server. */
+    const failPosts = (failures: number): void => {
+      let left = failures;
+      apiFetchMock.mockImplementation((path: string, opts?: FetchOpts) => {
+        if ((opts?.method ?? 'GET') === 'POST' && left > 0) {
+          left -= 1;
+          return Promise.reject(new Error('boom'));
+        }
+        return Promise.resolve(routeApi(path, opts));
+      });
+    };
+
+    it('keeps the failed body and re-POSTs it unchanged, then reports the save', async () => {
+      failPosts(1);
+      const { result } = startedRecorder();
+      act(() => result.current.recordFinish(1, 5000));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
+      const sent = { athleteId: 'a1', round: 'qualification', timeMs: 4000, startTime: 1000 };
+      expect(result.current.laneFeedback[1]?.failed?.input).toEqual(sent);
+
+      act(() => result.current.retrySave(1));
+
+      // In flight it keeps the body, so the board holds the offer (disabled).
+      expect(result.current.laneFeedback[1]).toMatchObject({
+        status: 'pending',
+        valueMs: 4000,
+        failed: { input: sent },
+      });
+      act(() => result.current.retrySave(1));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('saved'));
+      expect(bodies('POST', '/times')).toEqual([sent, sent]);
+      expect(result.current.laneFeedback[1]?.saved?.timeId).toBe('t1');
+      expect(result.current.laneFeedback[1]?.failed).toBeUndefined();
+      expect(result.current.toast).toEqual({ text: 'Lane 1 time saved', severity: 'success' });
+    });
+
+    it('retries a failed DNF as a DNF', async () => {
+      failPosts(1);
+      const { result } = startedRecorder();
+      act(() => result.current.recordDnf(1));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
+
+      act(() => result.current.retrySave(1));
+
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('saved'));
+      expect(bodies('POST', '/times').map((b) => b.timeMs)).toEqual([DNF_SENTINEL, DNF_SENTINEL]);
+    });
+
+    it('re-posts without re-scoring: the tally and the clinch stand as the stop left them', async () => {
+      const { result } = await matchRecorder();
+      await completeRun(result, 1000, 5000, 6000);
+      expect(result.current.runWins).toEqual({ 1: 1, 2: 0 });
+
+      failPosts(1);
+      act(() => result.current.onRaceStart(10000));
+      act(() => result.current.recordFinish(1, 14000));
+      act(() => result.current.recordFinish(2, 15000));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
+      await waitFor(() => expect(result.current.laneFeedback[2]?.status).toBe('saved'));
+      expect(result.current.runWins).toEqual({ 1: 2, 2: 0 });
+      await waitFor(() => expect(bodies('PUT', '/matches/')).toHaveLength(1));
+
+      act(() => result.current.retrySave(1));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('saved'));
+
+      expect(result.current.runWins).toEqual({ 1: 2, 2: 0 });
+      expect(bodies('PUT', '/matches/')).toHaveLength(1);
+    });
+
+    it('deletes a retry that lands after the lane was resumed', async () => {
+      failPosts(1);
+      const { result } = startedRecorder();
+      act(() => result.current.recordFinish(1, 5000));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
+
+      holdPost = true;
+      act(() => result.current.retrySave(1));
+      await waitFor(() => expect(bodies('POST', '/times')).toHaveLength(2));
+      act(() => result.current.resumeLane(1));
+
+      await act(async () => {
+        releasePost();
+      });
+
+      expect(result.current.laneFeedback[1]).toBeNull();
+      await waitFor(() =>
+        expect(paths('DELETE', '/times/')).toEqual([`/competitions/${COMP}/times/t1`]),
+      );
+    });
+
+    it('does nothing unless the lane holds a failed POST', async () => {
+      const { result } = startedRecorder();
+      act(() => result.current.retrySave(1));
+      act(() => result.current.recordFinish(1, 5000));
+      act(() => result.current.retrySave(1));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('saved'));
+      act(() => result.current.retrySave(1));
+
+      expect(bodies('POST', '/times')).toHaveLength(1);
+    });
+
+    it('a void after the failure withdraws the offer', async () => {
+      failPosts(1);
+      const { result } = startedRecorder();
+      act(() => result.current.recordFinish(1, 5000));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
+
+      act(() => result.current.voidRun());
+      act(() => result.current.retrySave(1));
+
+      expect(result.current.laneFeedback[1]).toBeNull();
+      expect(bodies('POST', '/times')).toHaveLength(1);
+    });
+  });
+
   describe('resuming a mis-stopped lane (resumeLane)', () => {
     it('deletes the Time the mis-press saved and re-opens the lane', async () => {
       const { result } = startedRecorder();

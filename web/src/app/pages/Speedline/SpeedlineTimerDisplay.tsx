@@ -22,6 +22,7 @@ import { useLocation } from 'react-router-dom';
 import { ReadyState } from 'react-use-websocket';
 import { applyOverlayBodyStyle } from 'app/pages/Stream/overlayBg';
 import { refVh } from 'app/util/overlayScale';
+import { activeStartLanes } from 'app/util/raceTime';
 import { Stopwatch } from './Stopwatch';
 import { Typography } from '@mui/material';
 import { CORNER_INSET_X, CORNER_INSET_Y, TimerLaneBlock } from 'app/pages/Stream/TimerLaneBlock';
@@ -77,12 +78,12 @@ const LaneFalseStartBadge = ({ count }: { count: number }) => {
 };
 
 /**
- * The start-light row's bottom baseline — the clock plates' own bottom edge (the
- * lane blocks' corner inset plus the UNOFFICIAL marker row they reserve BELOW
- * the plate), so the bulbs read on the timer row rather than under it. Measured
+ * The start-light housing's foot — the clock plates' own bottom edge (the lane
+ * blocks' corner inset plus the UNOFFICIAL marker row they reserve BELOW the
+ * plate), so the light reads on the timer row rather than under it. Measured
  * rather than derived: the marker row's height is the Typography's, not a token.
  */
-const SIGNAL_BULB_BOTTOM = refVh(138);
+const SIGNAL_HOUSING_BOTTOM = refVh(139);
 
 export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'broadcast' }) => {
   const { bottomMargin, sideMargin } = useQueryParams();
@@ -227,6 +228,10 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         mirrorLanesRef.current = null;
         setSignalPhase(0);
         setTextDisplay('');
+        // A Stopwatch that mounts later (a dormant lane re-assigned, a lane's
+        // false-start badge cleared) replays `recovery` on mount; past a reset
+        // the last ignition would restart it on the previous race's epoch.
+        setRecovery({});
         break;
       case 'updatePreview':
         setIsPreviewEnabled(data.enabled);
@@ -331,6 +336,13 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
   }, [mirrorPhase]);
 
   const isReadyToDisplay = readyState === ReadyState.OPEN && isPreviewEnabled;
+  // A solo run (one lane assigned) drops the dormant lane's lower-third — the
+  // lanes the start ignites are the lanes on air. Off the selection, not the
+  // seed's `lanes`, so the layout holds before the lights run and on re-OPEN.
+  const shownLanes = activeStartLanes({
+    1: laneAthleteIds[1] ?? '',
+    2: laneAthleteIds[2] ?? '',
+  });
 
   // One lane's timertimer-style lower-third: the flag+name banner
   // (AthleteNameStrip), the false-start badge and the white TIME plate (drawn by
@@ -352,6 +364,7 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
           lastJsonMessage={lastJsonMessage}
           recovery={recovery[lane]}
           size="plate"
+          plateAlign={side}
         />
       );
 
@@ -362,9 +375,8 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         testId={`timer-lane-${lane}`}
         sx={{
           position: 'absolute',
-          // The `?bottomMargin`/`?sideMargin` producer knobs stay RAW px against
-          // the capture — they exist to nudge the overlay clear of a rig's own
-          // furniture, which is measured in output px, not in frame fractions.
+          // The `?bottomMargin`/`?sideMargin` producer knobs stay raw output px
+          // (broadcast-overlays.md "Producer margin knobs").
           bottom: bottomMargin ? `${bottomMargin}px` : CORNER_INSET_Y,
           [side]: sideMargin ? `${sideMargin}px` : CORNER_INSET_X,
         }}
@@ -442,7 +454,7 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         <Box
           sx={{
             position: 'absolute',
-            bottom: bottomMargin ? `${bottomMargin}px` : SIGNAL_BULB_BOTTOM,
+            bottom: bottomMargin ? `${bottomMargin}px` : SIGNAL_HOUSING_BOTTOM,
             left: 0,
             right: 0,
             display: 'flex',
@@ -454,12 +466,12 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         </Box>
       )}
 
-      {/* The two lane lower-thirds at the bottom corners (blank until preview is
-          enabled and the socket is open). */}
+      {/* The lane lower-thirds at the bottom corners (blank until preview is
+          enabled and the socket is open). A solo lane keeps its own corner. */}
       {isReadyToDisplay && (
         <>
-          {renderLane(1, 'left')}
-          {renderLane(2, 'right')}
+          {shownLanes.includes(1) && renderLane(1, 'left')}
+          {shownLanes.includes(2) && renderLane(2, 'right')}
         </>
       )}
     </Box>

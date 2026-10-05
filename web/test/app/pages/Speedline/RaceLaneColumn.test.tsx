@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LaneId, RaceRecorder } from 'app/hooks/useRaceRecorder';
 import { RaceLaneColumn } from 'app/pages/Speedline/RaceLaneColumn';
+import { DNF_SENTINEL } from 'app/util/time';
 import { speedlineLaneState, type SpeedlineLaneState } from 'app/util/timerSnapshot';
 
 import { px } from '../../../util/computedUnits';
@@ -30,7 +31,6 @@ const column = (
     recorder={recorder}
     athletes={ATHLETES}
     laneState={over.laneState ?? idle(lane)}
-    isReady
     onStop={over.onStop ?? vi.fn()}
     stopLock={over.stopLock ?? null}
     onResume={over.onResume ?? vi.fn()}
@@ -173,6 +173,94 @@ describe('RaceLaneColumn', () => {
     const chip = screen.getByText(/not saved 1:23\.45/i).parentElement;
     expect(chip).toHaveClass('MuiChip-colorError');
     expect(chip).toHaveClass('MuiChip-filled');
+  });
+
+  /**
+   * `speedline-lane-save-retry` + `speedline-times-page-deep-link`: a failed
+   * save carries its own recovery — the re-send, and the one Times-page row it
+   * belongs to, opened beside the board rather than in place of it.
+   */
+  describe('a failed lane save', () => {
+    const failedInput = {
+      athleteId: 'a1',
+      round: 'final' as const,
+      timeMs: 83450,
+      startTime: 1000,
+    };
+    const failed = (status: 'error' | 'pending' = 'error') =>
+      makeRecorder({
+        laneAthletes: { 1: 'a1', 2: '' },
+        laneFeedback: { 1: { status, valueMs: 83450, failed: { input: failedInput } }, 2: null },
+      });
+
+    it('offers Retry save as a race control, re-sending through the recorder', () => {
+      const recorder = failed();
+      render(column(1, recorder));
+
+      const retry = screen.getByRole('button', { name: 'Retry save' });
+      expectRaceControl(retry);
+      fireEvent.click(retry);
+      expect(recorder.retrySave).toHaveBeenCalledWith(1);
+    });
+
+    it('holds Retry disabled while the retry is in flight', () => {
+      render(column(1, failed('pending')));
+      expect(screen.getByText(/saving 1:23\.45/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Retry save' })).toBeDisabled();
+    });
+
+    it('links the Times page row it belongs to, in a new tab', () => {
+      render(column(1, failed()));
+
+      const link = screen.getByRole('link', { name: 'Times page ↗' });
+      expect(link).toHaveAttribute('href', '/admin/times?athlete=a1&round=final');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener');
+      const press = createEvent.mouseDown(link);
+      fireEvent(link, press);
+      expect(press.defaultPrevented).toBe(true);
+    });
+
+    it('sits below the race pair, so the live presses keep their slots', () => {
+      const { container } = render(column(1, failed()));
+      expect(Array.from(container.querySelectorAll('button')).map((b) => b.textContent)).toEqual([
+        'Stop',
+        'Resume Lane 1',
+        'False start · Lane 1',
+        'Lane 1 DNF',
+        'Retry save',
+      ]);
+    });
+
+    it('offers no re-send for a failed correction — its field re-commits', () => {
+      render(
+        column(
+          1,
+          makeRecorder({
+            laneFeedback: { 1: { ...savedFeedback('t1', 7000), status: 'error' }, 2: null },
+          }),
+        ),
+      );
+      expect(screen.queryByRole('button', { name: 'Retry save' })).toBeNull();
+      expect(screen.getByLabelText(/correct time/i)).toBeInTheDocument();
+    });
+
+    it('withdraws both once the feedback clears (resume / void)', () => {
+      const { rerender } = render(column(1, failed()));
+      rerender(column(1, makeRecorder({ laneAthletes: { 1: 'a1', 2: '' } })));
+      expect(screen.queryByRole('button', { name: 'Retry save' })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Times page ↗' })).toBeNull();
+    });
+  });
+
+  it('points a DNF at its Times page row instead of printing the path', () => {
+    render(
+      column(1, makeRecorder({ laneFeedback: { 1: savedFeedback('t1', DNF_SENTINEL), 2: null } })),
+    );
+    const link = screen.getByRole('link', { name: 'Times page ↗' });
+    expect(link).toHaveAttribute('href', '/admin/times?athlete=a1&round=final');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(screen.queryByText(/\/admin\/times/)).toBeNull();
   });
 
   it('shows a pending chip while a lane time is in flight', () => {
@@ -358,7 +446,38 @@ describe('RaceLaneColumn', () => {
       const resume = screen.getByRole('button', { name: 'Resume Lane 1' });
       expect(resume).toBeDisabled();
       expect(resume).toHaveAccessibleDescription('Lane 1 is not stopped');
+      // Printed as well as described: a gloved or touch hand never hovers (§4.7).
+      expect(screen.getByText('why: Lane 1 is not stopped')).toBeInTheDocument();
       expect(px(window.getComputedStyle(resume).minHeight)).toBeGreaterThanOrEqual(44);
+    });
+
+    it('prints the resolved-run reason once the resume window has closed', () => {
+      render(
+        column(1, makeRecorder({ laneAthletes: assigned }), {
+          resumeLock: 'run has resolved — Void or re-run instead',
+        }),
+      );
+
+      expect(
+        screen.getByText('why: run has resolved — Void or re-run instead'),
+      ).toBeInTheDocument();
+    });
+
+    it('holds the Resume why-line slot empty while Resume is live', () => {
+      const { rerender } = render(
+        column(1, makeRecorder({ laneAthletes: assigned }), {
+          resumeLock: 'Lane 1 is not stopped',
+        }),
+      );
+      const resumeWhy = () =>
+        screen.getByRole('button', { name: 'Resume Lane 1' }).parentElement!.nextElementSibling!;
+      expect(resumeWhy()).toHaveTextContent('why: Lane 1 is not stopped');
+
+      rerender(column(1, makeRecorder({ laneAthletes: assigned }), { resumeLock: null }));
+
+      expect(resumeWhy()).toHaveAttribute('data-testid', 'why-line');
+      expect(resumeWhy().textContent?.trim()).toBe('');
+      expect(px(window.getComputedStyle(resumeWhy()).minHeight)).toBeGreaterThan(0);
     });
   });
 });

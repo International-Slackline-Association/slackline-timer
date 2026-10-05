@@ -3,17 +3,19 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { useState } from 'react';
 
 import { BoardConfirmDialog } from 'app/components/BoardConfirmDialog';
+import { LockedControl } from 'app/components/LockedControl';
 import { MatchWinnerLine } from 'app/components/MatchWinnerLine';
 import { RaceButton } from 'app/components/RaceButton';
 import { SelectField } from 'app/components/SelectField';
 import { SelectionChangeConfirmDialog } from 'app/components/SelectionChangeConfirmDialog';
 import { WhyLine } from 'app/components/WhyLine';
 import type { RaceRecorder } from 'app/hooks/useRaceRecorder';
+import { fieldWidths } from 'app/theme/tokens';
 import { GENDERS, TIME_ROUNDS, type Athlete } from 'app/types';
 import { apiErrorMessage } from 'app/util/apiError';
 import { genderLabel } from 'app/util/gender';
 import { matchLabel } from 'app/util/matchLabel';
-import { roundLabel } from 'app/util/rounds';
+import { isHeadToHeadRound, roundLabel } from 'app/util/rounds';
 import { formatMs } from 'app/util/time';
 
 /**
@@ -33,12 +35,15 @@ export const RaceRecorderControls = ({
   recorder,
   athletes,
   swapLock = null,
+  voidLock = null,
 }: {
   recorder: RaceRecorder;
   athletes: Athlete[];
   /** Why the lane swap is inert, from the board's interlock table
    * (`app/util/speedlineLocks`), or null while it is live. */
   swapLock?: string | null;
+  /** Why both Void presses are inert, from the same table. */
+  voidLock?: string | null;
 }) => {
   const {
     round,
@@ -114,6 +119,16 @@ export const RaceRecorderControls = ({
     resetSeries();
   };
 
+  // The winner is first to 2 run-wins, so after run 1 an empty winner line reads
+  // as a failed save; say where the series stands instead. Not at 0–0 (the
+  // Best of 3 line already says it) nor on a clinched tally whose winner has not
+  // reached this panel yet.
+  const runsScored = runWins[1] + runWins[2];
+  const seriesAwaiting =
+    derivedWinner === null && runsScored > 0 && runWins[1] < 2 && runWins[2] < 2
+      ? `series ${runWins[1]}–${runWins[2]}, awaiting run ${runsScored + 1}`
+      : null;
+
   // False-start advisory (rules S2–S4): only acted on with a match selected (the
   // head judge resolves the round). The strip states the advised consequence and
   // offers its one-tap action; when it owns a void/award action the standalone
@@ -161,7 +176,7 @@ export const RaceRecorderControls = ({
             select
             value={round}
             onChange={(e) => requestRound(e.target.value as (typeof TIME_ROUNDS)[number])}
-            sx={{ minWidth: 160, flex: '1 1 160px' }}
+            sx={{ minWidth: fieldWidths.short, flex: `1 1 ${fieldWidths.short}px` }}
           >
             {TIME_ROUNDS.map((r) => (
               <MenuItem key={r} value={r}>
@@ -175,7 +190,7 @@ export const RaceRecorderControls = ({
             select
             value={selectedGender}
             onChange={(e) => requestGender(e.target.value as (typeof GENDERS)[number])}
-            sx={{ minWidth: 130, flex: '1 1 130px' }}
+            sx={{ minWidth: fieldWidths.compact, flex: `1 1 ${fieldWidths.compact}px` }}
           >
             {GENDERS.map((g) => (
               <MenuItem key={g} value={g}>
@@ -185,18 +200,24 @@ export const RaceRecorderControls = ({
           </TextField>
         </Stack>
 
-        <SelectField
-          label="Match (speed)"
-          value={selectedMatchId}
-          onChange={(e) => selectMatch(e.target.value)}
-          helperText="Fills both lanes; sets the match winner once both finish"
-          sx={{ width: '100%' }}
-          placeholder={{ value: '', label: '— no match —' }}
-          options={roundMatches.map((m) => ({
-            value: m.matchId,
-            label: matchLabel(m, athleteName),
-          }))}
-        />
+        {/* Unmounted outside the head-to-head rounds, where it could only
+            offer "— no match —": a row of setup chrome the tablet fold pays
+            for. Leaving the playoffs already clears a picked match (the round
+            confirm), so nothing selected hides behind it. */}
+        {isHeadToHeadRound(round) && (
+          <SelectField
+            label="Match (speed)"
+            value={selectedMatchId}
+            onChange={(e) => selectMatch(e.target.value)}
+            helperText="Fills both lanes; the winner is set when a lane wins 2 runs"
+            sx={{ width: '100%' }}
+            placeholder={{ value: '', label: '— no match —' }}
+            options={roundMatches.map((m) => ({
+              value: m.matchId,
+              label: matchLabel(m, athleteName),
+            }))}
+          />
+        )}
 
         {/* Colourless chrome — no state to name, so no tone — but a press on
             the desk all the same, and the wrapper is what carries the 44 px
@@ -212,7 +233,7 @@ export const RaceRecorderControls = ({
           >
             Swap
           </RaceButton>
-          <WhyLine reason={swapLock} />
+          <WhyLine reason={swapLock} reserve={false} />
         </Stack>
 
         {selectedMatchId && (
@@ -288,9 +309,14 @@ export const RaceRecorderControls = ({
               {fsAdvice(fsAdvised)}
             </Typography>
             {(fsAdvised.kind === 'rerun-round' || fsAdvised.kind === 'rerun-start') && (
-              <RaceButton tone="stop" onClick={requestVoid} sx={{ ml: 'auto' }}>
-                Void run &amp; rerun
-              </RaceButton>
+              <Stack sx={{ ml: 'auto', alignItems: 'flex-end' }}>
+                <LockedControl reason={voidLock}>
+                  <RaceButton tone="stop" disabled={voidLock !== null} onClick={requestVoid}>
+                    Void run &amp; rerun
+                  </RaceButton>
+                </LockedControl>
+                <WhyLine reason={voidLock} reserve={false} />
+              </Stack>
             )}
             {fsAdvised.kind === 'round-to-opponent' && (
               <RaceButton
@@ -305,23 +331,36 @@ export const RaceRecorderControls = ({
         )}
 
         {!fsHasAction && (
-          <Stack
-            direction="row"
-            spacing={2}
-            useFlexGap
-            sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-          >
-            <RaceButton tone="stop" disabled={!canVoid} onClick={requestVoid}>
-              Void run
-            </RaceButton>
-            <Typography variant="caption" color="text.secondary">
-              Deletes this run&apos;s recorded times
-            </Typography>
+          <Stack>
+            <Stack
+              direction="row"
+              spacing={2}
+              useFlexGap
+              sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+            >
+              <LockedControl reason={voidLock}>
+                <RaceButton
+                  tone="stop"
+                  disabled={!canVoid || voidLock !== null}
+                  onClick={requestVoid}
+                >
+                  Void run
+                </RaceButton>
+              </LockedControl>
+              <Typography variant="caption" color="text.secondary">
+                Deletes this run&apos;s recorded times
+              </Typography>
+            </Stack>
+            <WhyLine reason={voidLock} reserve={false} />
           </Stack>
         )}
 
         {selectedMatchId && (
-          <MatchWinnerLine derivedWinner={derivedWinner} athleteName={athleteName} />
+          <MatchWinnerLine
+            derivedWinner={derivedWinner}
+            athleteName={athleteName}
+            awaiting={seriesAwaiting}
+          />
         )}
 
         {createTime.isError && (

@@ -49,8 +49,8 @@ describe('speedlineHandsetOutcome', () => {
     );
   });
 
-  // Reset and the false-start flags answer to no lock because the handler gives
-  // them none: the confirm guards Reset, and a jump may be flagged after the run.
+  // The run holds neither Reset nor the false-start flags: the confirm guards
+  // Reset, and a jump may be flagged after the run.
   it('reports the unlocked keys as fired even mid-race', () => {
     const racing = speedlineLocks({
       connected: true,
@@ -66,6 +66,25 @@ describe('speedlineHandsetOutcome', () => {
     expect(line(1, { locks: racing, overlay: null })).toBe('handset 1 · yellow → Reset');
     expect(line(11, { locks: racing, overlay: null })).toBe(
       'handset 3 · yellow → False start — lane 1',
+    );
+  });
+
+  // The pad reads the same `locks.reset` the on-screen Reset does, so a dead
+  // link takes both — never just the button.
+  it('gives Reset the link lock its on-screen twin carries', () => {
+    const offline = speedlineLocks({
+      connected: false,
+      signalPhase: 0,
+      aborted: false,
+      now: 0,
+      laneState: {
+        1: speedlineLaneState({ timerId: 1, startTime: null, stopTime: null }),
+        2: speedlineLaneState({ timerId: 2, startTime: null, stopTime: null }),
+      },
+    });
+
+    expect(line(1, { locks: offline, overlay: null })).toBe(
+      'handset 1 · yellow → locked while the console is not connected',
     );
   });
 

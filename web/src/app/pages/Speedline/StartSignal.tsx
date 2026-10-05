@@ -1,8 +1,10 @@
 import React from 'react';
 import { Box, Stack } from '@mui/material';
 
-import { colors } from 'app/theme/tokens';
+import { colors, overlayArt } from 'app/theme/tokens';
 import { PRE_BEEP_PHASE } from 'app/hooks/useStartSignalTimer';
+import { Plate } from 'app/pages/Stream/Plate';
+import { refVh } from 'app/util/overlayScale';
 
 interface Props {
   currentPhase: number;
@@ -20,7 +22,7 @@ interface Props {
 //   1  first SET tone — left amber (race.set), right dark/off
 //   2  second SET tone — both amber (race.set)
 //   3  GO — both green (race.go)
-// Any other phase (-1 after the sequence completes) leaves the housing dark.
+// Any other phase (-1, cleared) falls to idle behind the hidden housing.
 const bulbColors = (phase: number): [string, string] => {
   switch (phase) {
     case PRE_BEEP_PHASE:
@@ -37,37 +39,63 @@ const bulbColors = (phase: number): [string, string] => {
   }
 };
 
+/**
+ * The overlay/preview housing, reference px on the 1920×1080 capture frame
+ * (design-system §7): a sharp `void` plate, its pad equal to the bulb gap so the
+ * two bulbs sit evenly spaced in it. The edge is the shared plate stroke, emitted
+ * frame-relative so it scales with the bulbs off 1080p.
+ */
+const HOUSING = { bulb: 60, gap: 8, pad: 8, stroke: parseFloat(overlayArt.strokeWidth) } as const;
+
+// No `transition` on the bulbs, at either size: every phase change — GO above
+// all — is a hard cut so start perception stays crisp (design-system §8).
 const RaceStartSignal: React.FC<Props> = ({ currentPhase, size }) => {
   const [left, right] = bulbColors(currentPhase);
+  const small = size === 'small';
+  const bulbSize = small ? 30 : refVh(HOUSING.bulb);
 
-  const sizeProps = size === 'small' ? { width: 30, height: 30 } : { width: 60, height: 60 };
-
-  // Show the housing for the whole armed→SET→GO sequence (phases 0–3); hide it
-  // once the sequence has been cleared (phase -1).
-  const visible = currentPhase >= 0 && currentPhase <= 3;
+  // Lit for the whole armed→SET→GO sequence (phases 0–3), out once it clears
+  // (-1). The control's bare bulbs keep their slot — Start / Abort / Reset sit
+  // under them and must not lift mid-run — but never paint idle grey after GO,
+  // which would read as re-armed. The housing leaves the flow (design-system §6).
+  const lit = currentPhase >= 0 && currentPhase <= 3;
+  const layoutSx = {
+    ...(small
+      ? { display: 'flex', visibility: lit ? 'visible' : 'hidden' }
+      : { display: lit ? 'flex' : 'none' }),
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
 
   const bulbSx = (fill: string) => ({
-    width: sizeProps.width,
-    height: sizeProps.height,
+    width: bulbSize,
+    height: bulbSize,
     borderRadius: '50%',
     backgroundColor: fill,
-    transition: 'background-color 0.5s ease',
-    border: `1px solid ${colors.surface.void}`,
+    // The control page's bulbs sit on the light board with no housing behind them.
+    ...(small && { border: `1px solid ${colors.surface.void}` }),
   });
 
-  return (
-    <Stack
-      direction="row"
-      spacing={1}
-      sx={{
-        display: visible ? 'flex' : 'none',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
+  const bulbs = (
+    <>
       <Box data-testid="start-bulb-0" sx={bulbSx(left)} />
       <Box data-testid="start-bulb-1" sx={bulbSx(right)} />
+    </>
+  );
+
+  return small ? (
+    <Stack direction="row" spacing={1} sx={layoutSx}>
+      {bulbs}
     </Stack>
+  ) : (
+    <Plate
+      data-testid="start-signal-housing"
+      fill={colors.surface.void}
+      strokeWidth={refVh(HOUSING.stroke)}
+      sx={{ ...layoutSx, gap: refVh(HOUSING.gap), p: refVh(HOUSING.pad) }}
+    >
+      {bulbs}
+    </Plate>
   );
 };
 

@@ -2,8 +2,11 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Stopwatch } from 'app/pages/Speedline/Stopwatch';
-import { colors } from 'app/theme/tokens';
+import { colors, OVERLAY_LANE } from 'app/theme/tokens';
 import type { StopwatchWSMessage } from 'app/hooks/useWebSocket';
+import { refVw } from 'app/util/overlayScale';
+
+import { px, vwPx } from '../../../util/computedUnits';
 
 describe('Stopwatch hero time numerals', () => {
   it('renders the time in the monospace numeral face with tabular-nums', () => {
@@ -108,6 +111,45 @@ describe('Stopwatch hero time numerals', () => {
     expect(shadow).not.toBe('');
     expect(shadow).not.toBe('none');
     expect(shadow.replace(/\s/g, '')).toContain('rgba(51,60,78');
+  });
+
+  it('inks idle and stopped plate digits in the overlay name ink (one black per frame)', () => {
+    const { unmount } = render(
+      <Stopwatch
+        lastJsonMessage={undefined}
+        isReady
+        timerId={1}
+        recovery={{ kind: 'idle' }}
+        size="plate"
+      />,
+    );
+    expect(window.getComputedStyle(screen.getByText('0:00.00')).color).toBe('rgb(35, 31, 32)');
+    unmount();
+    render(
+      <Stopwatch
+        lastJsonMessage={undefined}
+        isReady
+        timerId={1}
+        recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
+        size="plate"
+      />,
+    );
+    expect(window.getComputedStyle(screen.getByText('1:23.45')).color).toBe('rgb(35, 31, 32)');
+  });
+
+  it('keeps running plate digits in running teal', () => {
+    render(
+      <Stopwatch
+        lastJsonMessage={undefined}
+        isReady
+        timerId={1}
+        recovery={{ kind: 'running', startTime: Date.now() }}
+        size="plate"
+      />,
+    );
+    expect(window.getComputedStyle(screen.getByText(/^\d+:\d\d\.\d\d$/)).color).toBe(
+      colors.race.running,
+    );
   });
 
   it('renders a running lane in running teal', () => {
@@ -426,5 +468,56 @@ describe('Stopwatch hero time numerals', () => {
       expect(screen.getByText('0:00.03')).toBeInTheDocument();
       setSpy.mockRestore();
     });
+  });
+});
+
+describe('Stopwatch clock plate', () => {
+  const plateOf = (elapsedMs: number, plateAlign?: 'left' | 'right' | 'center') => {
+    const view = render(
+      <Stopwatch
+        lastJsonMessage={undefined}
+        isReady
+        timerId={1}
+        recovery={{ kind: 'finished', startTime: 0, stopTime: elapsedMs, elapsedMs }}
+        size="plate"
+        plateAlign={plateAlign}
+      />,
+    );
+    return { plate: () => screen.getByTestId('stopwatch-plate'), ...view };
+  };
+
+  it('draws the shared lane clock plate width and inner padding', () => {
+    const { plate } = plateOf(83_450);
+    const style = window.getComputedStyle(plate());
+    expect(px(style.width)).toBeCloseTo(vwPx(refVw(OVERLAY_LANE.clockPlate)), 2);
+    expect(px(style.paddingLeft)).toBeCloseTo(vwPx(refVw(OVERLAY_LANE.clockPlatePad)), 2);
+  });
+
+  it('keeps one plate width when the minutes gain a digit', () => {
+    const { plate, rerender } = plateOf(599_990);
+    expect(screen.getByText('9:59.99')).toBeInTheDocument();
+    const before = window.getComputedStyle(plate()).width;
+    rerender(
+      <Stopwatch
+        lastJsonMessage={undefined}
+        isReady
+        timerId={1}
+        recovery={{ kind: 'finished', startTime: 1, stopTime: 600_001, elapsedMs: 600_000 }}
+        size="plate"
+      />,
+    );
+    expect(screen.getByText('10:00.00')).toBeInTheDocument();
+    expect(window.getComputedStyle(plate()).width).toBe(before);
+  });
+
+  it.each([
+    ['left', 'flex-start'],
+    ['right', 'flex-end'],
+    ['center', 'center'],
+  ] as const)('justifies the digits to the %s lane edge', (plateAlign, justify) => {
+    const { plate } = plateOf(83_450, plateAlign);
+    const style = window.getComputedStyle(plate());
+    expect(style.justifyContent).toBe(justify);
+    expect(style.paddingLeft).toBe(style.paddingRight);
   });
 });

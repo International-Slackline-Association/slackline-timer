@@ -42,6 +42,19 @@ describe('RaceRecorderControls', () => {
     expect(screen.getByTestId('why-line')).toHaveTextContent('why: locked while a lane runs');
   });
 
+  // `ftt-followup-speedline-rail-match-picker-playoff-only-1`: the rail's locks
+  // flip on Start and on the last Stop, with the hand on a lane or a handset,
+  // so the line costs its height only while it has something to say.
+  it('reserves no why-line under the swap while it is live', () => {
+    render(
+      <RaceRecorderControls
+        recorder={makeRecorder({ laneAthletes: { 1: 'a1', 2: 'a2' } })}
+        athletes={ATHLETES}
+      />,
+    );
+    expect(screen.queryByTestId('why-line')).toBeNull();
+  });
+
   it('surfaces a save error without implying timing broke', () => {
     render(
       <RaceRecorderControls
@@ -136,6 +149,52 @@ describe('RaceRecorderControls', () => {
     expect(cancelRoundChange).toHaveBeenCalled();
   });
 
+  // `speedline-rail-match-picker-match-rounds-only`: a qualification or training
+  // run is one athlete against the clock, so the picker there offered only
+  // "— no match —" and its best-of-3 helper — a dead row stacking the rail under
+  // the tablet fold. It mounts in the rounds a match is raced in.
+  describe('the Match pick is a playoff-round control', () => {
+    const HELPER = 'Fills both lanes; the winner is set when a lane wins 2 runs';
+
+    it.each(['qualification', 'training'] as const)(
+      'has no Match field or helper in %s — the rest of the rail stays',
+      (round) => {
+        render(<RaceRecorderControls recorder={makeRecorder({ round })} athletes={ATHLETES} />);
+        expect(screen.queryByLabelText(/match \(speed\)/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(HELPER)).not.toBeInTheDocument();
+        expect(screen.getByLabelText(/^round$/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/^gender$/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /swap lanes/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^void run$/i })).toBeInTheDocument();
+      },
+    );
+
+    it.each(['quarter', 'half', 'small_final', 'final', 'test'] as const)(
+      'offers %s’s matches with the best-of-3 helper',
+      (round) => {
+        const match = {
+          matchId: `m-${round}`,
+          compId: 'c1',
+          discipline: 'speed',
+          round,
+          gender: 'male',
+          position: 1,
+          athlete1Id: 'a1',
+          athlete2Id: 'a2',
+        };
+        render(
+          <RaceRecorderControls
+            recorder={makeRecorder({ round, roundMatches: [match] as never })}
+            athletes={ATHLETES}
+          />,
+        );
+        const field = screen.getByLabelText(/match \(speed\)/i);
+        expect(within(field).getByRole('option', { name: /jane doe/i })).toHaveValue(`m-${round}`);
+        expect(screen.getByText(HELPER)).toBeInTheDocument();
+      },
+    );
+  });
+
   it('routes a gender change through requestGender (the guarded door)', () => {
     const requestGender = vi.fn();
     render(<RaceRecorderControls recorder={makeRecorder({ requestGender })} athletes={ATHLETES} />);
@@ -187,7 +246,44 @@ describe('RaceRecorderControls', () => {
     expect(screen.getByText(/time not updated.*timing is unaffected/i)).toBeInTheDocument();
   });
 
-  it('shows the derived match winner inline once both lanes finish', () => {
+  // `speedline-match-helper-series-wording`: the helper promised a winner "once
+  // both finish", so after run 1 of a best-of-3 the empty winner line read as a
+  // failed save. The winner is first to 2 run-wins; until then the line says
+  // where the series stands and which run it waits on.
+  it('says the match winner is first to 2 runs, not "once both finish"', () => {
+    render(
+      <RaceRecorderControls recorder={makeRecorder({ round: 'quarter' })} athletes={ATHLETES} />,
+    );
+    expect(
+      screen.getByText('Fills both lanes; the winner is set when a lane wins 2 runs'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/once both/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the series score and the run it awaits until a lane wins 2', () => {
+    const rail = (runWins: { 1: number; 2: number }) => (
+      <RaceRecorderControls
+        recorder={makeRecorder({ selectedMatchId: 'm1', runWins })}
+        athletes={ATHLETES}
+      />
+    );
+    const { rerender } = render(rail({ 1: 0, 2: 0 }));
+    // Nothing scored yet: nothing awaited that the Best of 3 line does not say.
+    expect(screen.queryByText(/^Winner:/)).not.toBeInTheDocument();
+
+    rerender(rail({ 1: 1, 2: 0 }));
+    expect(screen.getByText('Winner: — series 1–0, awaiting run 2')).toBeInTheDocument();
+
+    rerender(rail({ 1: 1, 2: 1 }));
+    expect(screen.getByText('Winner: — series 1–1, awaiting run 3')).toBeInTheDocument();
+
+    // A clinched tally whose winner has not landed here yet (a peer-mirrored
+    // series) awaits no further run.
+    rerender(rail({ 1: 2, 2: 0 }));
+    expect(screen.queryByText(/awaiting run/)).not.toBeInTheDocument();
+  });
+
+  it('shows the derived match winner inline once a lane wins the series', () => {
     const { container } = render(
       <RaceRecorderControls
         recorder={makeRecorder({ selectedMatchId: 'm1', derivedWinner: 'a1' })}
@@ -259,6 +355,71 @@ describe('RaceRecorderControls', () => {
     fireEvent.click(button);
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Void run' }));
     expect(voidRun).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * `speedline-void-run-locked-while-run-live`: a void under a live run left
+   * the still-running lane's Stop to record a Time for a run already voided.
+   * The rail locks it with the board's sentence, like the swap above it.
+   */
+  describe('Void under a live run', () => {
+    const saved = { 1: savedFeedback('t1', 83450), 2: null };
+
+    it.each(['locked while a lane runs', 'locked while the start sequence runs'])(
+      'locks Void run and says why: %s',
+      (reason) => {
+        render(
+          <RaceRecorderControls
+            recorder={makeRecorder({ laneFeedback: saved })}
+            athletes={ATHLETES}
+            voidLock={reason}
+          />,
+        );
+        const button = screen.getByRole('button', { name: /^void run$/i });
+        expect(button).toBeDisabled();
+        expect(button).toHaveAccessibleDescription(reason);
+        expect(screen.getByText(`why: ${reason}`)).toBeInTheDocument();
+      },
+    );
+
+    it('is live again once the run has resolved, and still asks first', () => {
+      const voidRun = vi.fn();
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({ voidRun, laneFeedback: saved })}
+          athletes={ATHLETES}
+          voidLock={null}
+        />,
+      );
+      expect(screen.queryByTestId('why-line')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: /^void run$/i }));
+      expect(voidRun).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toHaveTextContent('Void this run?');
+    });
+
+    // Both lanes flagged mid-run: the advice stands so the head judge reads
+    // what is coming, and its action waits for the run to resolve.
+    it('keeps the both-lanes advice up with its action locked', () => {
+      const voidRun = vi.fn();
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            selectedMatchId: 'm1',
+            laneAthletes: { 1: 'a1', 2: 'a2' },
+            fsCounts: { 1: 1, 2: 1 },
+            fsOutcome: { kind: 'rerun-round' },
+            voidRun,
+          })}
+          athletes={ATHLETES}
+          voidLock="locked while a lane runs"
+        />,
+      );
+      expect(screen.getByText(/both lanes false-started/i)).toBeInTheDocument();
+      const button = screen.getByRole('button', { name: /void run & rerun/i });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAccessibleDescription('locked while a lane runs');
+      expect(screen.getByText('why: locked while a lane runs')).toBeInTheDocument();
+    });
   });
 
   it('surfaces a void error without implying timing broke', () => {
@@ -350,7 +511,7 @@ describe('RaceRecorderControls', () => {
 
   // The rail's two colourless presses (FREESTYLE_BOARD_UX §7's P3 sibling): no
   // state to paint, so nothing about them looked wrong — and both shipped under
-  // the aux floor, holding focus, while the Freestyle desk's own `Swap players`
+  // the aux floor, holding focus, while the Freestyle desk's own `Swap athletes`
   // already took the wrapper.
   it('paints the lane swap as a race control', () => {
     render(
@@ -503,8 +664,9 @@ describe('the recording rail heading', () => {
     // overline class is what the rest of the board's section headings carry.
     expect(heading).toHaveClass('MuiTypography-overline');
     // More than the 9 px MUI floats the outlined label above its field box —
-    // measured in the browser at all four contract viewports, where an 8 px
-    // gutter still overlapped by 1 px.
+    // measured in the browser at all four viewports of
+    // design-system §9 "Responsive contract", where an 8 px gutter still
+    // overlapped by 1 px.
     expect(px(style.marginBottom)).toBeGreaterThan(MUI_FLOATING_LABEL_RISE_PX);
   });
 });

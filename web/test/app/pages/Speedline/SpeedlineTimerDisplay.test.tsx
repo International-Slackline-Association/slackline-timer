@@ -25,6 +25,7 @@ vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
         lastJsonMessage: lastMessage.current,
         readyState: readyState.current,
         sendWSMessage: vi.fn(),
+        sendAck: vi.fn(),
       };
     },
   };
@@ -48,7 +49,7 @@ vi.mock('app/hooks/useSignalAudio', () => ({
 }));
 
 import { SpeedlineTimerDisplay } from 'app/pages/Speedline/SpeedlineTimerDisplay';
-import { OVERLAY_LANE } from 'app/pages/Stream/TimerLaneBlock';
+import { OVERLAY_LANE } from 'app/theme/tokens';
 
 import { pinViewport, px } from '../../../util/computedUnits';
 
@@ -58,6 +59,20 @@ const renderDisplay = (variant: 'projector' | 'broadcast', search: string) =>
       <SpeedlineTimerDisplay variant={variant} />
     </MemoryRouter>,
   );
+
+/** The speed board's live selection with the given lane athletes (null = unassigned). */
+const selection = (athlete1Id: string | null, athlete2Id: string | null): StopwatchWSMessage => ({
+  type: 'updateSelection',
+  sessionId: 'worlds-2026',
+  data: {
+    discipline: 'speed',
+    round: 'qualification',
+    gender: 'male',
+    matchId: null,
+    athlete1Id,
+    athlete2Id,
+  },
+});
 
 describe('SpeedlineTimerDisplay relay session', () => {
   // Regression: the broadcast overlay is addressed by ?compId= and its read token
@@ -355,15 +370,33 @@ describe('SpeedlineTimerDisplay start-signal from the anchor seed', () => {
   // latency on the authoritative `start` message.
   it('ignites the seeded lanes at the GO edge, anchored on the schedule epoch', () => {
     const { deliver } = setup();
-    // Solo run: only lane 1 ignites; lane 2 stays dormant.
+    // Solo run: only lane 1 has an athlete, so only lane 1 ignites.
+    deliver(selection('a1', null));
     deliver(seed(1_000_000, [1]));
     act(() => vi.advanceTimersByTime(5000)); // GO — clocks leave zero NOW
 
     // One second past GO the ignited lane reads exactly 0:01.00 (anchored on
-    // anchor + 5000, not on any message arrival); the dormant lane holds zero.
+    // anchor + 5000, not on any message arrival); the dormant lane has no
+    // lower-third at all.
     act(() => vi.advanceTimersByTime(1000));
-    expect(screen.getByText('0:01.00')).toBeInTheDocument();
-    expect(screen.getByText('0:00.00')).toBeInTheDocument();
+    expect(within(screen.getByTestId('timer-lane-1')).getByText('0:01.00')).toBeInTheDocument();
+    expect(screen.queryByTestId('timer-lane-2')).toBeNull();
+  });
+
+  // A lane that re-appears (solo → pair) mounts a fresh Stopwatch, which replays
+  // the display's last recovered lane state; a reset must void that, or the
+  // re-mounted lane resumes ticking on the previous race's GO epoch.
+  it('re-mounts a dormant lane idle after a reset, not on the last ignition', () => {
+    const { deliver } = setup();
+    deliver(selection('a1', 'a2'));
+    deliver(seed(1_000_000, [1, 2]));
+    act(() => vi.advanceTimersByTime(6000)); // GO + 1s, both lanes running
+    deliver({ type: 'reset', sessionId: 'worlds-2026', data: {} });
+    deliver(selection('a1', null));
+    deliver(selection('a1', 'a2'));
+    act(() => vi.advanceTimersByTime(1000));
+
+    expect(within(screen.getByTestId('timer-lane-2')).getByText('0:00.00')).toBeInTheDocument();
   });
 
   it('never ignites the clocks when the sequence is aborted before GO', () => {
@@ -381,6 +414,72 @@ describe('SpeedlineTimerDisplay start-signal from the anchor seed', () => {
 
     // Both lanes still hold the idle clock — nothing started.
     expect(screen.getAllByText('0:00.00').length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('SpeedlineTimerDisplay solo run (one lane assigned)', () => {
+  const setup = (variant: 'projector' | 'broadcast' = 'broadcast') => {
+    lastMessage.current = null;
+    readyState.current = 1;
+    const search =
+      variant === 'broadcast' ? '?compId=worlds-2026&token=abc' : '?sessionId=worlds-2026';
+    const r = renderDisplay(variant, search);
+    const repaint = () =>
+      r.rerender(
+        <MemoryRouter initialEntries={[`/route${search}`]}>
+          <SpeedlineTimerDisplay variant={variant} />
+        </MemoryRouter>,
+      );
+    const deliver = (msg: StopwatchWSMessage) =>
+      act(() => {
+        lastMessage.current = msg;
+        repaint();
+      });
+    const setReadyState = (state: number) =>
+      act(() => {
+        readyState.current = state;
+        repaint();
+      });
+    return { deliver, setReadyState };
+  };
+
+  it.each(['broadcast', 'projector'] as const)(
+    'renders only the assigned lane on the %s display',
+    (variant) => {
+      const { deliver } = setup(variant);
+      deliver(selection(null, 'a2'));
+      expect(screen.queryByTestId('timer-lane-1')).toBeNull();
+      expect(screen.getByTestId('timer-lane-2')).toBeInTheDocument();
+      // The start light stays in place for the solo athlete.
+      expect(screen.getByTestId('start-bulb-0')).toBeInTheDocument();
+    },
+  );
+
+  it('keeps both plates for a pair', () => {
+    const { deliver } = setup();
+    deliver(selection('a1', 'a2'));
+    expect(screen.getByTestId('timer-lane-1')).toBeInTheDocument();
+    expect(screen.getByTestId('timer-lane-2')).toBeInTheDocument();
+  });
+
+  it('keeps both plates for a training run (no athletes)', () => {
+    const { deliver } = setup();
+    deliver(selection('a1', null));
+    deliver(selection(null, null));
+    expect(screen.getByTestId('timer-lane-1')).toBeInTheDocument();
+    expect(screen.getByTestId('timer-lane-2')).toBeInTheDocument();
+  });
+
+  // The board re-pushes its selection on every socket OPEN, so a reconnecting
+  // OBS source recovers the solo layout without waiting for the next start.
+  it('recovers the solo layout from the selection re-pushed on re-OPEN', () => {
+    const { deliver, setReadyState } = setup();
+    setReadyState(3); // CLOSED — the lower-thirds blank
+    expect(screen.queryByTestId('timer-lane-1')).toBeNull();
+    setReadyState(1);
+    deliver(selection('a1', null));
+    expect(screen.getByTestId('timer-lane-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('timer-lane-2')).toBeNull();
   });
 });
 
@@ -435,6 +534,20 @@ describe('SpeedlineTimerDisplay corner geometry', () => {
     expect(bottom).toBeCloseTo(2 * OVERLAY_LANE.inset, 1);
     expect(plateWidth).toBeCloseTo(640, 1);
     expect(numeral).toBeCloseTo(120, 1);
+  });
+
+  // The time hugs the lane's outer edge, mirroring the name strip above it.
+  it('justifies each lane clock to its outer edge', () => {
+    restoreViewport = pinViewport(1920, 1080);
+    lastMessage.current = null;
+    readyState.current = 1;
+    renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
+    const justify = (lane: number) =>
+      window.getComputedStyle(
+        within(screen.getByTestId(`timer-lane-${lane}`)).getByTestId('stopwatch-plate'),
+      ).justifyContent;
+    expect(justify(1)).toBe('flex-start');
+    expect(justify(2)).toBe('flex-end');
   });
 
   // The producer knobs stay RAW px against the capture, not frame-relative: they

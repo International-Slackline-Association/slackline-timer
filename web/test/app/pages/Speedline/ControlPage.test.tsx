@@ -9,10 +9,13 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { StopwatchWSMessage } from 'app/hooks/useWebSocket';
 import { PRE_BEEP_PHASE } from 'app/hooks/useStartSignalTimer';
+import { GRACE_MS } from 'app/hooks/useStaleAfterGrace';
+import { telemetryTheme } from 'app/theme/theme';
+import { deskColumns, deskMedia } from 'app/theme/tokens';
 
 import { px } from '../../../util/computedUnits';
 import {
@@ -20,7 +23,9 @@ import {
   COMPACT_PX,
   DESK_HEIGHT_PX,
   DESK_MIN_PX,
+  deskMediaValue,
   pinLayoutWidth,
+  SPEEDLINE_START_STRIP_PX,
 } from '../../../util/deskGeometry';
 
 const { apiFetchMock } = vi.hoisted(() => ({ apiFetchMock: vi.fn() }));
@@ -30,11 +35,12 @@ vi.mock('app/api/client', async (importOriginal) => {
 });
 
 // The page's single relay socket (ADR 0043). `receiverMessage` is the incoming
-// peer message a rerender delivers.
+// peer message a rerender delivers; `readyState` is the link a rerender reports.
 const { sockets } = vi.hoisted(() => ({
   sockets: {
     senderSend: vi.fn(),
     receiverMessage: null as StopwatchWSMessage | null,
+    readyState: 1,
   },
 }));
 vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
@@ -43,7 +49,7 @@ vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
     ...actual,
     useWS: () => ({
       sendWSMessage: sockets.senderSend,
-      readyState: 1,
+      readyState: sockets.readyState,
       lastJsonMessage: sockets.receiverMessage,
       senderId: 'own-sender-id',
     }),
@@ -72,13 +78,18 @@ const { playAudioMock, audio } = vi.hoisted(() => ({
   playAudioMock: vi.fn(),
   audio: { blocked: false },
 }));
-vi.mock('app/hooks/useSignalAudio', () => ({
-  useSignalAudio: () => ({
-    audioElement: null,
-    playAudio: playAudioMock,
-    audioBlocked: audio.blocked,
-  }),
-}));
+vi.mock('app/hooks/useSignalAudio', async () => {
+  const { createElement } = await import('react');
+  // The real hook's zero-height holder, so the page's placement of it is testable.
+  const audioElement = createElement('div', { 'data-testid': 'signal-audio' });
+  return {
+    useSignalAudio: () => ({
+      audioElement,
+      playAudio: playAudioMock,
+      audioBlocked: audio.blocked,
+    }),
+  };
+});
 vi.mock('app/state/selectedCompetition', () => ({
   useSelectedCompetition: () => ({ compId: 'c1' }),
 }));
@@ -114,7 +125,14 @@ const renderPage = () => {
       refresh();
     });
   };
-  return { ...rendered, deliver, pressPad };
+  /** The socket moving to another `ReadyState` (0 connecting … 3 closed). */
+  const relink = (readyState: number) => {
+    act(() => {
+      sockets.readyState = readyState;
+      refresh();
+    });
+  };
+  return { ...rendered, deliver, pressPad, relink };
 };
 
 const startButton = () => screen.getByRole('button', { name: 'Start' });
@@ -476,6 +494,56 @@ describe('SpeedlineControlPage health chips', () => {
   });
 });
 
+/**
+ * `ftt-followup-control-session-self-restore-unreachable-1`: the lane clocks are
+ * the board's own state (ADR 0027), so a down relay costs the audience screens,
+ * never the timekeeper's view of a still-running run — the header's caption
+ * promises exactly that. Only the preview's plates wait on the socket.
+ */
+describe('SpeedlineControlPage clocks on a down link', () => {
+  beforeEach(() => {
+    sockets.senderSend = vi.fn();
+    sockets.receiverMessage = null;
+    sockets.readyState = 1;
+    gamepad.press = undefined;
+    apiFetchMock.mockReset().mockResolvedValue([]);
+    audio.blocked = false;
+  });
+  afterEach(() => {
+    sockets.readyState = 1;
+    vi.useRealTimers();
+  });
+
+  const laneNumerals = () => within(screen.getByTestId('desk-live')).getAllByText('0:00.00');
+
+  it.each([
+    ['connecting', [0]],
+    ['reconnecting', [1, 3]],
+  ])('shows both lane clocks while the link is %s', (_phase, steps) => {
+    sockets.readyState = steps[0];
+    const { relink } = renderPage();
+    for (const readyState of steps.slice(1)) relink(readyState);
+
+    expect(laneNumerals()).toHaveLength(2);
+    for (const numeral of laneNumerals()) expect(numeral).toBeVisible();
+  });
+
+  it.each([
+    ['Not connected', [3]],
+    ['Connection lost', [1, 3]],
+  ])('shows both lane clocks past the grace (%s)', (label, steps) => {
+    vi.useFakeTimers();
+    sockets.readyState = steps[0];
+    const { relink } = renderPage();
+    for (const readyState of steps.slice(1)) relink(readyState);
+    act(() => vi.advanceTimersByTime(GRACE_MS + 100));
+
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(laneNumerals()).toHaveLength(2);
+    for (const numeral of laneNumerals()) expect(numeral).toBeVisible();
+  });
+});
+
 // The live-path control contract the Freestyle board taught the operator
 // (FREESTYLE_BOARD_UX §6 + the §7 P3 sibling note): one dialect across both
 // desks, so a hand trained on one finds Start/Stop/Reset on the other.
@@ -711,6 +779,114 @@ describe('SpeedlineControlPage handset behind a question (FREESTYLE_BOARD_UX §4
 });
 
 /**
+ * `speedline-live-run-reset-confirm-and-abort-lock`: the run used to lock the
+ * on-screen Reset while handset 1 still raised the confirm, and left Abort
+ * Start live past GO, where it only re-labelled the board. One lock now reads
+ * the same on both paths: Reset is live and confirm-guarded, Abort ends at GO.
+ */
+describe('SpeedlineControlPage live-run Reset and Abort', () => {
+  beforeEach(() => {
+    sockets.senderSend = vi.fn();
+    sockets.receiverMessage = null;
+    gamepad.press = undefined;
+    playAudioMock.mockReset();
+    apiFetchMock.mockReset().mockResolvedValue([]);
+  });
+
+  const sends = (...types: StopwatchWSMessage['type'][]) =>
+    (sockets.senderSend.mock.calls as [StopwatchWSMessage][])
+      .map(([m]) => m)
+      .filter((m) => types.includes(m.type));
+
+  const startRace = (deliver: (message: StopwatchWSMessage) => void) =>
+    deliver({
+      type: 'start',
+      sessionId: 'c1',
+      senderId: 'peer-panel',
+      data: { startTime: Date.now() - 1000, lanes: [1, 2] },
+    });
+
+  it('asks before a mid-race Reset, and Keep timing leaves the clocks running', async () => {
+    const user = userEvent.setup();
+    const { deliver } = renderPage();
+    startRace(deliver);
+
+    expect(resetButton()).toBeEnabled();
+    await user.click(resetButton());
+    expect(screen.getByRole('dialog', { name: 'Reset this run?' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Keep timing' }));
+    await waitForElementToBeRemoved(() => screen.queryByText('Reset this run?'));
+    for (const stop of stopButtons()) expect(stop).toBeEnabled();
+    expect(sends('reset')).toHaveLength(0);
+  });
+
+  it('wipes the run on Reset run', async () => {
+    const user = userEvent.setup();
+    const { deliver } = renderPage();
+    startRace(deliver);
+
+    await user.click(resetButton());
+    await user.click(screen.getByRole('button', { name: 'Reset run' }));
+    await waitForElementToBeRemoved(() => screen.queryByText('Reset this run?'));
+
+    expect(sends('reset')).toHaveLength(1);
+    for (const stop of stopButtons()) expect(stop).toBeDisabled();
+    expect(startButton()).toBeEnabled();
+  });
+
+  it('clears an idle board without asking', () => {
+    renderPage();
+
+    fireEvent.click(resetButton());
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(sends('reset')).toHaveLength(1);
+  });
+
+  it('locks Abort Start once GO has fired, on screen and on the pad', () => {
+    const { deliver, pressPad } = renderPage();
+    startRace(deliver);
+
+    expect(abortButton()).toBeDisabled();
+    expect(screen.getByText('why: GO has fired — flag false starts per lane')).toBeInTheDocument();
+
+    fireEvent.click(abortButton());
+    pressPad(5);
+
+    expect(sends('updateText', 'updateSignalPhase')).toHaveLength(0);
+    for (const stop of stopButtons()) expect(stop).toBeEnabled();
+  });
+
+  it('keeps Abort live through the lights, with Reset behind the same question', () => {
+    vi.useFakeTimers();
+    try {
+      renderPage();
+      fireEvent.click(startButton());
+      act(() => vi.advanceTimersByTime(300)); // armed: the pre-beep window
+
+      expect(startButton()).toBeDisabled();
+      expect(abortButton()).toBeEnabled();
+      expect(resetButton()).toBeEnabled();
+
+      fireEvent.click(resetButton());
+      expect(screen.getByRole('dialog', { name: 'Reset this run?' })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('locks Void run while a lane runs, in the board’s words', () => {
+    const { deliver } = renderPage();
+    startRace(deliver);
+
+    expect(screen.getByRole('button', { name: /^void run$/i })).toHaveAccessibleDescription(
+      'locked while a lane runs',
+    );
+  });
+});
+
+/**
  * The desk (`speedline-desk-layout`): the lane's athlete and its Saved chip
  * stand IN the lane column beside that lane's clock, and the cross-lane rail
  * sits to the side — not in a panel under the whole board.
@@ -721,6 +897,34 @@ describe('SpeedlineControlPage desk', () => {
     sockets.receiverMessage = null;
     gamepad.press = undefined;
     apiFetchMock.mockReset().mockResolvedValue([]);
+  });
+
+  // `ftt-followup-speedline-board-run-interlocks-1`: the bulbs sit above Start,
+  // so a light that left the flow on clear lifted the whole strip mid-run.
+  it('keeps the start light in flow, unlit, once the sequence clears', () => {
+    vi.useFakeTimers();
+    try {
+      renderPage();
+      const light = () =>
+        window.getComputedStyle(screen.getByTestId('start-bulb-0').parentElement!);
+      expect(light().display).toBe('flex');
+
+      fireEvent.click(startButton());
+      // Reset, sequence opens at +300, GO at +5300, cleared at +6300.
+      act(() => vi.advanceTimersByTime(6300));
+
+      expect(light().display).toBe('flex');
+      expect(light().visibility).toBe('hidden');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ends the spaced page stack at the desk — no gap owed to the audio holder', () => {
+    renderPage();
+
+    const page = screen.getByTestId('control-status-header').parentElement!;
+    expect(screen.getByTestId('signal-audio').parentElement).not.toBe(page);
   });
 
   it('puts each lane’s recording controls in that lane’s own column', () => {
@@ -737,8 +941,21 @@ describe('SpeedlineControlPage desk', () => {
     }
     // The cross-lane rail keeps the selection context and the destructive undo.
     const rail = screen.getByRole('region', { name: 'Result recording' });
-    expect(within(rail).getByLabelText('Match (speed)')).toBeInTheDocument();
+    expect(within(rail).getByLabelText(/^round$/i)).toBeInTheDocument();
     expect(within(rail).getByRole('button', { name: 'Swap lanes' })).toBeInTheDocument();
+  });
+
+  it('opens the desk on its gate token and the start strip on the md breakpoint', () => {
+    renderPage();
+
+    const live = screen.getByTestId('desk-live');
+    expect(deskMediaValue(live.parentElement!, 'grid-template-columns', deskMedia.speedline)).toBe(
+      deskColumns,
+    );
+    const md = telemetryTheme.breakpoints.up('md').replace('@media ', '');
+    expect(deskMediaValue(live, 'grid-template-columns', md)).toBe(
+      `minmax(0, 5fr) minmax(${SPEEDLINE_START_STRIP_PX}px, 3fr) minmax(0, 5fr)`,
+    );
   });
 
   /**
@@ -768,9 +985,10 @@ describe('SpeedlineControlPage desk', () => {
     });
 
     expect(startButton()).toHaveAccessibleDescription('locked while a lane runs');
-    // The two surfaces the run holds: the race pair's reserved line and the
-    // rail's Swap — one map, so both print the sentence the button describes.
+    // The rail's two presses the run holds — Swap and Void run — print the
+    // sentence Start describes; the race pair's line names what to do past GO.
     expect(screen.getAllByText('why: locked while a lane runs')).toHaveLength(2);
+    expect(abortButton()).toHaveAccessibleDescription('GO has fired — flag false starts per lane');
   });
 
   /**
@@ -803,13 +1021,14 @@ describe('SpeedlineControlPage desk', () => {
  * `speedline-compact-setup-strip`: below the desk gate the three columns stack,
  * and desk-left went first as a full column — the Preview switch over a ~220 px
  * handset card — which at 1024x768 pushed `False start` (bottom 789) and `DNF`
- * (839) under the fold, against both the responsive contract ("setup chrome
- * collapses before the live path") and the manual's promise that the clocks
- * come first. The order stays (setup -> race -> rail, nothing moves between
- * widths); what changes is that setup collapses to ONE wrapping row there.
+ * (839) under the fold, against both design-system §9 "Responsive contract"
+ * ("setup chrome collapses before the live path") and the manual's promise that
+ * the clocks come first. The order stays (setup -> race -> rail, nothing moves
+ * between widths); what changes is that setup collapses to ONE wrapping row
+ * there.
  *
  * The card owns a gamepad listener and a once-a-second ticker, so the variant is
- * ONE render chosen by the same `(min-width:1280px)` the desk grid gates on —
+ * ONE render chosen by the same `deskMedia.speedline` the desk grid gates on —
  * never both behind a CSS display toggle.
  */
 describe('SpeedlineControlPage setup strip', () => {
@@ -849,11 +1068,32 @@ describe('SpeedlineControlPage setup strip', () => {
     );
   });
 
+  // speedline-compact-fold-lane-dnf-1024: in a row of its own the strip put the
+  // live deck ~100 px lower than on the desk, and `Lane n DNF` on the 768 px
+  // fold. It rides in the header's empty column beside the health block
+  // instead, with the switch and its link on one line, so the live deck is the
+  // first thing in the desk grid.
+  it('lays the strip into the header, one line high, below the desk gate', () => {
+    pinLayoutWidth(COMPACT_PX, COMPACT_HEIGHT_PX);
+    renderPage();
+
+    const header = screen.getByTestId('control-status-header');
+    const left = within(header).getByTestId('desk-left');
+    const preview = within(left).getByTestId('preview-controls');
+    expect(window.getComputedStyle(preview).flexDirection).toBe('row');
+
+    const live = screen.getByTestId('desk-live');
+    expect(live.parentElement?.firstElementChild).toBe(live);
+  });
+
   it('keeps the full card, in a column, once the desk gate is met', () => {
     pinLayoutWidth(DESK_MIN_PX, DESK_HEIGHT_PX);
     renderPage();
 
     const left = screen.getByTestId('desk-left');
+    expect(within(screen.getByTestId('control-status-header')).queryByTestId('desk-left')).toBe(
+      null,
+    );
     expect(window.getComputedStyle(left).flexDirection).toBe('column');
     expect(screen.getByTestId('handset-card')).toBeInTheDocument();
     expect(screen.queryByTestId('handset-strip')).not.toBeInTheDocument();

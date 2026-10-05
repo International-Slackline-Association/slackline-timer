@@ -14,7 +14,6 @@ interface Props {
    * enabled only while the lane is running — no dependency on the relay echo.
    */
   laneState: SpeedlineLaneState;
-  isReady: boolean;
   stop(): void;
   /** Why this lane's Stop is inert, from the page's interlock table
    * (`app/util/speedlineLocks`), or null while it is live. */
@@ -44,7 +43,10 @@ export const StopwatchControl = (props: Props) => {
       )}
       <Stopwatch
         lastJsonMessage={undefined}
-        isReady={props.isReady}
+        // Ungated by the link, unlike the preview's plates: these clocks are
+        // the board's own state, and a run still timing through an outage is
+        // exactly when the timekeeper must see it.
+        isReady
         timerId={props.id}
         laneState={props.laneState}
         size="control"

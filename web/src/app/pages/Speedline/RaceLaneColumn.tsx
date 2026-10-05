@@ -1,28 +1,50 @@
-import { Chip, Stack, TextField, Typography } from '@mui/material';
+import { Chip, Link, Stack, TextField, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 
+import type { TimeInput } from 'app/api/times';
 import { LockedControl } from 'app/components/LockedControl';
-import { RaceButton } from 'app/components/RaceButton';
+import { RaceButton, blurOnClickProps } from 'app/components/RaceButton';
 import { SelectField } from 'app/components/SelectField';
+import { WhyLine } from 'app/components/WhyLine';
 import type { LaneId, RaceRecorder } from 'app/hooks/useRaceRecorder';
+import { space } from 'app/theme/tokens';
 import type { Athlete } from 'app/types';
 import { athleteOptions } from 'app/util/athleteOptions';
 import { laneName } from 'app/util/raceNames';
 import type { SpeedlineLaneState } from 'app/util/timerSnapshot';
 import { DNF_SENTINEL, formatMs, isValidTimeFormat, parseTimeString } from 'app/util/time';
+import { timeCorrectionHref } from 'app/util/timesLink';
 import { StopwatchControl } from './StopwatchControl';
+
+/**
+ * The Times page filtered to the row a lane recorded. A new tab, never a route:
+ * the board is a live timing surface, and navigating away would drop its
+ * socket mid-run.
+ */
+const TimesPageLink = ({ input }: { input: TimeInput }) => (
+  <Link
+    href={timeCorrectionHref(input.round, input.athleteId)}
+    target="_blank"
+    rel="noopener"
+    {...blurOnClickProps<HTMLAnchorElement>()}
+  >
+    Times page ↗
+  </Link>
+);
 
 /**
  * Inline `M:SS.hh` correction for an already-saved lane time (hand timers
  * differ from the system clock). Seeds from the recorded value and commits on
  * Enter / blur via the recorder's existing update path; a no-change or DNF
- * value is left to the operator (DNF is corrected on /admin/times).
+ * value is left to the operator (a DNF is corrected on the Times page).
  */
 const LaneTimeEdit = ({
   valueMs,
+  input,
   onCommit,
 }: {
   valueMs: number;
+  input: TimeInput;
   onCommit: (timeMs: number) => void;
 }) => {
   const [str, setStr] = useState(() => formatMs(valueMs));
@@ -50,7 +72,15 @@ const LaneTimeEdit = ({
       // line under every lane costs ~20 px of the 720 px desk's fold budget for
       // a hint the field is already showing back. It comes out for the two
       // states that have something to SAY.
-      helperText={isDnf ? 'Edit a DNF on /admin/times' : invalid ? 'M:SS.hh' : undefined}
+      helperText={
+        isDnf ? (
+          <>
+            Edit a DNF on the <TimesPageLink input={input} />
+          </>
+        ) : invalid ? (
+          'M:SS.hh'
+        ) : undefined
+      }
       onChange={(e) => setStr(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
@@ -66,7 +96,6 @@ interface Props {
   recorder: RaceRecorder;
   athletes: Athlete[];
   laneState: SpeedlineLaneState;
-  isReady: boolean;
   onStop: () => void;
   /** Why this lane's Stop is inert, from the board's interlock table. */
   stopLock: string | null;
@@ -95,16 +124,15 @@ interface Props {
  * The order is a fold contract (`speedline-lane-post-stop-layout-shift`):
  * everything down to and including the race pair (False start / Lane n DNF) is
  * always present or height-reserved, so a stop cannot move the pair under a
- * hand already reaching for it. What the run PRODUCES — the 2nd-FS caption, the
- * correction field, the re-attribution — sits below the pair, where the column
- * may grow: none of it is pressed in a hurry.
+ * hand already reaching for it. What the run PRODUCES — the 2nd-FS caption, a
+ * failed save's Retry, the correction field, the re-attribution — sits below
+ * the pair, where the column may grow: none of it is pressed in a hurry.
  */
 export const RaceLaneColumn = ({
   lane,
   recorder,
   athletes,
   laneState,
-  isReady,
   onStop,
   stopLock,
   onResume,
@@ -120,6 +148,7 @@ export const RaceLaneColumn = ({
     attemptCap,
     editLaneTime,
     moveTime,
+    retrySave,
     fsCounts,
     clearFs,
     laneFeedback,
@@ -161,7 +190,6 @@ export const RaceLaneColumn = ({
       <StopwatchControl
         id={lane}
         laneState={laneState}
-        isReady={isReady}
         stop={onStop}
         lock={stopLock}
         name={laneName(laneAthletes[lane], athletes)}
@@ -171,13 +199,16 @@ export const RaceLaneColumn = ({
           mis-press and its recovery as one event. Neutral, not a race tone: it
           un-does, it does not drive the race. Standing in every state (per the
           fold contract above), it carries its reason instead of vanishing:
-          "Lane n is not stopped" before, "run has resolved" after. No handset
-          key reaches it — see the pad effect on the ControlPage. */}
+          "Lane n is not stopped" before, "run has resolved" after — printed in
+          a slot reserved while Resume is live, so the picker and the race pair
+          hold still as the window opens and closes. No handset key reaches it
+          — see the pad effect on the ControlPage. */}
       <LockedControl reason={resumeLock}>
         <RaceButton tone="neutral" disabled={resumeLock !== null} onClick={onResume}>
           Resume Lane {lane}
         </RaceButton>
       </LockedControl>
+      <WhyLine reason={resumeLock} />
 
       <SelectField
         label={`Lane ${lane} athlete`}
@@ -202,7 +233,7 @@ export const RaceLaneColumn = ({
         // One small chip tall whether or not a chip stands in it — the Saved
         // chip lands mid-run, and a row that grew to receive it would move the
         // race pair below.
-        sx={{ flexWrap: 'wrap', justifyContent: 'center', minHeight: 24 }}
+        sx={{ flexWrap: 'wrap', justifyContent: 'center', minHeight: space.unit * 3 }}
       >
         {/* Rule S5: qualification is two attempts per athlete. Badge the
             used count and lock the lane at the cap (admin CRUD corrects). */}
@@ -246,8 +277,35 @@ export const RaceLaneColumn = ({
           2nd false start — attempt failed, no time recorded
         </Typography>
       )}
+      {/* A POST that did not land carries its recovery: the re-send and the
+          row on the Times page (a failed correction re-commits from its own
+          field). Below the pair, per the fold contract: the reserved strip
+          above holds one chip, not a 44 px press. */}
+      {feedback?.failed && (
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{ flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}
+        >
+          <RaceButton
+            tone="save"
+            disabled={feedback.status === 'pending'}
+            onClick={() => retrySave(lane)}
+          >
+            Retry save
+          </RaceButton>
+          <Typography variant="body2">
+            <TimesPageLink input={feedback.failed.input} />
+          </Typography>
+        </Stack>
+      )}
       {saved && (
-        <LaneTimeEdit valueMs={feedback.valueMs} onCommit={(ms) => editLaneTime(lane, ms)} />
+        <LaneTimeEdit
+          valueMs={feedback.valueMs}
+          input={saved.input}
+          onCommit={(ms) => editLaneTime(lane, ms)}
+        />
       )}
       {/* The recovery for a result recorded against the wrong person: one tap,
           and explicit — a re-pick may be exploratory, so nothing moves until

@@ -34,18 +34,41 @@ describe('speedlineLocks', () => {
     const locks = speedlineLocks({ ...idle, signalPhase: 2 });
 
     expect(locks.start).toBe('locked while the start sequence runs');
-    expect(locks.reset).toBe('locked while the start sequence runs');
     expect(locks.abort).toBeNull();
   });
 
-  it('names the running lane once the clocks are away', () => {
+  it('names the running lane once the clocks are away, and locks Abort past GO', () => {
     const locks = speedlineLocks({
       ...idle,
       laneState: { 1: running, 2: { kind: 'idle' } },
     });
 
     expect(locks.start).toBe('locked while a lane runs');
-    expect(locks.reset).toBe('locked while a lane runs');
+    // A jump after GO never halts the run (rule S4): it is flagged per lane.
+    expect(locks.abort).toBe('GO has fired — flag false starts per lane');
+  });
+
+  // The GO light stands for a second after the clocks ignite (phase 3), and a
+  // press there is already past GO.
+  it('treats the GO second as the race, not the lights', () => {
+    const locks = speedlineLocks({
+      ...idle,
+      signalPhase: 3,
+      laneState: { 1: running, 2: running },
+    });
+
+    expect(locks.abort).toBe('GO has fired — flag false starts per lane');
+    expect(locks.start).toBe('locked while a lane runs');
+  });
+
+  // `speedline-live-run-reset-confirm-and-abort-lock`: the confirm guards a
+  // live Reset, not a lock — a locked Reset left Stop-both-lanes (which POSTs
+  // Times) as the only way out of a run gone wrong.
+  it.each([
+    ['the lights', { signalPhase: 2 }],
+    ['a running lane', { laneState: { 1: running, 2: { kind: 'idle' } } as const }],
+  ])('leaves Reset live during %s', (_state, over) => {
+    expect(speedlineLocks({ ...idle, ...over }).reset).toBeNull();
   });
 
   it('explains the dead Start after an abort — the board waits for a Reset', () => {
@@ -107,6 +130,32 @@ describe('speedlineLocks', () => {
     // -1 latches Start dead, but no clock is away: this is exactly the moment an
     // operator fixes the sides before pressing Reset.
     expect(speedlineLocks({ ...idle, signalPhase: -1, aborted: true }).swap).toBeNull();
+  });
+
+  // `speedline-void-run-locked-while-run-live`: a mid-run void would let the
+  // still-running lane's Stop record a Time for a run already voided, so Void
+  // is interlocked exactly like the swap beside it on the rail.
+  it.each([
+    ['idle', idle],
+    ['lights', { ...idle, signalPhase: 2 }],
+    ['racing', { ...idle, laneState: { 1: running, 2: { kind: 'idle' } } as const }],
+    ['aborted', { ...idle, signalPhase: -1, aborted: true }],
+    ['offline', { ...idle, connected: false }],
+    ['offline racing', { ...idle, connected: false, laneState: { 1: running, 2: running } }],
+  ] as const)('locks Void exactly as it locks the swap: %s', (_state, input) => {
+    const locks = speedlineLocks(input);
+
+    expect(locks.void).toBe(locks.swap);
+  });
+
+  it('names the run that takes Void', () => {
+    expect(speedlineLocks(idle).void).toBeNull();
+    expect(speedlineLocks({ ...idle, signalPhase: 2 }).void).toBe(
+      'locked while the start sequence runs',
+    );
+    expect(speedlineLocks({ ...idle, laneState: { 1: running, 2: { kind: 'idle' } } }).void).toBe(
+      'locked while a lane runs',
+    );
   });
 
   it('locks a finished lane out of a second stop', () => {
