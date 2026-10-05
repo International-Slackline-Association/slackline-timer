@@ -9,6 +9,11 @@
  * the overlay files (Competitor, VsOverlay, RankingsOverlay) and that
  * WinnerOverlay/RoundsSummaryOverlay now use in place of fixed `rem`
  * (ADR 0034 §4).
+ *
+ * Three decimals keep each emission a plain `vw`/`vh` length that jsdom and
+ * `test/util/computedUnits.ts` resolve; a `calc(px * 100vw / 1920)` form would
+ * not. The cost is at most one 1/64px layout unit at 1080p (`refVw(16)` =
+ * `0.833vw` = 15.994px), below text antialiasing.
  */
 
 /** A reference-pixel width as a viewport-width unit off the 1920px frame. */

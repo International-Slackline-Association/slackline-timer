@@ -108,7 +108,8 @@ const StatRow = ({
   kind: ScoreCellKind;
   testId: string;
   /** Draw the translucent backing band behind the row. The TOTAL row is a bare
-   *  solid box in the art, so it opts out. */
+   *  solid box in the art, so it opts out — and keeps the layout's white caps +
+   *  footage shadow, since its label sits on bare footage. */
   strip?: boolean;
 }) => (
   <Box
@@ -142,6 +143,9 @@ const StatRow = ({
         fontSize: refVh(labelSize),
         lineHeight: 1,
         whiteSpace: 'nowrap',
+        // White caps on the 48% white band wash out to <=1.9:1 over bright
+        // footage; the band is light enough to carry the plate ink instead.
+        ...(strip && { color: colors.overlay.nameInk, textShadow: 'none' }),
       }}
     >
       {label}

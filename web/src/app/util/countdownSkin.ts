@@ -111,7 +111,9 @@ const SURFACES: Record<CountdownGround, SurfaceSkin> = {
   },
   plate: {
     numeral: {
-      idle: colors.ink.hi,
+      // One black per frame: every filled stream plate (and the SVO cards
+      // composited over this lower third) inks in nameInk.
+      idle: colors.overlay.nameInk,
       running: colors.race.running,
       onBreak: colors.race.setDim,
       expired: colors.race.stopDim,

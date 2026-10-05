@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Athlete } from 'app/types';
 import { AthleteCard } from 'app/pages/Stream/AthleteCard';
-import { colors, overlayTypeFloor } from 'app/theme/tokens';
+import { colors, overlayArt, overlayTypeFloor } from 'app/theme/tokens';
+
+import { emPx, px } from '../../../util/computedUnits';
+
+/** Whether `el`'s computed tracking is the authored `em` token. */
+const expectTracking = (el: HTMLElement, token: string) =>
+  expect(px(window.getComputedStyle(el).letterSpacing)).toBeCloseTo(emPx(token, el), 2);
 
 /** Resolve a hex token to the `rgb(...)` form jsdom reports for `color`. */
 const rgb = (hex: string) => {
@@ -82,6 +88,16 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
     expect(style.backgroundColor).toBe(rgb(colors.overlay.nameInk));
   });
 
+  it('ends the name block a clearance above the divider rule so a caption never sits on it', () => {
+    // The fit packs name + result + caption flush to the block's foot: ending at
+    // the flag strip put the last rows under the rule, ending AT the rule left
+    // the caption touching it. FLAG_STRIP_H + DIVIDER_H + the 1.5cqh clearance.
+    render(<AthleteCard athlete={athlete()} result="0:07.09" sourceTag="SMALL FINAL" />);
+    expect(window.getComputedStyle(screen.getByTestId('athlete-card-name')).bottom).toMatch(
+      /^calc\(6% \+ .*0\.8cqh \+ 1\.5cqh.*\)$/,
+    );
+  });
+
   it('shows the question-mark placeholder (no TBD text, no white band) when no athlete is bound', () => {
     const { container } = render(<AthleteCard />);
     expect(screen.getByTestId('athlete-card-unknown')).toBeInTheDocument();
@@ -110,6 +126,31 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
     expect(window.getComputedStyle(photo).backgroundColor).toBe(rgb(colors.overlay.plateFilled));
   });
 
+  it('tracks the initials on the shared name token', () => {
+    render(<AthleteCard athlete={athlete({ photoUrl: undefined })} />);
+    expectTracking(screen.getByText('TS'), overlayArt.nameTracking);
+  });
+
+  it('steps the source tag and points unit down by colour, not opacity', () => {
+    render(<AthleteCard athlete={athlete()} result="31" resultUnit="PTS" sourceTag="FINAL" />);
+    for (const id of ['athlete-card-result-unit', 'athlete-card-source-tag']) {
+      const style = window.getComputedStyle(screen.getByTestId(id));
+      expect(style.color).toBe(rgb(colors.overlay.nameInkSubordinate));
+      expect(Number(style.opacity || 1)).toBe(1);
+    }
+  });
+
+  it('writes a winner’s source tag and points unit in the green text tier', () => {
+    // Words under 24px on a light ground take `goText`; `goDim` is numeral-only.
+    render(
+      <AthleteCard athlete={athlete()} result="31" resultUnit="PTS" sourceTag="FINAL" isWinner />,
+    );
+    expect(window.getComputedStyle(screen.getByText('31')).color).toBe(rgb(colors.race.goDim));
+    for (const id of ['athlete-card-result-unit', 'athlete-card-source-tag']) {
+      expect(window.getComputedStyle(screen.getByTestId(id)).color).toBe(rgb(colors.race.goText));
+    }
+  });
+
   it('scopes the name block to its own container so cqh resolves against the band', () => {
     // The name region carries its own container context; without it the type
     // (sized in cqh of the whole card) rides up under the slant and shears.
@@ -124,6 +165,29 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
     render(<AthleteCard athlete={athlete()} result="1:23.45" />);
     const result = window.getComputedStyle(screen.getByText('1:23.45'));
     expect(result.fontFamily).toContain('JetBrains Mono');
+  });
+
+  it('inks a DNF result in the stop tier and a finite one in the name ink', () => {
+    const { unmount } = render(<AthleteCard athlete={athlete()} result="DNF" />);
+    // stopDim resolves through --tl-stop-dim, which jsdom leaves unresolved.
+    expect(window.getComputedStyle(screen.getByText('DNF')).color).toBe(colors.race.stopDim);
+    unmount();
+    render(<AthleteCard athlete={athlete()} result="1:23.45" />);
+    expect(window.getComputedStyle(screen.getByText('1:23.45')).color).toBe(
+      rgb(colors.overlay.nameInk),
+    );
+  });
+
+  it('steps a borrowed result down to the subordinate ink, keeping DNF in the stop tier', () => {
+    const { unmount } = render(<AthleteCard athlete={athlete()} result="0:07.09" resultBorrowed />);
+    expect(window.getComputedStyle(screen.getByTestId('athlete-card-result')).color).toBe(
+      rgb(colors.overlay.nameInkSubordinate),
+    );
+    unmount();
+    render(<AthleteCard athlete={athlete()} result="DNF" resultBorrowed />);
+    expect(window.getComputedStyle(screen.getByTestId('athlete-card-result')).color).toBe(
+      colors.race.stopDim,
+    );
   });
 
   it('omits the result numeral entirely when no result is passed (no dash placeholder)', () => {
@@ -141,6 +205,7 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
     // resolve to the 700 face — pin the weight that actually exists.
     expect(style.fontWeight).toBe('700');
     expect(style.textTransform).toBe('uppercase');
+    expectTracking(tag, overlayArt.bannerTracking);
   });
 
   it('shows no WINNER tag by default (opt-in only)', () => {
@@ -162,6 +227,7 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
       />,
     );
     expect(screen.getByTestId('athlete-card-name')).toHaveTextContent('M. STEIN');
+    expectTracking(screen.getByText('M. STEIN'), overlayArt.nameTracking);
     expect(screen.queryByText('Maximilian')).not.toBeInTheDocument();
     expect(screen.queryByText('Steinhauser')).not.toBeInTheDocument();
   });

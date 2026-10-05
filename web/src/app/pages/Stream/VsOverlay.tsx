@@ -35,8 +35,9 @@ import { VsFreestyleStatsTable, VsSpeedStatsTable } from 'app/pages/Stream/VsSta
  * whose content follows the discipline split — the speed plane's RUN 1/2/3
  * best-of-3 laps (`useTimes`, filling in live as each run is recorded), or the
  * freestyle plane's judged component breakdown + TOTAL (`useScores`, adapting the
- * columns per round). The winner's frame edge goes `race.go` green. Transparent
- * background for keying; refreshes live on `db_update`.
+ * columns per round). Once decided, the winner's frame edge goes `race.go` green
+ * and the loser's `race.stop`. Transparent background for keying; refreshes live
+ * on `db_update`.
  *
  * This variant is **pinned to one round** (the URL `:round`). For a card that
  * follows the operator across every round of a gender/discipline, see the
@@ -138,7 +139,7 @@ export const pickLiveMatch = (
  * panels are the `Competitor` frame itself (ADR 0029) and the gutters below are
  * asymmetric because the master's are.
  */
-const ART = {
+export const VS_ART = {
   vsGap: 176.19, // between the two photo cards, holding the VS glyph
   tableToCardLeft: 67.06, // left stats table → left card
   cardToTableRight: 61.03, // right card → right stats table
@@ -229,7 +230,8 @@ const VsBody = ({
  * off `useTimes` (they fill in live as each run is recorded); on the freestyle
  * plane, the judged component breakdown + TOTAL off `useScores`. The result data
  * is fetched for `round` (the pinned round, or the live match's own round) via
- * the discipline split. The winner's frame goes `race.go` green.
+ * the discipline split. A decided match frames the winner `race.go` green and
+ * the loser `race.stop`; an undecided one keeps both white edges.
  *
  * Side order follows the board's live lane pairing when it names this match
  * (`matchSideOrder`) — all result data is athlete-keyed, so a swap only moves
@@ -267,6 +269,9 @@ export const VsMatchup = ({
   const [leftId, rightId] = matchSideOrder(match, selection);
   const isWinnerLeft = match.winnerId != null && match.winnerId === leftId;
   const isWinnerRight = match.winnerId != null && match.winnerId === rightId;
+  // A bound side of a decided match that is not the winner; an empty slot stays white.
+  const isLoserLeft = match.winnerId != null && leftId != null && !isWinnerLeft;
+  const isLoserRight = match.winnerId != null && rightId != null && !isWinnerRight;
 
   // The stats table for one side. A freestyle score maps to the breakdown entry
   // shape (null when unscored → empty boxes); speed maps to the three run laps.
@@ -297,16 +302,17 @@ export const VsMatchup = ({
     <Box sx={{ textAlign: 'center' }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'center' }}>
         {statsTable('left', leftId)}
-        <Box sx={{ width: refVw(ART.tableToCardLeft) }} />
+        <Box sx={{ width: refVw(VS_ART.tableToCardLeft) }} />
         <Competitor
           athlete={athleteById(leftId)}
           isWinner={isWinnerLeft}
+          isLoser={isLoserLeft}
           winnerTag={isWinnerLeft}
         />
         {/* The art's inter-panel gap; the VS glyph sits centred inside it. */}
         <Box
           sx={{
-            width: refVw(ART.vsGap),
+            width: refVw(VS_ART.vsGap),
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -329,9 +335,10 @@ export const VsMatchup = ({
         <Competitor
           athlete={athleteById(rightId)}
           isWinner={isWinnerRight}
+          isLoser={isLoserRight}
           winnerTag={isWinnerRight}
         />
-        <Box sx={{ width: refVw(ART.cardToTableRight) }} />
+        <Box sx={{ width: refVw(VS_ART.cardToTableRight) }} />
         {statsTable('right', rightId)}
       </Stack>
     </Box>

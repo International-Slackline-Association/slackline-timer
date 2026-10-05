@@ -17,7 +17,7 @@ describe('overlayScale', () => {
     expect(refVh(9)).toBe('0.833vh');
   });
 
-  it('keeps three decimals of precision (frame math is fractional)', () => {
+  it('rounds to three decimals: a plain vw/vh length jsdom resolves, within 1/64px at 1080p', () => {
     expect(refVw(298.81)).toBe('15.563vw');
     expect(refVh(498.02)).toBe('46.113vh');
   });

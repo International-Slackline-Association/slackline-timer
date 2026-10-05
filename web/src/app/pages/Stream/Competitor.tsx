@@ -25,13 +25,15 @@ export const Competitor = ({
   athlete,
   result,
   isWinner = false,
+  isLoser = false,
   winnerTag = false,
 }: {
   athlete?: Athlete;
   /** Result numeral below the name (best time / judged overall). Omit for a pure identity card. */
   result?: string;
   isWinner?: boolean;
-  /** Paint the "WINNER" word on the green frame (see `AthleteCard`). */
+  isLoser?: boolean;
+  /** Paint the "WINNER" word above the green frame (see `AthleteCard`). */
   winnerTag?: boolean;
 }) => (
   <Box sx={{ width: refVw(298.81), height: refVh(498.02) }}>
@@ -39,6 +41,7 @@ export const Competitor = ({
       athlete={athlete}
       result={result}
       isWinner={isWinner}
+      isLoser={isLoser}
       winnerTag={winnerTag}
       edgeWidth={PANEL_EDGE}
     />

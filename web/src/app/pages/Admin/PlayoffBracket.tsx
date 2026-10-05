@@ -26,6 +26,7 @@ import {
   profileTreeLayout,
   resolveBracketSlots,
   resolveNameWinners,
+  seededFromSemis,
 } from 'app/util/bracket';
 
 /** A bracket section label at its layout centre. Both tree arts set them in
@@ -93,11 +94,13 @@ export type BracketVariant = 'profile' | 'name';
  * - **`name`**: a single-direction left→right name tree — section labels,
  *   white-bordered translucent name plates, white connector elbows.
  *
- * Either way a fixed 8-athlete single-elimination tree. `transparent` for the
- * OBS overlay; the dark backdrop is for the admin page so the white strokes are
- * visible. The winner box's edge recolors flat `race.go` green at the shared edge
- * width (no widening ring — see `Plate` `flat`); winner TEXT on a white plate
- * takes `race.goDim` instead, which clears contrast there.
+ * Either way a fixed 8-athlete single-elimination tree, minus the empty quarter
+ * column when the bracket was seeded straight into the semis (`seededFromSemis`)
+ * — derived here so the overlay and `/admin/matches` show one tree.
+ * `transparent` for the OBS overlay; the dark backdrop is for the admin page so
+ * the white strokes are visible. The winner box's edge recolors flat `race.go`
+ * green at the shared edge width (no widening ring — see `Plate` `flat`); winner
+ * TEXT on a white plate takes `race.goDim` instead, which clears contrast there.
  */
 export const PlayoffBracket = ({
   matches,
@@ -116,6 +119,11 @@ export const PlayoffBracket = ({
   return <ProfileBracket matches={matches} athleteById={athleteById} transparent={transparent} />;
 };
 
+/** Profile-tree box edge + connector weight: `overlayArt.strokeWidth`'s 6px on
+ *  the 1920×1080 frame (9px clotted the dense boxes, ADR 0029 amend), as a
+ *  reference px so `refVh` scales it with the capture like the name tree's. */
+const PROFILE_STROKE_PX = 6;
+
 /**
  * Mirrored two-sided "profile" bracket: LAAX athlete-card boxes + section labels
  * + white connector elbows drawn in JSX over a transparent canvas. Geometry
@@ -130,7 +138,9 @@ const ProfileBracket = ({
   athleteById: (id?: string) => Athlete | undefined;
   transparent: boolean;
 }) => {
-  const { boxes, labels, connectors } = profileTreeLayout();
+  const { boxes, labels, connectors } = profileTreeLayout({
+    hideQuarter: seededFromSemis(matches),
+  });
   const resolved = resolveBracketSlots(matches);
   const bySlotId = new Map(resolved.map((s) => [s.boxId, s]));
   const winners = resolveNameWinners(matches);
@@ -174,10 +184,10 @@ const ProfileBracket = ({
             points={points.map(([x, y]) => `${x},${y}`).join(' ')}
             fill="none"
             stroke={colors.overlay.stroke}
-            // Device px (non-scaling-stroke) at the shared overlay stroke (6px —
-            // 9px clotted the dense bracket boxes, ADR 0029 amend), same weight
-            // as the box edges so the tree reads as one line system at 1080p.
-            strokeWidth={parseFloat(overlayArt.strokeWidth)}
+            // The box edge weight, frame-relative like the name tree's (see
+            // `PROFILE_STROKE_PX`), so the tree stays one line system at any
+            // capture size.
+            style={{ strokeWidth: refVh(PROFILE_STROKE_PX) }}
             vectorEffect="non-scaling-stroke"
           />
         ))}
@@ -203,13 +213,12 @@ const ProfileBracket = ({
             }}
           >
             {/* Every box but the large centre FINALS is too narrow for a full
-                first+last name — render the condensed fragment there. Boxes take
-                the shared overlay stroke (6px, ADR 0029 amend), not the g2 default. */}
+                first+last name — render the condensed fragment there. */}
             <AthleteCard
               athlete={athlete}
               isWinner={isWinner}
               narrow={!box.isFinal}
-              edgeWidth={overlayArt.strokeWidth}
+              edgeWidth={refVh(PROFILE_STROKE_PX)}
               // Flat green edge (same width as the white edges), not the VS/winner
               // cards' outset rim — a doubled-width ring read far too heavy on the
               // small quarter/semi boxes and outweighed their white neighbours.
@@ -248,7 +257,7 @@ const NameBracket = ({
   athleteById: (id?: string) => Athlete | undefined;
   transparent: boolean;
 }) => {
-  const { plates, labels, connectors } = nameTreeLayout();
+  const { plates, labels, connectors } = nameTreeLayout({ hideQuarter: seededFromSemis(matches) });
   const resolved = resolveBracketSlots(matches);
   const bySlotId = new Map(resolved.map((s) => [s.boxId, s]));
   const winners = resolveNameWinners(matches);
@@ -343,13 +352,15 @@ const NameBracket = ({
               // bar — the same "to be decided" placeholder the profile cards
               // carry, so both bracket variants speak one unknown-athlete
               // language. White (overlay.stroke — the structural-mark colour, as
-              // the plate stroke/connectors and the former TBD text), sized to
-              // the bar height so the plate column stays uniform.
+              // the plate stroke/connectors and the former TBD text), at the
+              // bar's full inner height — the border already insets it, so the
+              // glyph drops its portrait margin (`fit="tight"`).
               <UnknownAthlete
                 testId={`slot-unknown-${plate.boxId}`}
+                fit="tight"
                 sx={{
                   m: 'auto',
-                  height: '64%',
+                  height: '100%',
                   color: colors.overlay.stroke,
                   opacity: 0.9,
                   // Broadcast protection halo so the white mark survives bright
@@ -415,7 +426,7 @@ const NamePlateBody = ({ athlete, isWinner }: { athlete: Athlete; isWinner: bool
             // `AthleteCard` already makes. The plate's inset ring stays
             // `race.go`: it sits on the stroke, not the white fill.
             accent={isWinner ? colors.race.goDim : undefined}
-            sx={{ color: colors.overlay.nameInk, letterSpacing: '0.02em', lineHeight: 1 }}
+            sx={{ color: colors.overlay.nameInk, lineHeight: 1 }}
           />
         </Box>
       </Box>

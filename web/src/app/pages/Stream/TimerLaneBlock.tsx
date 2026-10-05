@@ -3,32 +3,26 @@ import type { SxProps, Theme } from '@mui/material';
 import type { ReactNode } from 'react';
 
 import { AthleteNameStrip } from 'app/pages/Stream/AthleteNameStrip';
+import { OVERLAY_LANE } from 'app/theme/tokens';
 import { type Athlete } from 'app/types';
 import { refVh, refVw } from 'app/util/overlayScale';
 
-/**
- * Shared geometry for the broadcast/preview timer lower-thirds, so the two mode
- * overlays (SpeedlineTimerDisplay + FreestyleTimerDisplay) cannot drift apart:
- *  - `inset` — the side + bottom safe inset of the lane blocks;
- *  - `gap` — the vertical gap between the name strip and the clock;
- *  - `nameStripHeight` — the compact banner height these timers use (the
- *    AthleteNameStrip default 92px is the full LAAX name lower-third).
- * Reference px on the 1920×1080 capture frame, emitted through `refVw`/`refVh`
- * below — the numbers stay the art metrics, the emissions scale a 720p or 4K
- * browser source with them.
- * Each display still OWNS its own positioning (Speedline pins each lane
- * `position: absolute` in a corner; Freestyle lays a flex band that also drives
- * warm-up / quali / best-trick / a rankings panel) and its own clock component —
- * only this per-lane column and these numbers are shared.
- */
-export const OVERLAY_LANE = { inset: 112, gap: 16, nameStripHeight: 56 } as const;
+/** A lane column's outer edge: a bottom corner, or `center` (Freestyle quali). */
+export type LaneSide = 'left' | 'right' | 'center';
 
-/**
- * The bottom-corner inset, frame-relative. The ONE owner of that corner: the
- * SVO cards are composited over these lower-thirds, so `SvoOverlay` derives its
- * own side margin from `OVERLAY_LANE.inset` rather than carrying a second
- * number (see `SVO_SIDE_MARGIN`).
- */
+/** Flex alignment that pushes a lane's content to its outer edge. */
+export const laneEdge = (side: LaneSide) =>
+  side === 'left' ? 'flex-start' : side === 'right' ? 'flex-end' : 'center';
+
+/** The white time plate both clocks draw (`OVERLAY_LANE.clockPlate`), frame-relative. */
+export const CLOCK_PLATE_WIDTH = refVw(OVERLAY_LANE.clockPlate);
+
+/** The plate's inner padding either side of the digits, so a lane-justified
+ *  time sits the same distance off its outer edge on both lanes. */
+export const CLOCK_PLATE_PX = refVw(OVERLAY_LANE.clockPlatePad);
+
+/** The bottom-corner inset, frame-relative; the SVO cards composited over it
+ *  derive their margin from the same `OVERLAY_LANE.inset` (`SVO_SIDE_MARGIN`). */
 export const CORNER_INSET_X = refVw(OVERLAY_LANE.inset);
 export const CORNER_INSET_Y = refVh(OVERLAY_LANE.inset);
 
@@ -52,8 +46,7 @@ export const TimerLaneBlock = ({
   sx,
   testId,
 }: {
-  /** Outer-edge alignment: `left`/`right` corners, or `center` (Freestyle quali). */
-  side: 'left' | 'right' | 'center';
+  side: LaneSide;
   /** When set, the flag+name banner renders above the clock. */
   athlete?: Athlete;
   /** Optional row above the name strip (Freestyle's BEST TRICK label). */
@@ -70,7 +63,7 @@ export const TimerLaneBlock = ({
       {
         display: 'flex',
         flexDirection: 'column',
-        alignItems: side === 'left' ? 'flex-start' : side === 'right' ? 'flex-end' : 'center',
+        alignItems: laneEdge(side),
         gap: refVh(OVERLAY_LANE.gap),
       },
       ...(Array.isArray(sx) ? sx : [sx]),

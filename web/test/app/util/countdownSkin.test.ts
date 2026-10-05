@@ -45,7 +45,7 @@ describe('countdownSkin numerals', () => {
     ['panel', 'running', colors.race.runningText],
     ['panel', 'onBreak', colors.race.setDim],
     ['panel', 'expired', colors.race.stopDim],
-    ['plate', 'idle', colors.ink.hi],
+    ['plate', 'idle', colors.overlay.nameInk],
     ['plate', 'running', colors.race.running],
     ['plate', 'onBreak', colors.race.setDim],
     ['plate', 'expired', colors.race.stopDim],

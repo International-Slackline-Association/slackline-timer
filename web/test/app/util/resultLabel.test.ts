@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
+import { colors } from 'app/theme/tokens';
 import { DNF_LABEL, DNF_SENTINEL } from 'app/util/time';
-import { bestTimeMs, formatScore, freestyleResultLabel, resultLabel } from 'app/util/resultLabel';
+import {
+  bestTimeMs,
+  formatScore,
+  freestyleResultLabel,
+  resultInk,
+  resultLabel,
+} from 'app/util/resultLabel';
 
 describe('bestTimeMs', () => {
   it('returns the minimum timeMs across attempts', () => {
@@ -53,5 +60,16 @@ describe('resultLabel', () => {
 
   it('renders the speed DNF sentinel as DNF', () => {
     expect(resultLabel('speed', { bestTimeMs: DNF_SENTINEL })).toBe(DNF_LABEL);
+  });
+});
+
+describe('resultInk', () => {
+  it('inks a DNF in the stop words-on-white tier', () => {
+    expect(resultInk(DNF_LABEL, colors.overlay.nameInk)).toBe(colors.race.stopDim);
+  });
+
+  it('keeps the caller ink for a finite result', () => {
+    expect(resultInk('1:23.45', colors.overlay.nameInk)).toBe(colors.overlay.nameInk);
+    expect(resultInk('42.00', colors.race.goDim)).toBe(colors.race.goDim);
   });
 });

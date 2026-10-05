@@ -9,8 +9,8 @@ import {
   STREAM_INSET_X_PX,
   useReportStreamStatus,
 } from 'app/pages/Stream/StreamLayout';
-import { OVERLAY_LANE } from 'app/pages/Stream/TimerLaneBlock';
 import { deriveStreamStatus } from 'app/pages/Stream/streamStatus';
+import { OVERLAY_LANE } from 'app/theme/tokens';
 import { refVh, refVw } from 'app/util/overlayScale';
 
 /**

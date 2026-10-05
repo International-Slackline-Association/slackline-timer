@@ -8,7 +8,7 @@ import { useLinkPhase } from 'app/hooks/useLinkPhase';
 import { useReadToken } from 'app/hooks/useReadToken';
 import { type LiveSelection } from 'app/hooks/useWebSocket';
 import { isDiscipline, type Discipline } from 'app/types';
-import { colors } from 'app/theme/tokens';
+import { overlayTextShadow } from 'app/theme/tokens';
 import { useStreamRefresh } from 'app/pages/Stream/useStreamRefresh';
 import { refVh, refVw } from 'app/util/overlayScale';
 import { applyOverlayBodyStyle } from 'app/pages/Stream/overlayBg';
@@ -59,8 +59,9 @@ export const useReportStreamStatus = (status: StreamStatus): void => {
  * Shared shell for the HTTP-driven `/stream/*` overlays. Reads `compId` + the
  * read token from the URL, wires live `db_update` refresh, and renders on the
  * `?bg=`-resolved background (transparent by default; `?bg=key` for chroma-keyed
- * rigs — see doc/dev/broadcast-overlays.md) with large white drop-shadowed text —
- * sensible broadcast defaults for an OBS/H2R browser source.
+ * rigs — see doc/dev/broadcast-overlays.md) with white text under the
+ * `overlayTextShadow` protection halo; filled plates cancel it with
+ * `textShadow: 'none'`.
  *
  * On-air it is **fail-safe**: there is no on-camera spinner and no "broken"
  * affordance. A loading, empty, errored, or misconfigured overlay paints
@@ -99,7 +100,7 @@ export const StreamLayout = ({
         px: STREAM_INSET_X,
         py: STREAM_INSET_Y,
         color: 'common.white',
-        textShadow: `0 2px 6px ${colors.overlay.scrim}, 0 0 2px ${colors.overlay.scrim}`,
+        textShadow: overlayTextShadow,
       }}
     >
       <StreamStatusMarker status={status} compId={compId} />

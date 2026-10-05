@@ -9,7 +9,10 @@ import {
   profileTreeLayout,
   resolveBracketSlots,
   resolveNameWinners,
+  seededFromSemis,
 } from 'app/util/bracket';
+
+const QUARTER_IDS = BRACKET_SLOTS.filter((s) => s.round === 'quarter').map((s) => s.boxId);
 
 /**
  * The vertical band every painted element occupies, in canvas %: a box by its
@@ -128,6 +131,78 @@ describe('resolveNameWinners', () => {
   });
 });
 
+describe('seededFromSemis', () => {
+  it('is true for a top-4 seed: half matches and no quarter round', () => {
+    expect(
+      seededFromSemis([
+        match({ round: 'half', position: 1 }),
+        match({ round: 'half', position: 2 }),
+        match({ round: 'final', position: 1 }),
+      ]),
+    ).toBe(true);
+  });
+
+  it('keeps the full tree before seeding (no matches at all)', () => {
+    expect(seededFromSemis([])).toBe(false);
+  });
+
+  it('keeps the full tree once any quarter match exists', () => {
+    expect(
+      seededFromSemis([
+        match({ round: 'quarter', position: 1 }),
+        match({ round: 'half', position: 1 }),
+      ]),
+    ).toBe(false);
+  });
+
+  it('keeps the full tree when only the finals exist', () => {
+    expect(seededFromSemis([match({ round: 'final', position: 1 })])).toBe(false);
+  });
+});
+
+describe('nameTreeLayout without the quarter round', () => {
+  const full = nameTreeLayout();
+  const layout = nameTreeLayout({ hideQuarter: true });
+
+  it('drops the 8 quarter plates and keeps every later plate', () => {
+    const ids = layout.plates.map((p) => p.boxId);
+    expect(layout.plates).toHaveLength(10);
+    for (const id of QUARTER_IDS) expect(ids).not.toContain(id);
+    expect(ids).toEqual(full.plates.map((p) => p.boxId).filter((id) => !QUARTER_IDS.includes(id)));
+  });
+
+  it('drops the QUARTER FINALS label and the four quarter→semi elbows', () => {
+    expect(layout.labels.map((l) => l.text)).not.toContain('QUARTER FINALS');
+    expect(layout.connectors).toHaveLength(4);
+  });
+
+  it('keeps the column spacing and the plate size', () => {
+    const left = (l: typeof layout, id: string) => l.plates.find((p) => p.boxId === id)!.leftPct;
+    expect(left(layout, 'winner') - left(layout, 'box_q_1_3')).toBeCloseTo(
+      left(full, 'winner') - left(full, 'box_q_1_3'),
+      5,
+    );
+    expect(layout.plates[0].widthPct).toBeCloseTo(full.plates[0].widthPct, 5);
+  });
+
+  it('centres the trimmed tree on the canvas in both axes, inside title-safe', () => {
+    expectTitleSafeAndCentred(verticalBands(layout.plates, layout.labels));
+    const lefts = layout.plates.map((p) => p.leftPct);
+    const rights = layout.plates.map((p) => p.leftPct + p.widthPct);
+    expect((Math.min(...lefts) + Math.max(...rights)) / 2).toBeCloseTo(50, 5);
+    expect(Math.min(...lefts)).toBeGreaterThanOrEqual(5);
+  });
+
+  it('moves the connectors with the shifted tree', () => {
+    // First remaining elbow: the top semi pair into box_final_l's left edge.
+    const finalist = layout.plates.find((p) => p.boxId === 'box_final_l')!;
+    const run = layout.connectors[0];
+    const [endX, endY] = run[run.length - 1];
+    expect(endX).toBeCloseTo(finalist.leftPct, 5);
+    expect(endY).toBeCloseTo(finalist.topPct + finalist.heightPct / 2, 5);
+  });
+});
+
 describe('nameTreeLayout', () => {
   const layout = nameTreeLayout();
 
@@ -235,6 +310,38 @@ describe('nameTreeLayout', () => {
     expect(third.yPct - centerY('small_winner')).toBeCloseTo(winner.yPct - centerY('winner'), 5);
     // ...and the caption band stays on the canvas.
     expect(third.yPct + (third.sizePct * 100) / 2).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('profileTreeLayout without the quarter round', () => {
+  const full = profileTreeLayout();
+  const layout = profileTreeLayout({ hideQuarter: true });
+
+  it('drops the 8 quarter boxes and both QUARTER FINALS labels', () => {
+    const ids = layout.boxes.map((b) => b.boxId);
+    expect(layout.boxes).toHaveLength(9);
+    for (const id of QUARTER_IDS) expect(ids).not.toContain(id);
+    expect(layout.labels.map((l) => l.text)).not.toContain('QUARTER FINALS');
+  });
+
+  it('drops the two quarter C-elbows + stubs per side (17 → 9 runs)', () => {
+    expect(layout.connectors).toHaveLength(9);
+    // No run reaches out to the quarter column any more.
+    const semiLeft = layout.boxes.find((b) => b.boxId === 'box_q_1_3')!.leftPct;
+    for (const run of layout.connectors) {
+      for (const [x] of run) {
+        expect(x).toBeGreaterThanOrEqual(semiLeft - 1e-9);
+        expect(x).toBeLessThanOrEqual(100 - semiLeft + 1e-9);
+      }
+    }
+  });
+
+  it('keeps the art x-positions and sits centred inside title-safe', () => {
+    const x = (l: typeof layout, id: string) => l.boxes.find((b) => b.boxId === id)!.leftPct;
+    for (const id of ['box_q_1_3', 'box_q_6_8', 'box_final_l', 'winner', 'box_small_r']) {
+      expect(x(layout, id)).toBeCloseTo(x(full, id), 5);
+    }
+    expectTitleSafeAndCentred(verticalBands(layout.boxes, layout.labels));
   });
 });
 

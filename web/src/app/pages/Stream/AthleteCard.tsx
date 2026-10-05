@@ -7,7 +7,17 @@ import { Plate } from 'app/pages/Stream/Plate';
 import { UnknownAthlete } from 'app/pages/Stream/UnknownAthlete';
 import { useFitToBox } from 'app/pages/Stream/useFitToBox';
 import { type Athlete } from 'app/types';
-import { colors, fonts, overlayArt, overlayMarkHalo, overlayTypeFloor } from 'app/theme/tokens';
+import {
+  colors,
+  fonts,
+  OVERLAY_WINNER_GAP_PX,
+  OVERLAY_WINNER_WORD_PX,
+  overlayArt,
+  overlayMarkHalo,
+  overlayTypeFloor,
+} from 'app/theme/tokens';
+import { refVh } from 'app/util/overlayScale';
+import { resultInk } from 'app/util/resultLabel';
 
 /**
  * The LAAX athlete-card art (`Profiles_W_*.png` is a provenance label for the
@@ -42,7 +52,8 @@ import { colors, fonts, overlayArt, overlayMarkHalo, overlayTypeFloor } from 'ap
  * — a long family name never ellipsizes, and a card carrying a result never
  * yields the name's height to it (the whole stack scales together, so the
  * given/family cap ratio and the numeral stay proportional).
- * The winner edge goes `race.go` green. An optional
+ * The winner edge goes `race.go` green, a decided head-to-head loser's
+ * `race.stop` (edge only — the name/result ink stays the plate tier). An optional
  * `result` numeral renders below the name in the monospace face (best time /
  * judged overall).
  *
@@ -63,6 +74,12 @@ const FLAG_STRIP_H = '6%';
  *  between the white plate foot and the flag band. Proportional (cqh) so it scales
  *  with the card; ~2px on the 250-tall master. */
 const DIVIDER_H = '0.8cqh';
+
+/** Ground between the name block's foot and the divider rule. The fit packs the
+ *  stack flush to that foot, so without it the last row (the standings caption)
+ *  sits on the rule. Card-cqh like `DIVIDER_H`, so it scales on the fixed
+ *  `Competitor` frame and the percentage bracket boxes alike. */
+const NAME_FOOT_CLEARANCE = '1.5cqh';
 
 /** Concave-upward arc for the plate's top edge (radial-gradient mask): a top-
  *  centred ellipse (rx = half the box → zero cut at the sides) removes a downward
@@ -90,8 +107,10 @@ export const AthleteCard = ({
   athlete,
   result,
   resultUnit,
+  resultBorrowed = false,
   sourceTag,
   isWinner = false,
+  isLoser = false,
   winnerTag = false,
   narrow = false,
   edgeWidth = '0.4cqh',
@@ -99,18 +118,24 @@ export const AthleteCard = ({
 }: {
   athlete?: Athlete;
   result?: string;
-  /** Freestyle top-card only: the points unit microlabel riding the result, so a
-   *  bare judged overall reads as points here as it does on the names cut. */
+  /** Ranking top card only: the unit microlabel (`PTS`/`AVG`) riding a bare-number
+   *  result, as it does on the names cut. */
   resultUnit?: string;
+  /** Standings-only: the result was borrowed from another round than the one
+   *  that placed the athlete (`StandingsEntry.resultSource`), so the numeral
+   *  steps down to the subordinate ink — the placing-round caption leads. */
+  resultBorrowed?: boolean;
   /** Standings-only (rule G3): the round that placed this athlete, rendered as a
    *  subordinate caption under the result so a slower time above a faster one
    *  reads as a bracket outcome — the profile-cut analogue of the names-cut tag. */
   sourceTag?: string;
   isWinner?: boolean;
-  /** Paint a "WINNER" word on the green frame. Opt-in (default off) so it fires
-   *  only where the frame alone is ambiguous — the VS lower-third. Homes that
-   *  already caption the win in their own layout (`WinnerOverlay`'s banner, the
-   *  bracket boxes) keep the bare green edge. */
+  /** Decided-match loser: the frame edge goes `race.stop` (see `Plate`). */
+  isLoser?: boolean;
+  /** Paint the "WINNER" word above the green frame — the VS lower-third and
+   *  `WinnerOverlay`'s banner, which share this one element. It sits outside
+   *  the card, so its home reserves the room above (see `WinnerOverlay`).
+   *  Opt-in: the bracket boxes keep the bare green edge. */
   winnerTag?: boolean;
   narrow?: boolean;
   /** Frame stroke width. Every home passes its own edge off the v2 art (ADR
@@ -128,11 +153,15 @@ export const AthleteCard = ({
     athlete && !athlete.photoUrl
       ? `${athlete.firstName[0] ?? ''}${athlete.lastName[0] ?? ''}`.toUpperCase()
       : '';
+  // The tag/unit are words under 24px, so a winner's take the green TEXT tier,
+  // not the numeral-only `goDim` the result beside them wears.
+  const subordinateInk = isWinner ? colors.race.goText : colors.overlay.nameInkSubordinate;
   return (
     <Plate
       fill={colors.overlay.plate}
       strokeWidth={edgeWidth}
       winner={isWinner}
+      loser={isLoser}
       ring={winnerRing}
       sx={{
         position: 'relative',
@@ -176,7 +205,7 @@ export const AthleteCard = ({
               // AthleteName's cqh branch).
               fontFamily: fonts.display,
               fontWeight: 700,
-              letterSpacing: '0.02em',
+              letterSpacing: overlayArt.nameTracking,
               lineHeight: 1,
               fontSize: '34cqh',
               ...PLATE_TEXT_FLAT,
@@ -206,16 +235,17 @@ export const AthleteCard = ({
         )}
       </Box>
 
-      {/* WINNER word on the green frame, in the same green display caps
-          WinnerOverlay's banner uses, so the winner reads as won rather than as
-          a chroma accident. Keeps the footage drop-shadow (no PLATE_TEXT_FLAT)
-          for legibility over the B&W portrait. */}
+      {/* WINNER word above the green frame, at a frame-relative size (refVh, not
+          the card's cqh) so it matches on every home. Anchored off the card's
+          OUTER edge: `100%` is the padding box, so the stroke width is added
+          back. Keeps the footage drop-shadow (no PLATE_TEXT_FLAT): it sits on
+          the footage, not on the white plate. */}
       {winnerTag && (
         <Typography
           data-testid="athlete-card-winner-tag"
           sx={{
             position: 'absolute',
-            top: '-14%',
+            bottom: `calc(100% + ${edgeWidth} + ${refVh(OVERLAY_WINNER_GAP_PX)})`,
             left: 0,
             right: 0,
             textAlign: 'center',
@@ -224,8 +254,8 @@ export const AthleteCard = ({
             fontFamily: fonts.display,
             fontWeight: 700,
             textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            fontSize: '7cqh',
+            letterSpacing: overlayArt.bannerTracking,
+            fontSize: refVh(OVERLAY_WINNER_WORD_PX),
             lineHeight: 1,
           }}
         >
@@ -254,7 +284,7 @@ export const AthleteCard = ({
       )}
 
       {/* Name block, scoped to the band's clear rectangular region (below the
-          18% slant, above the flag-strip foot). Its own `containerType:size`
+          18% slant, above the divider rule). Its own `containerType:size`
           re-anchors `cqh` to THIS box, so the type sizes against the band — not
           the whole card — and stays clear of the slant and flag at every box
           size (fixed Competitor + percentage bracket boxes alike). */}
@@ -264,9 +294,10 @@ export const AthleteCard = ({
           position: 'absolute',
           left: 0,
           right: 0,
-          // Sit below the slant's deepest point; leave the bottom for the flag.
+          // Sit below the slant's deepest point; end a clearance above the
+          // divider rule, which paints over anything below it.
           top: '68%',
-          bottom: FLAG_STRIP_H,
+          bottom: `calc(${FLAG_STRIP_H} + ${DIVIDER_H} + ${NAME_FOOT_CLEARANCE})`,
           containerType: 'size',
           justifyContent: 'center',
           alignItems: 'center',
@@ -320,7 +351,7 @@ export const AthleteCard = ({
                     textTransform: 'uppercase',
                     fontFamily: fonts.display, // see the initials block above
                     fontWeight: 700,
-                    letterSpacing: '0.01em',
+                    letterSpacing: overlayArt.nameTracking,
                     // ≥1 keeps an uppercase accent inside the line box, off the
                     // overflow:hidden band edge on the tiny quarter box (overlay-
                     // typography-polish).
@@ -357,8 +388,18 @@ export const AthleteCard = ({
                   // Floored like the name: on the smallest profile-ranking card the
                   // 22cqh result numeral fell to the ~13px sub-floor.
                   fontSize={`max(22cqh, ${TYPE_FLOOR})`}
-                  color={isWinner ? colors.race.goDim : colors.overlay.nameInk}
+                  color={
+                    isWinner
+                      ? colors.race.goDim
+                      : resultInk(
+                          result,
+                          resultBorrowed
+                            ? colors.overlay.nameInkSubordinate
+                            : colors.overlay.nameInk,
+                        )
+                  }
                   textShadow="none"
+                  testId="athlete-card-result"
                 >
                   {result}
                 </Numeral>
@@ -370,13 +411,12 @@ export const AthleteCard = ({
                     component="span"
                     data-testid="athlete-card-result-unit"
                     sx={{
-                      color: isWinner ? colors.race.goDim : colors.overlay.nameInk,
+                      color: subordinateInk,
                       fontFamily: fonts.display,
                       fontWeight: 500,
                       letterSpacing: overlayArt.headingTracking,
                       lineHeight: 1,
                       whiteSpace: 'nowrap',
-                      opacity: 0.6,
                       fontSize: `max(11cqh, ${TYPE_FLOOR})`,
                       ...PLATE_TEXT_FLAT,
                     }}
@@ -395,14 +435,13 @@ export const AthleteCard = ({
                 data-testid="athlete-card-source-tag"
                 sx={{
                   mt: '1.5cqh',
-                  color: isWinner ? colors.race.goDim : colors.overlay.nameInk,
+                  color: subordinateInk,
                   fontFamily: fonts.display,
                   fontWeight: 500,
                   textTransform: 'uppercase',
                   letterSpacing: overlayArt.headingTracking,
                   lineHeight: 1,
                   whiteSpace: 'nowrap',
-                  opacity: 0.6,
                   fontSize: `max(13cqh, ${TYPE_FLOOR})`,
                   ...PLATE_TEXT_FLAT,
                 }}

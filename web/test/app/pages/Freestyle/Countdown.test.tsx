@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { COUNTDOWN_SIZES, Countdown } from 'app/pages/Freestyle/Countdown';
 import type { CountdownWSMessage } from 'app/hooks/useWebSocket';
-import { colors } from 'app/theme/tokens';
+import { colors, OVERLAY_LANE } from 'app/theme/tokens';
+import { refVw } from 'app/util/overlayScale';
 
-import { emPx, px } from '../../../util/computedUnits';
+import { emPx, px, vwPx } from '../../../util/computedUnits';
 
 describe('Countdown hero time numerals', () => {
   it('renders the countdown in the monospace numeral face with tabular-nums', () => {
@@ -343,6 +344,27 @@ describe('Countdown control variant on-light tiers (FREESTYLE_BOARD_UX §6)', ()
     // The held run is a value the operator still has to read: full ink, not the
     // overlay's dimmed grey (2.9:1 on white).
     expect(window.getComputedStyle(screen.getByText('00:45')).color).toBe('rgb(51, 60, 78)');
+  });
+
+  it('inks the broadcast plate digits in the overlay name ink, state hues otherwise', () => {
+    // The /stream/timer lower third: one black across every filled plate on the
+    // frame (the SVO cards composite over it), not the slate ink.hi.
+    const { rerender } = render(
+      <Countdown mode="controlled" display={{ kind: 'idle', remainingMs: 90_000 }} size="plate" />,
+    );
+    expect(window.getComputedStyle(screen.getByText('01:30')).color).toBe('rgb(35, 31, 32)');
+    rerender(
+      <Countdown
+        mode="controlled"
+        display={{ kind: 'running', remainingMs: 90_000, startedAt: Date.now() }}
+        size="plate"
+      />,
+    );
+    expect(window.getComputedStyle(screen.getByText(/^\d\d:\d\d$/)).color).toBe(
+      colors.race.running,
+    );
+    rerender(<Countdown mode="controlled" display={{ kind: 'expired' }} size="plate" />);
+    expect(window.getComputedStyle(screen.getByText('00:00')).color).toBe(colors.race.stopDim);
   });
 
   it('paints expired digits, caption and frame in the stopDim tier', () => {
@@ -815,5 +837,36 @@ describe('Countdown on-break render (quali advisory break)', () => {
     );
     expect(screen.getByText(/1 left/i)).toBeVisible();
     expect(screen.getByText('00:45')).toBeVisible();
+  });
+});
+
+describe('Countdown clock plate', () => {
+  it('draws the same lane clock plate width as the Speedline stopwatch', () => {
+    render(
+      <Countdown mode="controlled" display={{ kind: 'idle', remainingMs: 90_000 }} size="plate" />,
+    );
+    expect(px(window.getComputedStyle(screen.getByTestId('countdown-plate')).width)).toBeCloseTo(
+      vwPx(refVw(OVERLAY_LANE.clockPlate)),
+      2,
+    );
+  });
+
+  it.each([
+    ['left', 'flex-start'],
+    ['right', 'flex-end'],
+    ['center', 'center'],
+  ] as const)('justifies the digits to the %s lane edge', (plateAlign, justify) => {
+    render(
+      <Countdown
+        mode="controlled"
+        display={{ kind: 'idle', remainingMs: 90_000 }}
+        size="plate"
+        plateAlign={plateAlign}
+      />,
+    );
+    const style = window.getComputedStyle(screen.getByTestId('countdown-plate'));
+    expect(style.justifyContent).toBe(justify);
+    expect(style.paddingLeft).toBe(style.paddingRight);
+    expect(px(style.paddingLeft)).toBeGreaterThan(0);
   });
 });
