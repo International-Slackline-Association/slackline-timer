@@ -4,8 +4,11 @@
 
 export declare const FINAL_RUNS: number;
 
+export type FinalRound = 'final' | 'small_final';
+
 export interface FinalMatch {
   matchId?: string;
+  round: FinalRound;
   athlete1Id?: string;
   athlete2Id?: string;
   winnerId?: string;
@@ -13,7 +16,7 @@ export interface FinalMatch {
 
 export interface FinalTimeRow {
   athleteId: string;
-  round: 'final';
+  round: FinalRound;
   matchId: string;
   timeMs: number;
   startTime: number;
@@ -29,7 +32,7 @@ export interface FinalScoreComponents {
 
 export type FinalScoreRow = FinalScoreComponents & {
   athleteId: string;
-  round: 'final';
+  round: FinalRound;
   matchId: string;
 };
 

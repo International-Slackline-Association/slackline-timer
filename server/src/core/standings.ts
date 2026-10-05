@@ -32,9 +32,9 @@ import type { Match, MatchRound } from './types';
  * qualification ranking (all provisional).
  */
 
-/** Where a placement's rank comes from. The rankings API re-reports `source` as
- *  the round the row's displayed RESULT came from, which differs whenever the
- *  placement round holds none (see `resultWithProvenance`). */
+/** Where a placement's rank comes from. The rankings API reports it as `source`
+ *  and, when the placing round holds no result, the round the displayed result
+ *  was borrowed from as `resultSource` (see `resultWithProvenance`). */
 export type StandingsSource = 'final' | 'small_final' | 'half' | 'quarter' | 'qualification';
 
 export interface StandingsPlacement {
