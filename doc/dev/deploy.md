@@ -244,7 +244,8 @@ first go-live pass is closed — the app then ran the 2026 championships live
 
 The controls: a us-east-1 billing stack (✅ deployed 2026-07-07), API-Gateway
 throttling (✅ deployed 2026-07-07, rides the `eu-central-2` backend deploy in §2),
-Lambda reserved-concurrency (✅ deployed 2026-07-21, §6.2), and a default-OFF WAF.
+Lambda reserved-concurrency (✅ deployed 2026-07-21, §6.2), and a default-OFF
+CloudFront WAF on the web distribution (§6.3; the APIs have none).
 Sizes + rationale live in `server/infra/{billing-stack,waf,slackline-stack}.ts` and
 ADR 0031. The one open item is the post-deploy burst smoke (§6.2 / HUMAN_TASKS §"Live-AWS / operational"
 `guardrail-deploy-smoke`).
@@ -309,30 +310,77 @@ landed once a Service Quotas increase raised the pool to the standard 1000.
      >/dev/null 2>&1 & done; wait
    ```
 
-### 6.3 WAF enable path (default-OFF) — part of `guardrail-deploy-smoke`
+### 6.3 Abuse runbook — what works today
 
-WAF stays **OFF** normally (its standing cost rivals this app's idle bill). This is
-the _rehearsed_ enable path for an observed abuse event — run once to prove it,
-then flip back.
+There is **no WAF in front of the APIs.** A regional WAF ACL attaches to API
+Gateway REST APIs only, not to HTTP or WebSocket APIs, so the backend carries none.
+API-level WAF arrives with the CloudFront edge layer in front of the HTTP API
+(security plan P11, future ADR 0054). Until then, in order of reach:
+
+1. **Leaked overlay link → revoke.** `/admin/overlays` → revoke (`POST
+/competitions/{compId}/revoke-read-tokens`) bumps the competition's
+   `tokenVersion`: every outstanding read token fails at once, HTTP and future WS
+   `$connect`s, and open `readOnly` overlay sockets are force-closed (ADR 0026). Mint
+   fresh links for the real overlays afterwards.
+2. **Flood on the web app → the CloudFront WAF.** The only ACL that can attach today
+   is the CLOUDFRONT-scope one on the web distribution (default-OFF; per-IP rate
+   limit 2000 req / 5 min, `infra/waf.ts`). It covers the SPA's static assets, not
+   the APIs or the photo CDN.
+
+   ```bash
+   cd server
+   AWS_PROFILE=… npx cdk deploy slackline-timer-v1-billing --parameters WafEnabled=true
+   AWS_PROFILE=… npx cdk deploy slackline-timer-v1-web --parameters WafWebAclArn=<WebAclArn output>
+   ```
+
+   **Verify** a synthetic per-IP burst is `403`-blocked (`RateLimitPerIp` metric),
+   then flip back so no standing cost lingers:
+
+   ```bash
+   AWS_PROFILE=… npx cdk deploy slackline-timer-v1-billing --parameters WafEnabled=false
+   AWS_PROFILE=… npx cdk deploy slackline-timer-v1-web --parameters WafWebAclArn=""
+   ```
+
+3. **Flood on the APIs → the throttles are the ceiling.** The HTTP stage (20 rps /
+   40 burst) and WS stage (2000/2000) throttles plus the reserved-concurrency caps
+   (§6.2) bound Lambda and DynamoDB spend; a flood that fills the HTTP bucket also
+   429s legitimate operators until it stops. A missing `Authorization` (HTTP) or
+   missing `Authorization`/`sessionId` (WS `$connect`) is 401'd by API Gateway
+   before any Lambda runs. Budgets + the billing alarm (§6.1) are the early warning.
+   A sustained targeted flood has no per-IP block at the API today; lowering the
+   stage throttle (`server/infra/slackline-stack.ts`) and redeploying is the
+   remaining lever.
+
+### 6.4 Restoring the competition table (PITR)
+
+`slackline-timer-v1-competition-<stage>` has point-in-time recovery with a 35-day
+window (`defineTables`); the relay table has none (its rows live 20 min). A restore
+never rewinds the live table — it **creates a new table**:
 
 ```bash
-cd server
-# Regional (API Gateway, backend stack):
-AWS_PROFILE=… npx cdk deploy slackline-timer-v1 --parameters WafEnabled=true
-# CloudFront (billing stack, us-east-1), then attach the exported ARN to the web dist:
-AWS_PROFILE=… npx cdk deploy slackline-timer-v1-billing --parameters WafEnabled=true
-AWS_PROFILE=… npx cdk deploy slackline-timer-v1-web --parameters WafWebAclArn=<WebAclArn output>
+AWS_PROFILE=… aws dynamodb restore-table-to-point-in-time --region eu-central-2 \
+  --source-table-name slackline-timer-v1-competition-prod \
+  --target-table-name slackline-timer-v1-competition-prod-restore \
+  --restore-date-time <ISO-8601, before the bad write>
 ```
 
-**Verify** a synthetic per-IP burst above the WAF budget (2000 req / 5-min,
-`waf.ts`) is `403`-blocked while normal traffic passes (WebACL `RateLimitPerIp`
-metric). Then **flip everything back to default-OFF** so no standing cost lingers:
+The restored table has no PITR, no deletion protection and no tags until set. Then
+either:
 
-```bash
-AWS_PROFILE=… npx cdk deploy slackline-timer-v1 --parameters WafEnabled=false
-AWS_PROFILE=… npx cdk deploy slackline-timer-v1-billing --parameters WafEnabled=false
-AWS_PROFILE=… npx cdk deploy slackline-timer-v1-web --parameters WafWebAclArn=""
-```
+- **Copy back (preferred):** read the affected `COMP#<compId>` partition from the
+  restored table and write those items into the live one (a one-off script over
+  `Query` + `BatchWriteItem`; delete rows the bad write added first). The stack, the
+  table name and every Lambda env stay as they are. Delete the restore table after.
+- **Swap (whole-table loss), outside an event:** once the restore table checks out,
+  turn deletion protection off on the live table, delete it, and restore again into
+  the **original name**. The stack and every Lambda env address the table by name,
+  so nothing is redeployed; but CloudFormation does not re-apply what the restore
+  dropped, so set it by hand (`aws dynamodb update-continuous-backups
+--point-in-time-recovery-specification PointInTimeRecoveryEnabled=true,RecoveryPeriodInDays=35`,
+  `aws dynamodb update-table --deletion-protection-enabled`), then check `cdk diff`
+  is clean. If the backend stack itself is gone, re-adopt the restored table with the
+  commission tooling (`server/scripts/commission/`, `cdk deploy
+--import-existing-resources`).
 
 ---
 

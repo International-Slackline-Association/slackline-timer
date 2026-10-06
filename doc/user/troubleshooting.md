@@ -42,6 +42,10 @@ still warns you before it throws a live run away, and the recovery is this
 computer's own memory, so it only works in the same browser you were running
 on.
 
+If the console shows **The control panel stopped**, it hit an internal error.
+Press **Reload panel**: the board comes back the same way as after a reload,
+with the run restored from a second board or from this computer's copy.
+
 ## Times or scores are not saving
 
 A **Not saved** chip, a **NOT SAVED · _reason_** line on a Freestyle score
@@ -119,7 +123,9 @@ organiser to add you as a manager — see
 
 **Blank is often correct.** Overlays deliberately show nothing when there is
 nothing to show, so they composite away between matches instead of leaving an
-empty box on air.
+empty box on air. An overlay that hits an internal error goes blank the same
+way and retries by itself: first after a couple of seconds, then at most every
+half minute.
 
 Check, in order:
 

@@ -44,8 +44,9 @@ server/ (AWS CDK, eu-central-2 / prod)
 ```
 
 The **server holds no timer logic** — all timing, state, and audio live in the
-browser; the relay only forwards each message to the other connections in the
-same session. The data plane is additive: it never touches the relay's hot path.
+browser; the relay only forwards each admitted message to the other connections
+in the same session (admission bounds and the `request_state` routing:
+`decisions.md` 0050). The data plane is additive: it never touches the relay's hot path.
 State recovery is peer-to-peer too: a (re)joining page asks for the current
 timer state and every control panel replies, so the relay stays stateless
 (`decisions.md` 0011). Control panels are themselves mirroring peers — any
@@ -132,8 +133,9 @@ hold — most "the overlay is wrong" reports are one of these, not a render bug.
    outage — while `Signal lost — reconnecting` names one it lost, and only that
    one arms the green `Reconnected` flash.
 3. **Catch-up on open.** The relay buffers nothing, so a page joining after the
-   action sends `request_state` and every control panel answers with a
-   `state_snapshot` (ADR 0011/0038). Two precedence rules carry the weight:
+   action sends `request_state`; the relay hands it to the read-write panels
+   only, and every control panel answers at once to the whole room — then at
+   most once more per 500 ms however many ask — with a `state_snapshot` (ADR 0011/0038/0050). Two precedence rules carry the weight:
    roll-back-able display state (light phase, text, badges) is only taken when
    **no live message arrived since open**; lane timer state always flows through
    and merges **newer-wins per lane** — a blank lane takes anything, a newer
@@ -162,6 +164,30 @@ confirms the `start`/`stop`/`reset` it consumed, keyed by that message's own
 epoch plus its page and user-agent. `messageHandler` logs and swallows both. The
 acks exist so CloudWatch can name the consumer a relayed message never reached,
 which is how the missed-stop class of incident gets diagnosed at all.
+
+Before any DynamoDB call, `messageHandler/frame.ts` admits a frame only if it
+is at most 8192 chars (2048 for `ping`/`ack`/`request_state`), parses to an
+object with a `type` matching `^[A-Za-z_]{1,32}$` and a compId-shaped
+`sessionId` (or none, read as `default`); an `ack` must also carry `of` ∈
+`start`/`stop`/`reset` and a numeric or absent `key`. Everything else is dropped
+with a 200 and counted into at most one `drop-summary` log line per minute per
+container. Client-supplied free text (the ack's `page`/`ua`, the relay trace
+details) goes through `core/logSafe.ts` — printable ASCII, truncated, the trace
+≤ 512 chars — so no frame can forge a log line or the `key=`/`delivered=`
+fields the incident joins parse. A `ping` refreshes the connection TTL at most
+once per minute per connection per container (forward row first, the map item
+only after it succeeds). A `request_state` is relayed canonical
+(`{ type, sessionId, senderId?, data: {} }`), to read-write connections only,
+after the same membership `GetItem` as every other frame, damped in memory to
+one per 5 s per connection per container — best-effort, no stored rate-limit
+state (ADR 0050).
+
+On the client, `useWS` hands each frame to the page's `onMessage`, never into
+held state (ADR 0051): parsed, checked by `isRelayFrame` (`hooks/wsFrameGuard.ts`
+— the fields consumers read, legacy shapes pass, malformed frames and unknown
+types are dropped), then delivered inside `flushSync`, so two frames landing in
+one task are two commits and a dead heat's two `stop`s both reach the display.
+A throwing handler is logged and contained.
 
 ## Why this shape (vs the Phoenix original)
 
@@ -225,9 +251,11 @@ is immediate for HTTP (the grant is read live per request; the 60s authorizer
 cache memoizes only the role, not the grant). **Read-only WS connections** are
 flagged on the `$connect` row and their sends dropped by `messageHandler`, so a
 leaked overlay token can't inject timer messages — with one exception,
-`request_state`, which carries no data and only prompts the control panels to
-re-broadcast what the overlay may already read (without it a mid-event joiner
-could never catch up).
+`request_state`, which only prompts the control panels to re-broadcast what the
+overlay may already read (without it a mid-event joiner could never catch up).
+The relay strips it to a canonical frame, hands it to the read-write panels
+only, and damps it in memory to one per connection per 5 s per container
+(ADR 0050).
 **Revocation** is a `tokenVersion` bump on the competition `META` item,
 instantly invalidating every outstanding token for that competition: HTTP reads
 and future WS `$connect`s fail the version check, and the revoke route also
@@ -256,8 +284,17 @@ Key design rules — these are load-bearing:
   attribute edits (`timeMs`, `winnerId`, …) are normal updates. The CRUD Lambdas
   are built for this.
 - **Referential integrity is on us** — DynamoDB has no FKs. Deleting an athlete
-  with Times/Matches is **blocked** with a clear error (cheap `begins_with`
-  existence check), never cascaded or orphaned.
+  with Times/Matches/Scores is **blocked** with a clear error (a strongly
+  consistent `begins_with` existence check), never cascaded. A Match's
+  `winnerId` must be one of its two (distinct) athletes; a Time's or Score's
+  `matchId` is format-checked only, so the race-stop write stays one call
+  (ADR 0052).
+- **Every input is bounded** (`FIELD_LIMITS`, duplicated web↔server like the
+  enums; full table in ADR 0052): string lengths, numeric ranges, id and
+  country formats, a 32 KB body, 300 athletes per competition. PUT is a full
+  replacement, so a bound is tightened only after
+  `server/scripts/maintenance/auditFieldBounds.mjs` finds no stored row
+  outside it.
 - **Rankings are computed in-Lambda.** DynamoDB can't aggregate: query all
   `TIME#<round>#…` (or `SCORE#<round>#…`) for a round and compute
   best-per-athlete in the Lambda — fine for a single small competition. Gender
@@ -292,14 +329,26 @@ Key design rules — these are load-bearing:
 ## Photos — S3 + CloudFront signed URLs, never public
 
 DynamoDB items cap at 400 KB, so the photo blob lives in S3 (content-hashed key
-`photos/<compId>/<sha256>.jpg` — unguessable, immutable, dedup) and the athlete
-carries only `photoKey`. The bucket is **never public**: locked to CloudFront
-via Origin Access Control + a trusted key group. Read Lambdas embed a
-CloudFront-**signed** `photoUrl` (RSA key from SSM) expiring at
-`competition.endDate` (≤ ~10 days, the same window as the read token). After the
-event every URL dies at the edge automatically — the "archived" state needs no
-cleanup job. Listing never ships bytes; signing is a cheap local RSA op, no S3
-round-trip.
+`photos/<compId>/<sha256>.<jpg|png|webp>` — unguessable, immutable, dedup) and
+the athlete carries only `photoKey`, which must sit under its own competition's
+prefix (a foreign key from a renamed compId is grandfathered while unchanged,
+ADR 0052) — the signer would otherwise mint fresh URLs for another event's
+photos. The hash is **S3-verified**: the presigned POST pins
+`x-amz-checksum-sha256` to it, so S3 rejects bytes that don't match and a key
+can't be overwritten with other content. The browser first downscales the pick
+to a ≤ 1 MiB JPEG (long edge 1280, EXIF orientation applied, metadata dropped —
+`app/util/resizeImage.ts`); the POST policy caps the body at 1 B–1 MiB. The
+bucket is **never public**: locked to CloudFront via Origin Access Control + a
+trusted key group, responses carrying the managed `SECURITY_HEADERS` policy
+(`nosniff`). Read Lambdas embed a CloudFront-**signed** `photoUrl` (RSA key from
+SSM) living **12–18 h**: `min(event expiry, now + 12 h rounded up to a 6 h UTC
+boundary)` (`computePhotoUrlExpiry`), so URLs are byte-stable within a window and
+cache, yet a leaked one dies within a day. Reads re-mint them; every
+photo-carrying query (athletes, rankings, standings, combined) re-fetches every
+3 h, hidden tabs included, so an idle overlay or admin tab never shows an
+expired photo. After the event every
+URL dies at the edge automatically — the "archived" state needs no cleanup job.
+Listing never ships bytes; signing is a cheap local RSA op, no S3 round-trip.
 
 ## Live refresh — server-side `db_update`
 

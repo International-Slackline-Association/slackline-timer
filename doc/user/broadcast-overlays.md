@@ -136,5 +136,8 @@ full OBS scene building on desktop.
 ## If an overlay goes blank or stale
 
 Overlays are deliberately silent when there is no data — an empty overlay is
-usually correct, not broken. If you think one is genuinely stuck, see
-[Troubleshooting](./troubleshooting.md#an-overlay-is-blank-or-stuck).
+usually correct, not broken. An overlay that hits an internal error also goes
+blank — transparent, or its `?bg=` colour — rather than putting an error on air,
+and retries on its own: first after a couple of seconds, then at most every
+half minute. If you think one is genuinely
+stuck, see [Troubleshooting](./troubleshooting.md#an-overlay-is-blank-or-stuck).
