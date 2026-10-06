@@ -8,17 +8,14 @@ import {
   useAdvanceInput,
   useConfirmGuard,
 } from 'app/hooks/useAdvanceInput';
-import type { GamepadPress } from 'app/hooks/useGamepads';
 import { ADVANCE_BUTTON } from 'app/util/buzzer';
 
-// The gamepad leg is unit-tested through a controllable mock — the real
-// useGamepads polls the Gamepad API off requestAnimationFrame, which jsdom
-// cannot drive deterministically. The rising-edge/bounce behavior has its own
-// suite (useGamepads.test.tsx); here we pin only the button-index routing.
-const gamepadState: { lastPressedGamepadButton?: GamepadPress } = {};
-vi.mock('app/hooks/useGamepads', () => ({
-  useGamepads: () => gamepadState,
-}));
+import { pressPad } from '../../util/gamepadMock';
+
+// The real useGamepads polls the Gamepad API off requestAnimationFrame, which
+// jsdom cannot drive; its edge/bounce behaviour has its own suite
+// (useGamepads.test.tsx). Here only the button-index routing is pinned.
+vi.mock('app/hooks/useGamepads', () => import('../../util/gamepadMock'));
 
 /** A confirm's readout name, irrelevant to the routing pinned here. */
 const CONFIRM = { dialog: 'Reset', safeAction: 'Keep timing' } as const;
@@ -37,7 +34,6 @@ const openOverlay = (role: 'dialog' | 'listbox' | 'menu'): HTMLElement => {
 };
 
 afterEach(() => {
-  delete gamepadState.lastPressedGamepadButton;
   document.body.innerHTML = '';
 });
 
@@ -196,24 +192,22 @@ describe('useAdvanceInput — keyboard Space', () => {
 });
 
 describe('useAdvanceInput — gamepad button', () => {
-  it(`fires on pad button ${ADVANCE_BUTTON} and re-fires on a new press token`, () => {
+  it(`fires on every press of pad button ${ADVANCE_BUTTON}, never on a re-render`, () => {
     const onAdvance = vi.fn();
-    gamepadState.lastPressedGamepadButton = { button: ADVANCE_BUTTON, seq: 1 };
     const { rerender, unmount } = renderHook(() => useAdvanceInput(onAdvance));
+    pressPad(ADVANCE_BUTTON);
     expect(onAdvance).toHaveBeenCalledTimes(1);
-    // The same token does not re-fire; a new seq (same button) does.
     rerender();
     expect(onAdvance).toHaveBeenCalledTimes(1);
-    gamepadState.lastPressedGamepadButton = { button: ADVANCE_BUTTON, seq: 2 };
-    rerender();
+    pressPad(ADVANCE_BUTTON);
     expect(onAdvance).toHaveBeenCalledTimes(2);
     unmount();
   });
 
   it('ignores the lane-claimed buttons (0-9 stay with the per-lane controls)', () => {
     const onAdvance = vi.fn();
-    gamepadState.lastPressedGamepadButton = { button: 0, seq: 1 };
     const { unmount } = renderHook(() => useAdvanceInput(onAdvance));
+    pressPad(0);
     expect(onAdvance).not.toHaveBeenCalled();
     unmount();
   });
@@ -427,8 +421,8 @@ describe('advanceBlocked / useConfirmGuard', () => {
     const onSafeClose = vi.fn();
     const dialog = openOverlay('dialog');
     const confirm = renderHook(() => useConfirmGuard(true, onSafeClose, CONFIRM));
-    gamepadState.lastPressedGamepadButton = { button: ADVANCE_BUTTON, seq: 1 };
     const advance = renderHook(() => useAdvanceInput(onAdvance));
+    pressPad(ADVANCE_BUTTON);
 
     expect(onSafeClose).toHaveBeenCalledTimes(1);
     expect(onAdvance).not.toHaveBeenCalled();

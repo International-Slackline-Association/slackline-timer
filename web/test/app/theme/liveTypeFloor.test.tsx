@@ -15,7 +15,7 @@ import type { TallyInput } from 'app/util/tallyModel';
 
 // The card polls the Gamepad API off requestAnimationFrame, which jsdom does
 // not run; nothing here presses a button, so a resting seam is enough.
-vi.mock('app/hooks/useGamepads', () => ({ useGamepads: () => ({}) }));
+vi.mock('app/hooks/useGamepads', () => import('../../util/gamepadMock'));
 
 /**
  * The daylight type floor (FREESTYLE_BOARD_UX §8 C12, anti-pattern "text

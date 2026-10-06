@@ -8,7 +8,7 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { advanceBlocked, advanceOverlay } from 'app/hooks/useAdvanceInput';
 import { PEER_FLASH_MS } from 'app/hooks/usePeerFlash';
@@ -16,20 +16,9 @@ import { CountdownControl } from 'app/pages/Freestyle/CountdownControl';
 import type { LaneState } from 'app/util/battleMachine';
 
 import { px } from '../../../util/computedUnits';
+import { pressPad as pressButton } from '../../../util/gamepadMock';
 
-// Drive the gamepad button through a mock so the pad path (dispatch to the page
-// reducer) can be exercised without the real rAF/navigator polling. The hook
-// returns a `{ button, seq }` token; `pressButton` mints a fresh seq so a
-// repeated button still re-fires the consumer effect.
-let lastPressedGamepadButton: { button: number; seq: number } | undefined;
-let pressSeq = 0;
-const pressButton = (button: number) => {
-  pressSeq += 1;
-  lastPressedGamepadButton = { button, seq: pressSeq };
-};
-vi.mock('app/hooks/useGamepads', () => ({
-  useGamepads: () => ({ lastPressedGamepadButton }),
-}));
+vi.mock('app/hooks/useGamepads', () => import('../../../util/gamepadMock'));
 
 const BUDGET = 120_000;
 
@@ -78,11 +67,6 @@ const baseProps = {
   onTakeBreak: () => {},
   onBlocked: () => {},
 };
-
-beforeEach(() => {
-  lastPressedGamepadButton = undefined;
-  pressSeq = 0;
-});
 
 describe('CountdownControl button state derives from the lane phase', () => {
   it('enables Start/Reset and disables Stop while idle', () => {
@@ -471,6 +455,13 @@ describe('CountdownControl dispatches actions', () => {
     expect(onTakeBreak).toHaveBeenCalledWith(1);
   });
 
+  it('times a handset Stop off the press, not off the render', () => {
+    const onStop = vi.fn();
+    render(<CountdownControl {...baseProps} lane={lane('running')} onStop={onStop} />);
+    pressButton(4, 1_234_567);
+    expect(onStop).toHaveBeenCalledWith(1, 1_234_567);
+  });
+
   it('routes gamepad button 0 to onStart when idle', () => {
     const onStart = vi.fn();
     const { rerender } = render(<CountdownControl {...baseProps} onStart={onStart} />);
@@ -784,7 +775,7 @@ describe('CountdownControl battle mode', () => {
         onTakeBreak={onTakeBreak}
       />,
     );
-    expect(onStop).toHaveBeenCalledWith(1);
+    expect(onStop).toHaveBeenCalledWith(1, expect.any(Number));
     expect(onTakeBreak).not.toHaveBeenCalled();
   });
 

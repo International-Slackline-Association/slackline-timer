@@ -1,57 +1,75 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 
 import { useGamepadSelection } from 'app/state/gamepadSelection';
 
 /**
- * A button press carrying a monotonic `seq` so that pressing the *same* button
- * twice in a row (Start → Reset → Start = button 0 each time) yields a *new*
- * value — consumer effects keyed on the token re-fire, where a bare button
- * index would be an unchanged state value React bails on.
+ * One rising edge of one button. `seq` is monotonic across the hook instance,
+ * so two presses of the same button stay distinguishable; `at` is the epoch the
+ * press happened at (see `pressEpoch`), the value a stop is timed off.
  */
 export interface GamepadPress {
   button: number;
   seq: number;
+  at: number;
 }
 
+export type GamepadPressHandler = (press: GamepadPress) => void;
+
 const BOUNCE_MS = 60;
+/** How far back a HID report timestamp may move a press. A frame is ~16 ms; a
+ * larger age is a stalled/backgrounded tab or a bogus clock, not a press age. */
+const MAX_REPORT_AGE_MS = 250;
 
 /**
- * Polls the Gamepad API each animation frame and emits the last pressed button
- * — but only for the operator-selected pad (`selectedIndex` from the shared
- * `GamepadSelectionProvider`). Multiple instances of this hook may run (one
- * Speedline control plus the two Freestyle `CountdownControl`s); they all read
- * the same shared selection, so a single chosen controller drives every timer.
+ * The epoch of the HID report that carried the press. `gamepad.timestamp` is on
+ * the `performance.now()` clock, so only its AGE is taken from it and applied to
+ * `Date.now()` — no cross-clock arithmetic. Browsers that leave it 0/absent get
+ * the poll time.
+ */
+const pressEpoch = (gamepad: Gamepad, now: number): number => {
+  if (!gamepad.timestamp) return now;
+  const age = Math.min(Math.max(performance.now() - gamepad.timestamp, 0), MAX_REPORT_AGE_MS);
+  return now - age;
+};
+
+/**
+ * Polls the Gamepad API each animation frame and calls `onPress` for every
+ * rising edge on the operator-selected pad (`selectedIndex` from the shared
+ * `GamepadSelectionProvider`), so a single chosen controller drives every timer
+ * across the hook's several instances.
  *
- * Detection is **rising-edge**: a press emits once on the false→true transition,
- * so a held button no longer auto-repeats and a deliberate same-button re-press
- * fires the moment it lands (no 1s wait). A short bounce guard (`BOUNCE_MS`)
- * rejects mechanical contact chatter. Both the previous pressed state and the
- * guard timestamp are keyed off the browser-stable `gamepad.index` (NOT a
- * `forEach` iteration index, which shifts when a pad disconnects and mis-keys
- * the state). Connect/disconnect tracking lives in the provider, so this hook
- * only reads `selectedIndex` and never registers window listeners.
+ * Every edge of a frame is delivered, in button order, each inside `flushSync`:
+ * one Buzz! dongle carries both lanes' reds, a dead heat lands both in one poll,
+ * and the second handler must read the state the first committed. `onPress` is
+ * held in a ref, so it may close over the latest render without re-subscribing
+ * the frame loop.
  *
- * The physical button-index → button map for the venue Buzz! buzzers (why the
- * per-page action constants are the numbers they are) is in
+ * Detection is **rising-edge** (a held button fires once; a same-button
+ * re-press fires the moment it lands) behind a `BOUNCE_MS` contact-chatter
+ * guard. Both are keyed off the browser-stable `gamepad.index`, not the
+ * iteration index, which shifts when a pad disconnects.
+ *
+ * The physical button-index → button map for the venue Buzz! buzzers is in
  * `doc/dev/buzzer-hardware.md`.
  */
-export const useGamepads = () => {
+export const useGamepads = (onPress: GamepadPressHandler): void => {
   const { selectedIndex } = useGamepadSelection();
 
   const requestRef = useRef<number | undefined>(undefined);
   const prevPressed = useRef<Record<string, boolean>>({});
   const lastEdgeTime = useRef<Record<string, number>>({});
+  const seqRef = useRef(0);
 
-  // Keep the latest selected index in a ref so the rAF loop (set up once) always
-  // reads the current value without re-subscribing the animation frame.
   const selectedIndexRef = useRef(selectedIndex);
   selectedIndexRef.current = selectedIndex;
-
-  const [lastPress, setLastPress] = useState<GamepadPress>();
-  const seqRef = useRef(0);
+  const onPressRef = useRef(onPress);
+  onPressRef.current = onPress;
 
   useEffect(() => {
     const animate = () => {
+      // Queued first: a throwing handler must not end the poll for every pad.
+      requestRef.current = requestAnimationFrame(animate);
       const pads = navigator.getGamepads ? navigator.getGamepads() : [];
       for (const gamepad of pads) {
         if (!gamepad) continue;
@@ -70,18 +88,18 @@ export const useGamepads = () => {
             lastEdgeTime.current[buttonId] = now;
             if (gamepad.index === selectedIndexRef.current) {
               seqRef.current += 1;
-              setLastPress({ button: i, seq: seqRef.current });
+              const press = { button: i, seq: seqRef.current, at: pressEpoch(gamepad, now) };
+              // The commit between presses is the point (see the JSDoc); at most a
+              // handful per frame, only on a press.
+              // eslint-disable-next-line @eslint-react/dom-no-flush-sync
+              flushSync(() => onPressRef.current(press));
             }
           }
         }
       }
-
-      requestRef.current = requestAnimationFrame(animate);
     };
 
     requestRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(requestRef.current!);
   }, []);
-
-  return { lastPressedGamepadButton: lastPress };
 };

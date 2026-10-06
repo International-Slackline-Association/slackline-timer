@@ -1,5 +1,5 @@
 ---
-last-updated: 2026-07-20
+last-updated: 2026-10-05
 ---
 
 # Buzzer / gamepad hardware — button numbering
@@ -13,6 +13,18 @@ documented in code (`app/hooks/useGamepads.tsx`,
 `app/state/gamepadSelection.tsx`, `app/hooks/useAdvanceInput.ts`); this file is
 the **hardware-side reference** — which physical button is which index — so the
 mapping constants in the pages aren't magic numbers.
+
+## How a press reaches the board
+
+`useGamepads(onPress)` polls the pads once per animation frame. Every button
+whose state rose false→true in that poll (and clears the 60 ms bounce guard) is
+handed to the page as `{ button, seq, at }`, **in index order, each committed
+before the next**. That matters because one dongle carries every handset: two
+lane judges hitting their reds in the same ~16 ms frame (H3 Red 10 + H4 Red 15)
+both reach the board, and the second stop sees the first one already applied.
+`at` is the press time — the browser's HID report timestamp, at most 250 ms
+back from the poll — and is what a Speedline lane stop or a Freestyle stop is
+timed off (never earlier than the lane's start).
 
 ## What the browser sees
 

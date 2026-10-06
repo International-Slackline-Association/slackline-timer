@@ -3,7 +3,7 @@
  * board's half of FREESTYLE_BOARD_UX §4.14, over the shared readout.
  *
  * Both halves live here together on purpose: the rows are what the operator is
- * shown, the verdicts are what the pad effect in `Speedline/ControlPage` does,
+ * shown, the verdicts are what the pad handler in `Speedline/ControlPage` does,
  * and a mapping listed apart from the guard it describes is how the two drift
  * (audit S18). The verdicts read the page's own `speedlineLocks` map rather
  * than re-deciding anything — so a dead key and the why-line under its
@@ -16,7 +16,7 @@ import { overlayLockReason, type HandsetOutcome } from 'app/util/handsetReadout'
 import type { SpeedlineLocks } from 'app/util/speedlineLocks';
 
 /**
- * Two handsets for the starter, one per lane judge — the indices the pad effect
+ * Two handsets for the starter, one per lane judge — the indices the pad handler
  * dispatches on (`doc/dev/buzzer-hardware.md`).
  */
 export const SPEEDLINE_BUZZER_ROWS: BuzzerMappingRow[] = [
@@ -54,7 +54,7 @@ export const speedlineHandsetOutcome = (
 ): HandsetOutcome => {
   const row = SPEEDLINE_BUZZER_ROWS.find((r) => r.button === button);
   if (row === undefined) return { kind: 'unbound' };
-  // Before the board is consulted at all: the pad effect bails on
+  // Before the board is consulted at all: the pad handler bails on
   // `overlayOwnsBoard()` ahead of every interlock, and this desk binds no
   // answer to the pad — so every key is held by the question, not by the board.
   if (overlay !== null) return { kind: 'locked', reason: overlayLockReason(overlay.confirm) };

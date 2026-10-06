@@ -4,12 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HandsetCard } from 'app/pages/Freestyle/HandsetCard';
 import { initialBattleState } from 'app/util/battleMachine';
 
-/** The pad seam, writable so a test can land a press between renders. */
-const pad = vi.hoisted(() => ({ press: undefined as { button: number; seq: number } | undefined }));
+import { pressPad } from '../../../util/gamepadMock';
 
-vi.mock('app/hooks/useGamepads', () => ({
-  useGamepads: () => ({ lastPressedGamepadButton: pad.press }),
-}));
+vi.mock('app/hooks/useGamepads', () => import('../../../util/gamepadMock'));
 
 vi.mock('app/state/gamepadSelection', () => ({
   useGamepadSelection: () => ({ connectedPads: [] }),
@@ -36,7 +33,6 @@ const card = () => (
 );
 
 afterEach(() => {
-  pad.press = undefined;
   vi.useRealTimers();
 });
 
@@ -67,8 +63,7 @@ describe('HandsetCard', () => {
     const { rerender } = render(card());
     expect(vi.getTimerCount()).toBe(0);
 
-    pad.press = { button: 0, seq: 1 };
-    rerender(card());
+    pressPad(0);
     act(() => vi.advanceTimersByTime(30_000));
     expect(screen.getByTestId('handset-readout')).toHaveTextContent('(0:30 ago)');
     expect(vi.getTimerCount()).toBeGreaterThan(0);
