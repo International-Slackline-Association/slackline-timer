@@ -93,8 +93,10 @@ a hook to catch it.
 The web build gate needs env: `npm --prefix web run build` in a clean shell stops
 with `Refusing to build without VITE_APP_WS_URL, VITE_APP_API_URL,
 VITE_APP_COGNITO_USER_POOL_ID, VITE_APP_COGNITO_CLIENT_ID, VITE_APP_COGNITO_DOMAIN,
-VITE_APP_COGNITO_TIMER_GROUP — the bundle has no fallbacks.` Export the unreachable
-placeholders the web job's Build step sets in
+VITE_APP_COGNITO_TIMER_GROUP — the bundle has no fallbacks.`, and then, for the
+build-time CSP (ADR 0054), without `WEB_CSP_PHOTO_CDN_DOMAIN,
+WEB_CSP_PHOTO_UPLOAD_ORIGIN`. Export the unreachable placeholders the web job's
+Build step sets in
 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml); they are its only home.
 
 Bypass only in emergencies with `--no-verify`, and fix forward immediately.

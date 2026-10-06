@@ -247,8 +247,12 @@ context, and shared tested helpers gate every route — `requireCompAccess`
 `requireAdmin` (superadmin-only: create competition, manage the manager list).
 The WS `$connect` authorizer runs the same grant check against the joined
 session, so an ungranted manager can't open the socket. Manager-grant revocation
-is immediate for HTTP (the grant is read live per request; the 60s authorizer
-cache memoizes only the role, not the grant). **Read-only WS connections** are
+is immediate for HTTP and WS: the grant is read live per HTTP request (the 60s
+authorizer cache memoizes only the role, not the grant), and the grant delete
+force-closes that `sub`'s open sockets on the competition — the `$connect`
+authorizer puts its principal (`sub`, `reader:<compId>`, or the offline
+`local-dev-operator`) in the context and `connectionHandler` stores it on the
+connection row (ADR 0053). **Read-only WS connections** are
 flagged on the `$connect` row and their sends dropped by `messageHandler`, so a
 leaked overlay token can't inject timer messages — with one exception,
 `request_state`, which only prompts the control panels to re-broadcast what the
@@ -378,3 +382,10 @@ and send, leaving overlays stale mid-broadcast.
    badly-set machine shows a slightly wrong elapsed until the operator's stop
    freezes it at the true value. Venue machines are NTP-synced to well under a
    frame; accepted.
+6. **WS access is checked at `$connect` only** (ADR 0053). A grant revoke closes
+   the manager's open sockets, but a reconnect racing the revoke (~100 ms) can
+   still be admitted, and a socket whose row predates the stored principal is
+   not found by the revoke. A token expiring or a Cognito user disabled
+   mid-socket is not enforced either. Each case ends at API Gateway's 2 h
+   connection cap, and forcing a close at token expiry would drop operator
+   sockets at arbitrary moments, between two lane stops included.
