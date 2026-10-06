@@ -5,6 +5,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { setWsAuthDenied, useWsAuthDenied } from 'app/auth/wsAuthSignal';
+import { clearAllCachedReadTokens } from 'app/util/readTokenCache';
 
 type Access = 'checking' | 'allowed' | 'denied';
 
@@ -77,7 +78,14 @@ export const RequireSignedIn = ({ children }: { children: ReactNode }) => {
               Go to competitions
             </Button>
           )}
-          <Button variant={wsDenied ? 'outlined' : 'contained'} onClick={() => signOut()}>
+          <Button
+            variant={wsDenied ? 'outlined' : 'contained'}
+            onClick={() => {
+              // Before `signOut()`: its Hosted-UI redirect can unload the page first.
+              clearAllCachedReadTokens();
+              void signOut();
+            }}
+          >
             Sign out
           </Button>
         </Stack>

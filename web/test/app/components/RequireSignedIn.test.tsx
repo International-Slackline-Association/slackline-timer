@@ -98,4 +98,17 @@ describe('RequireSignedIn', () => {
     expect(screen.queryByRole('button', { name: /go to competitions/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
   });
+
+  it('drops the cached overlay read tokens before signing out', async () => {
+    const tokenKey = 'speedline.overlayReadToken.comp-a';
+    window.localStorage.setItem(tokenKey, '{"token":"a","expiresAt":9e15,"storedAt":0}');
+    const cachedAtSignOut: (string | null)[] = [];
+    signOut.mockImplementation(() => cachedAtSignOut.push(window.localStorage.getItem(tokenKey)));
+    fetchAuthSession.mockResolvedValue(signedOutSession());
+    renderGate();
+
+    fireEvent.click(await screen.findByRole('button', { name: /sign out/i }));
+
+    expect(cachedAtSignOut).toEqual([null]);
+  });
 });

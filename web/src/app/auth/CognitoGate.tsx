@@ -7,6 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { BrandMark } from 'app/components/BrandMark';
 import { RequireSignedIn } from 'app/components/RequireSignedIn';
+import { clearAllCachedReadTokens } from 'app/util/readTokenCache';
 
 type AuthStatus = 'checking' | 'signedIn' | 'signedOut';
 
@@ -49,6 +50,10 @@ export const CognitoGate = ({ children }: { children: ReactNode }) => {
           setStatus('signedIn');
           break;
         case 'signedOut':
+          // Sign-outs that bypass `RequireSignedIn`'s button.
+          clearAllCachedReadTokens();
+          setStatus('signedOut');
+          break;
         case 'signInWithRedirect_failure':
           setStatus('signedOut');
           break;

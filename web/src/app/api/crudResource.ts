@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
+import { compPath } from 'app/api/paths';
 
 /**
  * Factory for the standard competition-scoped create/update/delete mutation
@@ -16,8 +17,6 @@ export const crudResource = <TEntity, TInput>(
   segment: string,
   keys: { all: (compId: string) => readonly unknown[] },
 ) => {
-  const collection = (compId: string) => `/competitions/${compId}/${segment}`;
-
   const useInvalidate = (compId: string) => {
     const queryClient = useQueryClient();
     return () => queryClient.invalidateQueries({ queryKey: keys.all(compId) });
@@ -27,7 +26,7 @@ export const crudResource = <TEntity, TInput>(
     const invalidate = useInvalidate(compId);
     return useMutation({
       mutationFn: (input: TInput) =>
-        apiFetch<TEntity>(collection(compId), { method: 'POST', body: input }),
+        apiFetch<TEntity>(compPath(compId, segment), { method: 'POST', body: input }),
       onSuccess: invalidate,
     });
   };
@@ -36,7 +35,7 @@ export const crudResource = <TEntity, TInput>(
     const invalidate = useInvalidate(compId);
     return useMutation({
       mutationFn: ({ id, input }: { id: string; input: TInput }) =>
-        apiFetch<TEntity>(`${collection(compId)}/${id}`, { method: 'PUT', body: input }),
+        apiFetch<TEntity>(compPath(compId, segment, id), { method: 'PUT', body: input }),
       onSuccess: invalidate,
     });
   };
@@ -45,7 +44,7 @@ export const crudResource = <TEntity, TInput>(
     const invalidate = useInvalidate(compId);
     return useMutation({
       mutationFn: (id: string) =>
-        apiFetch<void>(`${collection(compId)}/${id}`, { method: 'DELETE' }),
+        apiFetch<void>(compPath(compId, segment, id), { method: 'DELETE' }),
       onSuccess: invalidate,
     });
   };

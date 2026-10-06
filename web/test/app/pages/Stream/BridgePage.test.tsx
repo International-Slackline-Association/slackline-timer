@@ -32,7 +32,16 @@ vi.mock('app/api/client', async (importOriginal) => {
 });
 
 const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('app/util/h2rClient', () => ({ pushToH2r: pushMock }));
+vi.mock('app/util/h2rClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('app/util/h2rClient')>();
+  return {
+    ...actual,
+    createH2rPusher: (origin: string) => ({
+      push: (posts: unknown) => pushMock(origin, posts),
+      dispose: () => undefined,
+    }),
+  };
+});
 
 import { BridgePage } from 'app/pages/Stream/BridgePage';
 
@@ -134,6 +143,25 @@ describe('BridgePage', () => {
 
     await vi.waitFor(() => expect(pushMock).toHaveBeenCalled());
     expect(pushMock.mock.calls.at(-1)?.[0]).toBe('http://127.0.0.1:4001');
+  });
+
+  it('refuses a non-loopback ?h2r target visibly and never fetches', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    apiFetchMock.mockResolvedValue([]);
+
+    renderBridge(`/stream/bridge?compId=${COMP}&token=tok-1&h2r=http://evil.example`);
+    deliverFrames(
+      selectionMessage({ discipline: 'speed', round: 'final', athlete1Id: 'a1', athlete2Id: null }),
+    );
+
+    expect(screen.getByText(/must be on this machine/)).toBeInTheDocument();
+    expect(screen.queryByText('http://evil.example')).not.toBeInTheDocument();
+    await Promise.resolve();
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it('shows the operator a status panel (it is a control tab, not an OBS source)', () => {

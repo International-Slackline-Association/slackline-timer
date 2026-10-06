@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
+import { compPath } from 'app/api/paths';
 import { PHOTO_URL_REFETCH } from 'app/api/photoUrlRefresh';
 import type {
   CombinedEntry,
@@ -55,7 +56,7 @@ export const useRankings = (
       const params = new URLSearchParams({ gender });
       if (allTimes) params.set('allTimes', 'true');
       if (opts.discipline) params.set('discipline', opts.discipline);
-      return apiFetch<RankedAthlete[]>(`/competitions/${compId}/rankings/${round}?${params}`, {
+      return apiFetch<RankedAthlete[]>(`${compPath(compId!, 'rankings', round)}?${params}`, {
         signal,
         readToken: opts.readToken,
       });
@@ -81,7 +82,7 @@ export const useOverallStandings = (
     queryFn: ({ signal }) => {
       const params = new URLSearchParams({ gender });
       if (opts.discipline) params.set('discipline', opts.discipline);
-      return apiFetch<StandingsEntry[]>(`/competitions/${compId}/rankings/overall?${params}`, {
+      return apiFetch<StandingsEntry[]>(`${compPath(compId!, 'rankings', 'overall')}?${params}`, {
         signal,
         readToken: opts.readToken,
       });
@@ -104,9 +105,11 @@ export const useCombinedRanking = (
     queryKey: rankingKeys.combined(compId ?? '', gender),
     enabled: compId != null,
     ...PHOTO_URL_REFETCH,
-    queryFn: ({ signal }) =>
-      apiFetch<CombinedEntry[]>(`/competitions/${compId}/rankings/combined?gender=${gender}`, {
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams({ gender });
+      return apiFetch<CombinedEntry[]>(`${compPath(compId!, 'rankings', 'combined')}?${params}`, {
         signal,
         readToken: opts.readToken,
-      }),
+      });
+    },
   });

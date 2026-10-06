@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
+import { compPath } from 'app/api/paths';
 import type { Manager } from 'app/types';
 
 /**
@@ -14,12 +15,10 @@ export const managerKeys = {
   list: (compId: string) => [...managerKeys.all, compId] as const,
 };
 
-const base = (compId: string) => `/competitions/${encodeURIComponent(compId)}/managers`;
-
 export const useManagers = (compId: string | undefined) =>
   useQuery({
     queryKey: managerKeys.list(compId ?? ''),
-    queryFn: ({ signal }) => apiFetch<Manager[]>(base(compId!), { signal }),
+    queryFn: ({ signal }) => apiFetch<Manager[]>(compPath(compId!, 'managers'), { signal }),
     enabled: Boolean(compId),
   });
 
@@ -27,7 +26,7 @@ export const useGrantManager = (compId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (email: string) =>
-      apiFetch<Manager>(base(compId), { method: 'POST', body: { email } }),
+      apiFetch<Manager>(compPath(compId, 'managers'), { method: 'POST', body: { email } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: managerKeys.list(compId) }),
   });
 };
@@ -36,7 +35,7 @@ export const useRevokeManager = (compId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (sub: string) =>
-      apiFetch<void>(`${base(compId)}/${encodeURIComponent(sub)}`, { method: 'DELETE' }),
+      apiFetch<void>(compPath(compId, 'managers', sub), { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: managerKeys.list(compId) }),
   });
 };

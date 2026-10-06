@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { Box, Chip, Container, Stack, Typography } from '@mui/material';
 import { useLocation } from 'react-router-dom';
@@ -14,7 +14,7 @@ import {
   type BridgeSide,
   type BridgeSides,
 } from 'app/util/h2rBridge';
-import { pushToH2r } from 'app/util/h2rClient';
+import { createH2rPusher, resolveH2rTarget, type H2rPusher } from 'app/util/h2rClient';
 
 const DEFAULT_TARGET = 'http://127.0.0.1:4001';
 
@@ -25,7 +25,8 @@ const DEFAULT_TARGET = 'http://127.0.0.1:4001';
  * `updateSelection` (read token on `$connect`, ADR 0014), resolves each side to
  * display fields via the existing athletes/times/scores reads (the same join the
  * SVO overlays do), and POSTs name/country/result + the portrait into H2R's local API
- * on `:4001` (default; override with `?h2r=`). Zero backend change — H2R is
+ * on `:4001` (default; `?h2r=` overrides it with another loopback origin, see
+ * `resolveH2rTarget`). Zero backend change — H2R is
  * push-only, so this is pure client packaging of the existing read token + reads.
  * See doc/dev/broadcast-overlays.md §"External graphics tools".
  *
@@ -36,17 +37,24 @@ export const BridgePage = () => {
   const { search } = useLocation();
   const params = new URLSearchParams(search);
   const compId = params.get('compId');
-  const target = params.get('h2r') || DEFAULT_TARGET;
+  const target = resolveH2rTarget(params.get('h2r') || DEFAULT_TARGET);
   const readToken = useReadToken();
 
+  if ('error' in target) {
+    return (
+      <BridgeShell>
+        <Typography color="error">{target.error}</Typography>
+      </BridgeShell>
+    );
+  }
   if (!compId) {
     return (
-      <BridgeShell target={target}>
+      <BridgeShell target={target.origin}>
         <Typography color="error">Missing compId in the bridge URL.</Typography>
       </BridgeShell>
     );
   }
-  return <BridgeBody compId={compId} readToken={readToken} target={target} />;
+  return <BridgeBody compId={compId} readToken={readToken} target={target.origin} />;
 };
 
 const BridgeBody = ({
@@ -77,8 +85,16 @@ const BridgeBody = ({
     sides[2]?.result,
     selection?.discipline ?? null,
   ]);
+  // Created in an effect rather than a memo: StrictMode's mount/cleanup/mount
+  // would otherwise leave the memoised pusher disposed.
+  const pusher = useRef<H2rPusher | null>(null);
   useEffect(() => {
-    void pushToH2r(target, buildH2rPosts(sides, H2R_VARIABLE_MAP, selection?.discipline));
+    const p = createH2rPusher(target);
+    pusher.current = p;
+    return () => p.dispose();
+  }, [target]);
+  useEffect(() => {
+    pusher.current?.push(buildH2rPosts(sides, H2R_VARIABLE_MAP, selection?.discipline));
     // `sides` is rebuilt each render; `key` captures its pushable content.
   }, [key, target]);
 
@@ -127,7 +143,7 @@ const BridgeShell = ({
   status,
   children,
 }: {
-  target: string;
+  target?: string;
   status?: React.ReactNode;
   children: React.ReactNode;
 }) => (
@@ -136,13 +152,15 @@ const BridgeShell = ({
       <Typography variant="h5">H2R Graphics bridge</Typography>
       {status}
     </Stack>
-    <Typography color="text.secondary" sx={{ mb: 2 }}>
-      Keep this tab open next to H2R. It pushes the control board&apos;s live selection to{' '}
-      <Box component="code" sx={{ fontFamily: 'monospace' }}>
-        {target}
-      </Box>
-      .
-    </Typography>
+    {target && (
+      <Typography color="text.secondary" sx={{ mb: 2 }}>
+        Keep this tab open next to H2R. It pushes the control board&apos;s live selection to{' '}
+        <Box component="code" sx={{ fontFamily: 'monospace' }}>
+          {target}
+        </Box>
+        .
+      </Typography>
+    )}
     {children}
   </Container>
 );

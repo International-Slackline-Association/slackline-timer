@@ -513,8 +513,9 @@ const H2rBridgeLink = ({ compId, token }: { compId: string; token: string }) => 
     </Typography>
     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
       Open this on the machine running H2R Graphics and leave the tab open. It pushes the live
-      selection to H2R&apos;s local API; override the target with <code>&amp;h2r=</code> if H2R
-      isn&apos;t on the default <code>http://127.0.0.1:4001</code>.
+      selection to H2R&apos;s local API on that same machine; if H2R listens on another port than
+      the default <code>http://127.0.0.1:4001</code>, add{' '}
+      <code>&amp;h2r=http://127.0.0.1:PORT</code>. H2R on a different machine is not supported.
     </Typography>
     <CopyableUrl
       label="H2R bridge"

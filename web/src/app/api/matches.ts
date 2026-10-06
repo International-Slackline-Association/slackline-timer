@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
+import { compPath } from 'app/api/paths';
 import { crudResource } from 'app/api/crudResource';
 import type { Discipline, Gender, Match, MatchRound } from 'app/types';
 
@@ -35,7 +36,7 @@ export const useMatches = (
     queryFn: ({ signal }) => {
       const params = new URLSearchParams({ gender });
       if (opts.discipline) params.set('discipline', opts.discipline);
-      return apiFetch<Match[]>(`/competitions/${compId}/matches?${params}`, {
+      return apiFetch<Match[]>(`${compPath(compId!, 'matches')}?${params}`, {
         signal,
         readToken: opts.readToken,
       });
@@ -67,7 +68,7 @@ export const useAdvanceBracket = (compId: string) => {
       force?: boolean;
       stage?: SeedStage;
     }) =>
-      apiFetch<Match[]>(`/competitions/${compId}/matches/advance`, { method: 'POST', body: input }),
+      apiFetch<Match[]>(compPath(compId, 'matches', 'advance'), { method: 'POST', body: input }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: matchKeys.all(compId) }),
   });
 };

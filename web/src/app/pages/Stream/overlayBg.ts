@@ -2,7 +2,7 @@ import { colors } from 'app/theme/tokens';
 
 /** Resolve an overlay's CSS background from the `?bg=` query param. Default
  *  transparent (alpha) for browser-source compositing; aliases map to the
- *  reserved chroma-key colours; anything else passes through as a raw CSS colour.
+ *  reserved chroma-key colours; a plain colour (`PLAIN_COLOUR`) passes through.
  *  See doc/dev/broadcast-overlays.md. */
 const ALIASES: Record<string, string> = {
   transparent: 'transparent',
@@ -58,10 +58,16 @@ export const KEY_COMPOSITE_CLASS = 'tl-key-composite';
  *  `app/theme/tokens.css`). */
 export const CHROMA_GROUND_CLASS = 'tl-chroma-ground';
 
+// A `?bg=` link is shareable, so only plain colours reach `body.style.background`:
+// `url(`/`image-set(` would make the overlay fetch a third-party URL and `var(`
+// reads arbitrary tokens. A regex, not `CSS.supports` (absent in jsdom).
+const PLAIN_COLOUR =
+  /^(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|(?:rgba?|hsla?)\([\d\s.,%/+-]+\)|[a-z]+)$/i;
+
 export const resolveOverlayBackground = (search: string, fallback = 'transparent'): string => {
   const raw = new URLSearchParams(search).get('bg');
   if (raw == null || raw === '') return fallback;
-  return ALIASES[raw.toLowerCase()] ?? raw; // URLSearchParams already decoded it
+  return ALIASES[raw.toLowerCase()] ?? (PLAIN_COLOUR.test(raw) ? raw : fallback);
 };
 
 // The keyer erases exactly these grounds, so anything drawn over them would
