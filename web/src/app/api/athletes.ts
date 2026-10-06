@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
 import { crudResource } from 'app/api/crudResource';
+import { PHOTO_URL_REFETCH } from 'app/api/photoUrlRefresh';
 import type { Athlete } from 'app/types';
 
 // Invalidation strategy: see crudResource.ts.
@@ -18,6 +19,7 @@ export const useAthletes = (compId: string | null, opts: { readToken?: string } 
   useQuery({
     queryKey: athleteKeys.list(compId ?? ''),
     enabled: compId != null,
+    ...PHOTO_URL_REFETCH,
     queryFn: ({ signal }) =>
       apiFetch<Athlete[]>(`/competitions/${compId}/athletes`, {
         signal,

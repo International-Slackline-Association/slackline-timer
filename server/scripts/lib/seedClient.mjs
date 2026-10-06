@@ -12,6 +12,9 @@ import { basename, isAbsolute, resolve } from 'node:path';
 
 export const DNF_SENTINEL = 3_355_550;
 
+/** The presign policy's body cap (photoUpload handler `MAX_PHOTO_BYTES`). */
+export const MAX_PHOTO_BYTES = 1024 * 1024;
+
 const CONTENT_TYPES = {
   png: 'image/png',
   jpg: 'image/jpeg',
@@ -54,6 +57,10 @@ export const makeCall =
 export const uploadPhoto = async (call, compId, filePath) => {
   const contentType = contentTypeFor(filePath);
   const bytes = await readFile(filePath);
+  if (bytes.length > MAX_PHOTO_BYTES)
+    throw new Error(
+      `${basename(filePath)} is ${bytes.length} B, over the ${MAX_PHOTO_BYTES} B upload cap — resize it first`,
+    );
   const sha256 = createHash('sha256').update(bytes).digest('hex');
 
   const presign = await call('POST', `/competitions/${compId}/photo-uploads`, {

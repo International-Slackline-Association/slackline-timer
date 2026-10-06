@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
+import { PHOTO_URL_REFETCH } from 'app/api/photoUrlRefresh';
 import type {
   CombinedEntry,
   Discipline,
@@ -49,6 +50,7 @@ export const useRankings = (
   return useQuery({
     queryKey: rankingKeys.view(compId ?? '', round, gender, allTimes, opts.discipline),
     enabled: compId != null,
+    ...PHOTO_URL_REFETCH,
     queryFn: ({ signal }) => {
       const params = new URLSearchParams({ gender });
       if (allTimes) params.set('allTimes', 'true');
@@ -75,6 +77,7 @@ export const useOverallStandings = (
   useQuery({
     queryKey: rankingKeys.standings(compId ?? '', gender, opts.discipline),
     enabled: compId != null,
+    ...PHOTO_URL_REFETCH,
     queryFn: ({ signal }) => {
       const params = new URLSearchParams({ gender });
       if (opts.discipline) params.set('discipline', opts.discipline);
@@ -100,6 +103,7 @@ export const useCombinedRanking = (
   useQuery({
     queryKey: rankingKeys.combined(compId ?? '', gender),
     enabled: compId != null,
+    ...PHOTO_URL_REFETCH,
     queryFn: ({ signal }) =>
       apiFetch<CombinedEntry[]>(`/competitions/${compId}/rankings/combined?gender=${gender}`, {
         signal,

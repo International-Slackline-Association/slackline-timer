@@ -1,6 +1,6 @@
 import type { APIGatewayProxyHandlerV2WithLambdaAuthorizer } from 'aws-lambda';
 import { competitionDb } from 'core/competitionDb';
-import { computeEventExpiry } from 'core/eventWindow';
+import { computePhotoUrlExpiry } from 'core/eventWindow';
 import {
   AuthContext,
   HttpError,
@@ -81,7 +81,7 @@ export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = a
     if (!isDiscipline(discipline)) throw new HttpError(400, `unknown discipline: ${discipline}`);
 
     const signer = await photoUrlSignerFromEnv();
-    const expiresAt = computeEventExpiry(competition.endDate, Date.now());
+    const expiresAt = computePhotoUrlExpiry(competition.endDate, Date.now());
 
     const round = event.pathParameters?.round;
     const audience = (a: Athlete) => attachPhotoUrl(forAudience(a, auth), signer, expiresAt);

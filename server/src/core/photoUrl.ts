@@ -1,4 +1,5 @@
 import { getSignedUrl } from '@aws-sdk/cloudfront-signer';
+import { isOffline } from 'core/offline';
 import { getPhotoPrivateKey } from 'core/secrets';
 
 /**
@@ -10,9 +11,9 @@ import { getPhotoPrivateKey } from 'core/secrets';
  * rankings, vs-cards); signing is a local RSA operation, no S3 round trip.
  *
  * Why CloudFront signing instead of S3 presigned GETs: presigned URLs from a
- * Lambda role are capped at the role-session lifetime (hours); CloudFront
- * signed URLs have no expiry cap, so they can live until the competition's
- * endDate (≤ ~10 days, see core/eventWindow.ts).
+ * Lambda role are capped at the role-session lifetime, which would make the
+ * expiry depend on the credentials; CloudFront signed URLs carry exactly the
+ * expiry we choose (12–18 h, bounded by the event — core/eventWindow.ts).
  */
 
 export interface PhotoUrlSigner {
@@ -61,7 +62,7 @@ export const photoUrlSignerFromEnv = async (): Promise<PhotoUrlSigner | null> =>
     return createPhotoUrlSigner({ cdnDomain, keyPairId, privateKeyPem });
   }
 
-  if (process.env.IS_OFFLINE === 'true' && process.env.PHOTOS_BUCKET) {
+  if (isOffline() && process.env.PHOTOS_BUCKET) {
     return createOfflinePhotoUrlSigner({
       bucket: process.env.PHOTOS_BUCKET,
       publicBaseUrl:

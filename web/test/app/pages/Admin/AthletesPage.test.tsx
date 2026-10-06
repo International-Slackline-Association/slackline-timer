@@ -17,7 +17,7 @@ const { uploadMock } = vi.hoisted(() => ({ uploadMock: vi.fn() }));
 vi.mock('app/api/photoUpload', () => ({
   uploadAthletePhoto: uploadMock,
   ACCEPTED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/webp'],
-  acceptedFormatsHint: () => 'JPG, PNG or WebP, max 8 MB',
+  acceptedFormatsHint: () => 'JPG, PNG or WebP, max 30 MB',
 }));
 
 import { ApiError } from 'app/api/client';

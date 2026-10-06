@@ -14,7 +14,7 @@ vi.mock('core/competitionDb', () => ({
   competitionDb: { getCompetition: getCompetitionMock },
 }));
 
-import { main } from '@functions/photoUpload/handler';
+import { checksumSha256Base64, main } from '@functions/photoUpload/handler';
 
 const SHA = 'ab'.repeat(32);
 
@@ -68,7 +68,7 @@ describe('photoUpload handler', () => {
     expect(res.body.photoKey).toBe(`photos/worlds-2026/${SHA}.png`);
   });
 
-  it('constrains the POST policy to the content-hashed key, 8 MB, and the content type', async () => {
+  it('constrains the POST policy to the content-hashed key, 1 MiB, and the content type', async () => {
     await invoke(event());
 
     expect(createPresignedPostMock).toHaveBeenCalledTimes(1);
@@ -77,12 +77,26 @@ describe('photoUpload handler', () => {
     expect(arg.Key).toBe(`photos/worlds-2026/${SHA}.png`);
     expect(arg.Conditions).toEqual(
       expect.arrayContaining([
-        ['content-length-range', 0, 8 * 1024 * 1024],
+        ['content-length-range', 1, 1024 * 1024],
         ['eq', '$Content-Type', 'image/png'],
       ]),
     );
-    // The POST policy itself pins Content-Type as a form field too.
     expect(arg.Fields).toMatchObject({ 'Content-Type': 'image/png' });
+  });
+
+  it('binds the bytes to the declared hash via S3 checksum fields', async () => {
+    await invoke(event());
+
+    const arg = createPresignedPostMock.mock.calls[0][1];
+    expect(arg.Fields).toMatchObject({
+      'x-amz-checksum-algorithm': 'SHA256',
+      'x-amz-checksum-sha256': Buffer.from(SHA, 'hex').toString('base64'),
+    });
+  });
+
+  it('converts the hex digest to the base64 S3 expects', () => {
+    const hex = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+    expect(checksumSha256Base64(hex)).toBe('47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=');
   });
 
   it('rejects an unknown content type before presigning', async () => {
