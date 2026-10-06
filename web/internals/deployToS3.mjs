@@ -3,9 +3,10 @@
 // baked in, sync dist/ to the resolved UI bucket, force index.html to no-cache,
 // invalidate the resolved CloudFront distribution. Invoked by `npm run deploy`.
 //
-// Resolve-then-build is the required order: the bundle embeds VITE_APP_* at
-// build time. `npm run build` therefore stays credential-free (CI builds it
-// with no AWS access) and this is the only entrypoint that needs a session.
+// Resolve-then-build is the required order: the bundle embeds VITE_APP_*, and
+// index.html the CSP built from them plus WEB_CSP_*, at build time. `npm run
+// build` therefore stays credential-free (CI builds it with no AWS access) and
+// this is the only entrypoint that needs a session.
 //
 // Nothing falls back to a committed value (ADR 0048): with `--delete` on the
 // sync, a stale bucket name is a destructive operation against whatever bucket
@@ -19,7 +20,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { BACKEND_OUTPUTS, buildViteEnv, liveStack, loadDeployEnv } from './deployConfig.mjs';
+import { BACKEND_OUTPUTS, buildEnv, liveStack, loadDeployEnv } from './deployConfig.mjs';
 import { requireOutputs, runAws, stackOutputs } from './stackOutputs.mjs';
 
 // Anchored to the package root, not cwd: `node web/internals/deployToS3.mjs`
@@ -38,14 +39,14 @@ function aws(args, { profile, region } = {}) {
   execFileSync('aws', full, { stdio: 'inherit', windowsHide: true });
 }
 
-/** `npm run build` with the resolved VITE_APP_* env. Throws on a failed build. */
-function buildBundle(viteEnv) {
+/** `npm run build` with the resolved build env. Throws on a failed build. */
+function buildBundle(env) {
   const res = spawnSync('npm', ['run', 'build'], {
     cwd: WEB_ROOT,
     stdio: 'inherit',
     windowsHide: true,
     shell: process.platform === 'win32', // npm.cmd needs a shell on Windows
-    env: { ...process.env, ...viteEnv },
+    env: { ...process.env, ...env },
   });
   if (res.status !== 0) throw new Error('`npm run build` failed — nothing was uploaded.');
   if (!existsSync(join(DIST, 'index.html'))) {
@@ -119,17 +120,17 @@ function main() {
     ['WebBucketName', 'WebDistributionId'],
     { stackName: web.name, region: web.region },
   );
-  const viteEnv = buildViteEnv({ outputs: backendOutputs, env: process.env, stack: backend });
+  const env = buildEnv({ outputs: backendOutputs, env: process.env, stack: backend });
 
   console.log(`Bucket  : ${bucket}`);
   console.log(`CF dist : ${distributionId}`);
-  for (const [key, value] of Object.entries(viteEnv)) console.log(`   ${key.padEnd(30)} ${value}`);
+  for (const [key, value] of Object.entries(env)) console.log(`   ${key.padEnd(30)} ${value}`);
 
   const awsOpts = { profile, region: web.region };
   assertBucketIsOurs(bucket, { ...awsOpts, account });
 
   console.log('\nBuilding...');
-  buildBundle(viteEnv);
+  buildBundle(env);
 
   console.log(`\nSyncing ${DIST} -> s3://${bucket} ...`);
   aws(

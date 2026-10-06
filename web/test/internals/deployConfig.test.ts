@@ -4,22 +4,24 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  BACKEND_OUTPUTS,
-  buildViteEnv,
-  liveStack,
-  VITE_VARS,
-} from '../../internals/deployConfig.mjs';
+import { CSP_INPUTS } from '../../internals/csp.mjs';
+import { BACKEND_OUTPUTS, BUILD_VARS, buildEnv, liveStack } from '../../internals/deployConfig.mjs';
 
 /**
  * Guards what the web deploy resolves before it builds
  * (web/internals/deployConfig.mjs). `vite build` fails without the six
- * VITE_APP_* vars, so the only question is WHERE they come from: a missing one
+ * VITE_APP_* vars and the two WEB_CSP_* inputs, so the only question is WHERE
+ * they come from: a missing one
  * must stop the deploy rather than bake in a stale committed value.
  */
 
 const STACK = { name: 'a-backend-stack', region: 'eu-central-2' };
-const OUTPUTS = { WebsocketUrl: 'wss://ws.example', HttpApiUrl: 'https://api.example/prod' };
+const OUTPUTS = {
+  WebsocketUrl: 'wss://ws.example',
+  HttpApiUrl: 'https://api.example/prod',
+  PhotoCdnDomain: 'd111.cloudfront.net',
+  PhotoUploadOrigin: 'https://photos.s3.eu-central-2.amazonaws.com',
+};
 const ENV = {
   COGNITO_USER_POOL_ID: 'eu-central-1_Example',
   COGNITO_CLIENT_ID: 'a-client',
@@ -34,22 +36,34 @@ const ledger = (stacks: unknown[]) => {
   return path;
 };
 
-describe('buildViteEnv', () => {
+describe('buildEnv', () => {
   it('builds every var vite requires from the stack outputs plus .env.deploy', () => {
-    const viteEnv = buildViteEnv({ outputs: OUTPUTS, env: ENV, stack: STACK });
-    expect(Object.keys(viteEnv).sort()).toEqual(VITE_VARS.map((v) => v.vite).sort());
-    expect(viteEnv.VITE_APP_WS_URL).toBe('wss://ws.example');
-    expect(viteEnv.VITE_APP_API_URL).toBe('https://api.example/prod');
-    expect(viteEnv.VITE_APP_COGNITO_DOMAIN).toBe('auth.example.com');
+    const env = buildEnv({ outputs: OUTPUTS, env: ENV, stack: STACK });
+    expect(Object.keys(env).sort()).toEqual(BUILD_VARS.map((v) => v.name).sort());
+    expect(env.VITE_APP_WS_URL).toBe('wss://ws.example');
+    expect(env.VITE_APP_API_URL).toBe('https://api.example/prod');
+    expect(env.VITE_APP_COGNITO_DOMAIN).toBe('auth.example.com');
+    expect(env.WEB_CSP_PHOTO_CDN_DOMAIN).toBe('d111.cloudfront.net');
+    expect(env.WEB_CSP_PHOTO_UPLOAD_ORIGIN).toBe('https://photos.s3.eu-central-2.amazonaws.com');
+  });
+
+  it('resolves every input the build-time CSP requires', () => {
+    const names = BUILD_VARS.map((v) => v.name);
+    for (const input of CSP_INPUTS) expect(names).toContain(input);
   });
 
   it('asks the backend stack for exactly the outputs it consumes', () => {
-    expect(BACKEND_OUTPUTS).toEqual(['WebsocketUrl', 'HttpApiUrl']);
+    expect(BACKEND_OUTPUTS).toEqual([
+      'WebsocketUrl',
+      'HttpApiUrl',
+      'PhotoCdnDomain',
+      'PhotoUploadOrigin',
+    ]);
   });
 
   it('refuses to build when a .env.deploy value is missing, naming it and the template', () => {
     const { COGNITO_DOMAIN: _dropped, ...partial } = ENV;
-    const build = () => buildViteEnv({ outputs: OUTPUTS, env: partial, stack: STACK });
+    const build = () => buildEnv({ outputs: OUTPUTS, env: partial, stack: STACK });
     expect(build).toThrow(/refusing to build/);
     expect(build).toThrow(/VITE_APP_COGNITO_DOMAIN/);
     expect(build).toThrow(/COGNITO_DOMAIN \(repo-root \.env\.deploy\)/);
@@ -58,20 +72,20 @@ describe('buildViteEnv', () => {
 
   it('points a missing API URL at the stack that should publish it', () => {
     const build = () =>
-      buildViteEnv({ outputs: { WebsocketUrl: 'wss://ws.example' }, env: ENV, stack: STACK });
+      buildEnv({ outputs: { ...OUTPUTS, HttpApiUrl: undefined }, env: ENV, stack: STACK });
     expect(build).toThrow(/HttpApiUrl \(output of stack a-backend-stack in eu-central-2\)/);
   });
 
   it('reports every unresolved var at once, not just the first', () => {
-    const build = () => buildViteEnv({ stack: STACK });
-    for (const { vite } of VITE_VARS) expect(build).toThrow(new RegExp(vite));
+    const build = () => buildEnv({ stack: STACK });
+    for (const { name } of BUILD_VARS) expect(build).toThrow(new RegExp(name));
   });
 
   it('treats a blank value as unset', () => {
     // A half-filled `.env.deploy` line (`COGNITO_DOMAIN=`) is not a value; it
     // would otherwise reach the bundle as an empty Hosted-UI domain.
     expect(() =>
-      buildViteEnv({ outputs: OUTPUTS, env: { ...ENV, COGNITO_DOMAIN: '  ' }, stack: STACK }),
+      buildEnv({ outputs: OUTPUTS, env: { ...ENV, COGNITO_DOMAIN: '  ' }, stack: STACK }),
     ).toThrow(/VITE_APP_COGNITO_DOMAIN/);
   });
 });

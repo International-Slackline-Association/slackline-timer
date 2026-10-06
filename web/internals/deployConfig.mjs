@@ -52,34 +52,38 @@ export function liveStack(role, ledgerPath = LEDGER) {
   return { name, region };
 }
 
-// Every var `vite build` requires, and where each comes from: the API URLs are
-// backend-stack outputs; the Cognito pool is hand-provisioned outside this repo
-// (no stack can output it), so those four are `.env.deploy` inputs.
-export const VITE_VARS = [
-  { vite: 'VITE_APP_WS_URL', source: 'stack', key: 'WebsocketUrl' },
-  { vite: 'VITE_APP_API_URL', source: 'stack', key: 'HttpApiUrl' },
-  { vite: 'VITE_APP_COGNITO_USER_POOL_ID', source: 'env', key: 'COGNITO_USER_POOL_ID' },
-  { vite: 'VITE_APP_COGNITO_CLIENT_ID', source: 'env', key: 'COGNITO_CLIENT_ID' },
-  { vite: 'VITE_APP_COGNITO_DOMAIN', source: 'env', key: 'COGNITO_DOMAIN' },
-  { vite: 'VITE_APP_COGNITO_TIMER_GROUP', source: 'env', key: 'COGNITO_TIMER_GROUP' },
+// Every var `vite build` requires, and where each comes from: the API URLs and
+// the photo origins are backend-stack outputs; the Cognito pool is
+// hand-provisioned outside this repo (no stack can output it), so those four
+// are `.env.deploy` inputs. The WEB_CSP_* pair feeds only the build-time CSP
+// (internals/csp.mjs) and never reaches the bundle.
+export const BUILD_VARS = [
+  { name: 'VITE_APP_WS_URL', source: 'stack', key: 'WebsocketUrl' },
+  { name: 'VITE_APP_API_URL', source: 'stack', key: 'HttpApiUrl' },
+  { name: 'VITE_APP_COGNITO_USER_POOL_ID', source: 'env', key: 'COGNITO_USER_POOL_ID' },
+  { name: 'VITE_APP_COGNITO_CLIENT_ID', source: 'env', key: 'COGNITO_CLIENT_ID' },
+  { name: 'VITE_APP_COGNITO_DOMAIN', source: 'env', key: 'COGNITO_DOMAIN' },
+  { name: 'VITE_APP_COGNITO_TIMER_GROUP', source: 'env', key: 'COGNITO_TIMER_GROUP' },
+  { name: 'WEB_CSP_PHOTO_CDN_DOMAIN', source: 'stack', key: 'PhotoCdnDomain' },
+  { name: 'WEB_CSP_PHOTO_UPLOAD_ORIGIN', source: 'stack', key: 'PhotoUploadOrigin' },
 ];
 
-/** The backend stack outputs buildViteEnv needs — what to ask describe-stacks for. */
-export const BACKEND_OUTPUTS = VITE_VARS.filter((v) => v.source === 'stack').map((v) => v.key);
+/** The backend stack outputs buildEnv needs — what to ask describe-stacks for. */
+export const BACKEND_OUTPUTS = BUILD_VARS.filter((v) => v.source === 'stack').map((v) => v.key);
 
 /**
- * The `VITE_APP_*` env the production build runs with, or a throw naming every
- * unresolved var and where it should have come from. No var has a default: a
- * bundle built with a guessed API URL points a live event at the wrong backend.
+ * The env the production build runs with, or a throw naming every unresolved
+ * var and where it should have come from. No var has a default: a bundle built
+ * with a guessed API URL points a live event at the wrong backend.
  */
-export function buildViteEnv({ outputs = {}, env = {}, stack } = {}) {
-  const viteEnv = {};
+export function buildEnv({ outputs = {}, env = {}, stack } = {}) {
+  const resolved = {};
   const missing = [];
-  for (const { vite, source, key } of VITE_VARS) {
+  for (const { name, source, key } of BUILD_VARS) {
     const raw = source === 'stack' ? outputs[key] : env[key];
     const value = typeof raw === 'string' ? raw.trim() : '';
-    if (value) viteEnv[vite] = value;
-    else missing.push({ vite, source, key });
+    if (value) resolved[name] = value;
+    else missing.push({ name, source, key });
   }
   if (missing.length > 0) {
     const where = ({ source, key }) =>
@@ -88,10 +92,10 @@ export function buildViteEnv({ outputs = {}, env = {}, stack } = {}) {
         : `${key} (repo-root .env.deploy)`;
     throw new Error(
       'unresolved deploy config — refusing to build:\n' +
-        missing.map((m) => `   ${m.vite.padEnd(30)} <- ${where(m)}`).join('\n') +
+        missing.map((m) => `   ${m.name.padEnd(30)} <- ${where(m)}`).join('\n') +
         '\nAdd the missing entries to the git-ignored `.env.deploy` (template: ' +
         '.env.deploy.example), and deploy the backend stack so it publishes its outputs.',
     );
   }
-  return viteEnv;
+  return resolved;
 }

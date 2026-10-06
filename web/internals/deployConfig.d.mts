@@ -7,11 +7,11 @@ export declare function liveStack(
   ledgerPath?: string,
 ): { name: string; region: string };
 
-export declare const VITE_VARS: { vite: string; source: 'stack' | 'env'; key: string }[];
+export declare const BUILD_VARS: { name: string; source: 'stack' | 'env'; key: string }[];
 
 export declare const BACKEND_OUTPUTS: string[];
 
-export declare function buildViteEnv(opts?: {
+export declare function buildEnv(opts?: {
   outputs?: Record<string, string | undefined>;
   env?: Record<string, string | undefined>;
   stack?: { name?: string; region?: string };
