@@ -6,8 +6,8 @@ import { BillingStack } from '../../infra/billing-stack';
 
 // The cost backstop (ADR 0031 §1). Invariants pinned here: the $55 (≈€50)
 // monthly Budget with 50/80/100% actual+forecast notifications, the us-east-1
-// EstimatedCharges alarm at the same USD ceiling, and both routing to one SNS
-// email topic. USD is the single currency of truth — AWS Budgets rejects EUR in
+// EstimatedCharges alarm at $25 (an earlier warning than the Budget's 100%), and
+// the alarm routing to one SNS email topic. USD is the single currency of truth — AWS Budgets rejects EUR in
 // this account. A silent revert of the ceiling or a dropped notification tier
 // fails CI.
 const NOTIFY_EMAIL = 'billing-alerts@example.org';
@@ -65,13 +65,13 @@ describe('monthly cost Budget', () => {
 });
 
 describe('EstimatedCharges billing alarm', () => {
-  it('alarms on the USD-denominated us-east-1 billing metric at the €50-equivalent ceiling', () => {
+  it('alarms on the USD-denominated us-east-1 billing metric at $25, below the Budget', () => {
     template.hasResourceProperties('AWS::CloudWatch::Alarm', {
       Namespace: 'AWS/Billing',
       MetricName: 'EstimatedCharges',
       Dimensions: [{ Name: 'Currency', Value: 'USD' }],
       ComparisonOperator: 'GreaterThanThreshold',
-      Threshold: 55,
+      Threshold: 25,
       EvaluationPeriods: 1,
       TreatMissingData: 'notBreaching',
     });

@@ -85,6 +85,9 @@ export function createApp(context?: Record<string, unknown>): App {
   new SlacklineTimerV1Stack(app, 'slackline-timer-v1', {
     stage,
     cognito,
+    // One alert address for both topics: the ops alarms here (eu-central-2) and
+    // the billing alarm in us-east-1, which reads the same key itself.
+    alertEmail: requireDeployConfig(app, 'billingAlertEmail', 'BILLING_ALERT_EMAIL'),
     env: { region: 'eu-central-2', account },
     description: `slackline-timer-v1 backend (${stage}) — WS relay + competition data plane + photo CDN`,
   });

@@ -14,3 +14,10 @@ export declare const uploadPhoto: (
   compId: string,
   filePath: string,
 ) => Promise<string>;
+
+export declare const makeCall: (opts: {
+  api: string;
+  token: string;
+  retryDelayMs?: number;
+  maxRetries?: number;
+}) => SeedCall;

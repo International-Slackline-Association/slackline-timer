@@ -34,17 +34,26 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /**
  * Build the `call(method, path, body)` helper both seeders use:
  * an authenticated JSON fetch against one API base, returning `{ status, body }`.
+ * A 429 (the per-route HTTP throttle, infra/slackline-stack.ts) is retried with
+ * exponential backoff — a sequential roster replay outruns the athlete bucket,
+ * and an unretried 429 would drop that record from the seed.
  */
 export const makeCall =
-  ({ api, token }) =>
+  ({ api, token, retryDelayMs = 500, maxRetries = 5 }) =>
   async (method, path, body) => {
-    const r = await fetch(`${api}${path}`, {
-      method,
-      headers: { Authorization: token, 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
+    for (let attempt = 0; ; attempt++) {
+      const r = await fetch(`${api}${path}`, {
+        method,
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const text = await r.text();
+      if (r.status === 429 && attempt < maxRetries) {
+        await sleep(retryDelayMs * 2 ** attempt);
+        continue;
+      }
+      return { status: r.status, body: text ? JSON.parse(text) : null };
+    }
   };
 
 /**

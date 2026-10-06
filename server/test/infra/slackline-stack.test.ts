@@ -22,9 +22,11 @@ const COGNITO: CognitoConfig = {
 };
 
 const app = new App({ context: { 'aws:cdk:bundling-stacks': [] } });
+const ALERT_EMAIL = 'ops-alerts@example.org';
 const stack = new SlacklineTimerV1Stack(app, 'slackline-timer-v1', {
   stage: 'prod',
   cognito: COGNITO,
+  alertEmail: ALERT_EMAIL,
   env: { region: 'eu-central-2', account: '111111111111' },
 });
 const template = Template.fromStack(stack);
@@ -262,7 +264,7 @@ describe('Lambdas', () => {
     }
   });
 
-  it('grants relay access + WS fan-out only to messageHandler and the db_update writers', () => {
+  it('grants relay access + WS fan-out to messageHandler and the db_update writers', () => {
     const writers = [
       'CompetitionsFunction',
       'AthletesFunction',
@@ -300,11 +302,21 @@ describe('Lambdas', () => {
 
   // Grant items share the COMP# partition with every other entity, so a narrower
   // grant would need per-SK-prefix key conditions.
-  it('keeps managers full read-write on the competition table, off the relay', () => {
+  it('keeps managers full read-write on the competition table', () => {
     const actions = actionsOn('ManagersFunction', 'CompetitionTable');
     for (const a of ['dynamodb:PutItem', 'dynamodb:DeleteItem', 'dynamodb:Query'])
       expect(actions).toContain(a);
-    expect(fnPolicy('ManagersFunction')).not.toContain('SpeedlineTimerTable');
+  });
+
+  // ADR 0053: a grant revoke closes the sub's sockets via core/broadcast.ts
+  // disconnectSession — list the session (Query), close (ManageConnections),
+  // prune a 410'd row (DeleteItem). Nothing else on the relay.
+  it('limits managers to relay Query + DeleteItem plus ManageConnections', () => {
+    expect(actionsOn('ManagersFunction', 'SpeedlineTimerTable')).toEqual([
+      'dynamodb:DeleteItem',
+      'dynamodb:Query',
+    ]);
+    expect(fnPolicy('ManagersFunction')).toContain('execute-api:ManageConnections');
   });
 
   // L3: core/offline.ts gates the offline branches (incl. the `local-dev`
@@ -481,6 +493,15 @@ describe('WebSocket relay', () => {
       },
     });
   });
+
+  it('carries no per-route throttles on the WS stage', () => {
+    const wsStages = template.findResources('AWS::ApiGatewayV2::Stage', {
+      Properties: { ApiId: { Ref: Match.stringLikeRegexp('^WebsocketsApi') } },
+    });
+    const [ws] = Object.values(wsStages);
+    expect(ws).toBeDefined();
+    expect(ws.Properties.RouteSettings).toBeUndefined();
+  });
 });
 
 describe('HTTP data plane', () => {
@@ -494,8 +515,8 @@ describe('HTTP data plane', () => {
     });
   });
 
-  // ADR 0031 §2 — default-stage throttling: ~20 rps / 40 burst, above a live
-  // admin + ~15 overlays refreshing on db_update, below a flood.
+  // ADR 0031 §2 — the stage default now meters only requests matching no route;
+  // every route carries its own bucket (below).
   it('throttles the default stage at 20 rps / 40 burst', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
       StageName: 'prod',
@@ -504,6 +525,84 @@ describe('HTTP data plane', () => {
         ThrottlingBurstLimit: 40,
       },
     });
+  });
+
+  const httpStage = () => {
+    const stages = template.findResources('AWS::ApiGatewayV2::Stage', {
+      Properties: { ApiId: { Ref: Match.stringLikeRegexp('^HttpApi') } },
+    });
+    const entries = Object.entries(stages);
+    expect(entries).toHaveLength(1);
+    const [logicalId, res] = entries[0];
+    return {
+      logicalId,
+      dependsOn: (res.DependsOn ?? []) as string[],
+      routeSettings: res.Properties.RouteSettings as Record<
+        string,
+        { ThrottlingRateLimit: number; ThrottlingBurstLimit: number }
+      >,
+    };
+  };
+  const httpRoutes = () =>
+    Object.entries(template.findResources('AWS::ApiGatewayV2::Route')).filter(
+      ([, r]) => !String(r.Properties.RouteKey).startsWith('$'),
+    );
+
+  // M1: per-route buckets so an overlay-read flood cannot drain the writes. The
+  // numbers are pinned literally; re-sizing them is a deliberate test edit.
+  it('throttles every route by class (write 10/20, read 30/60, roster 5/10, admin 2/5)', () => {
+    const C = '/competitions';
+    const WRITE = { ThrottlingRateLimit: 10, ThrottlingBurstLimit: 20 };
+    const READ = { ThrottlingRateLimit: 30, ThrottlingBurstLimit: 60 };
+    const ROSTER = { ThrottlingRateLimit: 5, ThrottlingBurstLimit: 10 };
+    const ADMIN = { ThrottlingRateLimit: 2, ThrottlingBurstLimit: 5 };
+    expect(httpStage().routeSettings).toEqual({
+      [`GET ${C}`]: READ,
+      [`GET ${C}/{compId}`]: READ,
+      [`GET ${C}/{compId}/athletes`]: READ,
+      [`GET ${C}/{compId}/athletes/{athleteId}`]: READ,
+      [`GET ${C}/{compId}/times`]: READ,
+      [`GET ${C}/{compId}/scores`]: READ,
+      [`GET ${C}/{compId}/matches`]: READ,
+      [`GET ${C}/{compId}/rankings/{round}`]: READ,
+      [`POST ${C}/{compId}/times`]: WRITE,
+      [`PUT ${C}/{compId}/times/{timeId}`]: WRITE,
+      [`DELETE ${C}/{compId}/times/{timeId}`]: WRITE,
+      [`POST ${C}/{compId}/scores`]: WRITE,
+      [`PUT ${C}/{compId}/scores/{scoreId}`]: WRITE,
+      [`DELETE ${C}/{compId}/scores/{scoreId}`]: WRITE,
+      [`POST ${C}/{compId}/matches`]: WRITE,
+      [`PUT ${C}/{compId}/matches/{matchId}`]: WRITE,
+      [`DELETE ${C}/{compId}/matches/{matchId}`]: WRITE,
+      [`POST ${C}/{compId}/athletes`]: ROSTER,
+      [`PUT ${C}/{compId}/athletes/{athleteId}`]: ROSTER,
+      [`DELETE ${C}/{compId}/athletes/{athleteId}`]: ROSTER,
+      [`POST ${C}/{compId}/photo-uploads`]: ROSTER,
+      [`POST ${C}`]: ADMIN,
+      [`PUT ${C}/{compId}`]: ADMIN,
+      [`POST ${C}/{compId}/revoke-read-tokens`]: ADMIN,
+      [`POST ${C}/{compId}/read-tokens`]: ADMIN,
+      [`POST ${C}/{compId}/matches/seed`]: ADMIN,
+      [`POST ${C}/{compId}/matches/advance`]: ADMIN,
+      [`GET ${C}/{compId}/managers`]: ADMIN,
+      [`POST ${C}/{compId}/managers`]: ADMIN,
+      [`DELETE ${C}/{compId}/managers/{sub}`]: ADMIN,
+    });
+  });
+
+  it('keys RouteSettings by exactly the synthesized HTTP route keys', () => {
+    const routeKeys = httpRoutes().map(([, r]) => r.Properties.RouteKey as string);
+    expect(routeKeys).toHaveLength(HTTP_ROUTE_COUNT);
+    expect(Object.keys(httpStage().routeSettings).sort()).toEqual(routeKeys.sort());
+  });
+
+  // A RouteSettings key naming a route CFN has not created yet fails the deploy
+  // ("Unable to find Route by key").
+  it('makes the HTTP stage depend on every HTTP route', () => {
+    const { dependsOn } = httpStage();
+    for (const [logicalId, r] of httpRoutes()) {
+      expect(dependsOn, r.Properties.RouteKey as string).toContain(logicalId);
+    }
   });
 
   it('exposes exactly the documented route surface', () => {
@@ -608,11 +707,173 @@ describe('AWS WAF', () => {
   });
 });
 
+// L10: early warning for relay/authorizer throttling, relay errors, data-plane
+// 5xx and log-ingest cost, on a topic in the stack's own region (alarm actions
+// cannot cross regions; the billing topic is us-east-1).
+describe('operational alarms', () => {
+  const alarms = () =>
+    Object.values(template.findResources('AWS::CloudWatch::Alarm')).map(
+      (a) => a.Properties as Record<string, unknown>,
+    );
+  const alarmNamed = (name: string) => {
+    const alarm = alarms().find((a) => a.AlarmName === `slackline-timer-v1-${name}-prod`);
+    expect(alarm, name).toBeDefined();
+    return alarm!;
+  };
+  const opsTopicId = () => {
+    const topics = template.findResources('AWS::SNS::Topic', {
+      Properties: { TopicName: 'slackline-timer-v1-ops-prod' },
+    });
+    const ids = Object.keys(topics);
+    expect(ids).toHaveLength(1);
+    return ids[0];
+  };
+  // `fnRef` for CDK Match assertions, `refTo` for vitest toMatchObject.
+  const fnRef = (prefix: string) => ({ Ref: Match.stringLikeRegexp(`^${prefix}[0-9A-F]{8}$`) });
+  const refTo = (prefix: string) => ({ Ref: expect.stringMatching(`^${prefix}[0-9A-F]{8}$`) });
+  const lambdaStat = (id: string, fnPrefix: string, metricName: string, period: number) =>
+    Match.objectLike({
+      Id: id,
+      MetricStat: {
+        Metric: {
+          Namespace: 'AWS/Lambda',
+          MetricName: metricName,
+          Dimensions: [{ Name: 'FunctionName', Value: fnRef(fnPrefix) }],
+        },
+        Period: period,
+        Stat: 'Sum',
+      },
+      ReturnData: false,
+    });
+  const logStat = (id: string, logGroupPrefix: string) =>
+    Match.objectLike({
+      Id: id,
+      MetricStat: {
+        Metric: {
+          Namespace: 'AWS/Logs',
+          MetricName: 'IncomingBytes',
+          Dimensions: [{ Name: 'LogGroupName', Value: fnRef(logGroupPrefix) }],
+        },
+        Period: 3600,
+        Stat: 'Sum',
+      },
+      ReturnData: false,
+    });
+
+  it('subscribes the alert email to an ops topic in the backend region', () => {
+    const topicId = opsTopicId();
+    template.hasResourceProperties('AWS::SNS::Subscription', {
+      Protocol: 'email',
+      Endpoint: ALERT_EMAIL,
+      TopicArn: { Ref: topicId },
+    });
+  });
+
+  it('synthesizes exactly five alarms, each notifying the ops topic and quiet on no data', () => {
+    const topicId = opsTopicId();
+    expect(alarms()).toHaveLength(5);
+    for (const a of alarms()) {
+      expect(a.AlarmActions, String(a.AlarmName)).toEqual([{ Ref: topicId }]);
+      expect(a.TreatMissingData, String(a.AlarmName)).toBe('notBreaching');
+      expect(a.EvaluationPeriods, String(a.AlarmName)).toBe(1);
+      expect(a.DatapointsToAlarm, String(a.AlarmName)).toBe(1);
+    }
+  });
+
+  it('alarms on any messageHandler throttle within 1 min', () => {
+    expect(alarmNamed('message-handler-throttles')).toMatchObject({
+      Namespace: 'AWS/Lambda',
+      MetricName: 'Throttles',
+      Dimensions: [{ Name: 'FunctionName', Value: refTo('MessageHandlerFunction') }],
+      Statistic: 'Sum',
+      Period: 60,
+      Threshold: 1,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+    });
+  });
+
+  it('alarms on any WS + HTTP authorizer throttle within 5 min', () => {
+    const alarm = alarmNamed('authorizer-throttles');
+    expect(alarm).toMatchObject({
+      Threshold: 1,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'slackline-timer-v1-authorizer-throttles-prod',
+      Metrics: [
+        Match.objectLike({ Expression: 'FILL(ws, 0) + FILL(http, 0)', ReturnData: true }),
+        lambdaStat('ws', 'AuthorizerFunction', 'Throttles', 300),
+        lambdaStat('http', 'HttpAuthorizerFunction', 'Throttles', 300),
+      ],
+    });
+  });
+
+  it('alarms on any messageHandler error within 5 min', () => {
+    expect(alarmNamed('message-handler-errors')).toMatchObject({
+      Namespace: 'AWS/Lambda',
+      MetricName: 'Errors',
+      Dimensions: [{ Name: 'FunctionName', Value: refTo('MessageHandlerFunction') }],
+      Statistic: 'Sum',
+      Period: 300,
+      Threshold: 1,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+    });
+  });
+
+  it('alarms on 5 or more HTTP API 5xx within 5 min', () => {
+    expect(alarmNamed('http-api-5xx')).toMatchObject({
+      Namespace: 'AWS/ApiGateway',
+      MetricName: '5xx',
+      Dimensions: [{ Name: 'ApiId', Value: refTo('HttpApi') }],
+      Statistic: 'Sum',
+      Period: 300,
+      Threshold: 5,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+    });
+  });
+
+  it('alarms when relay + authorizer log ingest exceeds 1 GiB in an hour', () => {
+    expect(alarmNamed('log-ingest')).toMatchObject({
+      Threshold: 1024 ** 3,
+      ComparisonOperator: 'GreaterThanThreshold',
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'slackline-timer-v1-log-ingest-prod',
+      Metrics: [
+        Match.objectLike({
+          Expression: 'FILL(msg, 0) + FILL(wsAuth, 0) + FILL(httpAuth, 0)',
+          ReturnData: true,
+        }),
+        logStat('msg', 'MessageHandlerFunctionLogGroup'),
+        logStat('wsAuth', 'AuthorizerFunctionLogGroup'),
+        logStat('httpAuth', 'HttpAuthorizerFunctionLogGroup'),
+      ],
+    });
+  });
+});
+
 describe('outputs', () => {
   it('exports the three endpoints the web app + docs reference', () => {
     template.hasOutput('HttpApiUrl', Match.anyValue());
     template.hasOutput('WebsocketUrl', Match.anyValue());
     template.hasOutput('PhotoCdnDomain', Match.anyValue());
+  });
+
+  // The web build's CSP connect-src allows exactly this origin (ADR 0054), so
+  // it must be the host createPresignedPost returns as `url`:
+  // `https://<bucket>.s3.<region>.amazonaws.com/`, the bucket's regional name.
+  it('exports the photo upload origin as the bucket regional domain', () => {
+    template.hasOutput('PhotoUploadOrigin', {
+      Value: {
+        'Fn::Join': [
+          '',
+          [
+            'https://',
+            { 'Fn::GetAtt': [Match.stringLikeRegexp('^PhotosBucket'), 'RegionalDomainName'] },
+          ],
+        ],
+      },
+    });
   });
 });
 

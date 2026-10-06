@@ -23,7 +23,9 @@ import { defineWafToggle, makeRateBasedWebAcl } from './waf';
 // CloudWatch EstimatedCharges metric is USD-only too — so USD is the single
 // currency of truth for both backstops. $55 ≈ €50 with round headroom.
 const BUDGET_LIMIT_USD = 55;
-const ALARM_THRESHOLD_USD = 55;
+// Below the Budget so the alarm warns before the ceiling rather than with it
+// (the Budget's own 100% notification already covers $55).
+const ALARM_THRESHOLD_USD = 25;
 
 export interface BillingStackProps extends StackProps {
   stage: string;
@@ -95,7 +97,7 @@ export class BillingStack extends Stack {
     });
     const alarm = new Alarm(this, 'EstimatedChargesAlarm', {
       alarmName: `slackline-timer-v1-estimated-charges-${stage}`,
-      alarmDescription: `Account estimated charges exceeded US$${ALARM_THRESHOLD_USD} (≈ €50).`,
+      alarmDescription: `Account estimated charges exceeded US$${ALARM_THRESHOLD_USD} this month (Budget US$${BUDGET_LIMIT_USD}).`,
       metric: estimatedCharges,
       threshold: ALARM_THRESHOLD_USD,
       comparisonOperator: ComparisonOperator.GREATER_THAN_THRESHOLD,
