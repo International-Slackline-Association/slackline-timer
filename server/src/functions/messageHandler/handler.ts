@@ -1,6 +1,16 @@
 import { APIGatewayProxyHandler } from 'aws-lambda';
 import { broadcastToSession } from 'core/broadcast';
 import { db } from 'core/db';
+import { safe, safeQuoted } from 'core/logSafe';
+import { isOffline } from 'core/offline';
+
+import {
+  canonicalRequestState,
+  createConnectionDamper,
+  createDropSummary,
+  parseAck,
+  parseFrame,
+} from './frame';
 
 /**
  * Relay-trace detail: the allowlisted `data` fields worth logging per message
@@ -21,28 +31,46 @@ const TRACE_DATA_FIELDS = [
   'matchId',
 ] as const;
 
+const TRACE_MAX_CHARS = 512;
+
 const traceSummary = (data: unknown): string => {
   if (typeof data !== 'object' || data === null) return '';
   const source = data as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const key of TRACE_DATA_FIELDS) {
-    if (source[key] !== undefined) out[key] = source[key];
+    const value = source[key];
+    if (value === undefined) continue;
+    // Numbers stay numbers so Logs Insights can still compare epochs.
+    out[key] =
+      typeof value === 'number' || typeof value === 'boolean'
+        ? value
+        : safe(typeof value === 'string' ? value : JSON.stringify(value));
   }
-  return Object.keys(out).length ? ` details=${JSON.stringify(out)}` : '';
+  return Object.keys(out).length ? ` details=${JSON.stringify(out).slice(0, TRACE_MAX_CHARS)}` : '';
 };
+
+const DAMPER_WINDOW_MS = 60_000;
+// A client pings every 8 min against a 20 min row TTL (core/db.ts), so more
+// than one refresh per connection per minute is a flood.
+const pingDamper = createConnectionDamper({ windowMs: DAMPER_WINDOW_MS, maxEntries: 5000 });
+// A page sends one `request_state` per socket OPEN (ADR 0050).
+const requestStateDamper = createConnectionDamper({ windowMs: 5_000, maxEntries: 5000 });
+const drops = createDropSummary({ windowMs: DAMPER_WINDOW_MS, log: (line) => console.log(line) });
 
 export const main: APIGatewayProxyHandler = async (event) => {
   const connectionId = event.requestContext.connectionId!;
+  const now = Date.now();
 
-  // A malformed frame from an authorized client is a drop, not an invocation error.
-  let message: { type?: string; sessionId?: string; data?: unknown };
-  try {
-    message = JSON.parse(event.body || '{}');
-  } catch {
-    console.log(`drop: malformed frame from ${connectionId}`);
+  // A bad frame from an authorized client is a drop, not an invocation error.
+  // `type` and `sessionId` are pattern-checked here, so they log unescaped below.
+  const parsed = parseFrame(event.body);
+  if (!parsed.ok) {
+    drops.note(parsed.reason, now);
     return { statusCode: 200, body: 'Dropped' };
   }
-  const sessionId = message.sessionId || 'default';
+  drops.flush(now);
+  const message = parsed.frame;
+  const sessionId = message.sessionId ?? 'default';
 
   // App-level keepalive (ADR 0024): clients ping every ~8 min so API Gateway's
   // 10-min idle timeout never fires. The send itself already reset the idle timer.
@@ -51,14 +79,28 @@ export const main: APIGatewayProxyHandler = async (event) => {
   // (db.ts) — conditional-on-existence there, so a ping racing an expiry/prune
   // can't resurrect the row, and a failed refresh must never fail the keepalive.
   // Handled before the membership/read-only checks and the fan-out: a ping stays
-  // out of the drop log and never relays.
+  // out of the drop log and never relays. The damper bounds a ping flood to one
+  // refresh per connection per minute per container.
   if (message.type === 'ping') {
-    await db.refreshConnectionTtl({ sessionId, connectionId }).catch(() => {});
+    if (pingDamper.admit(connectionId, now)) {
+      await db.refreshConnectionTtl({ sessionId, connectionId }).catch(() => {});
+    }
     return { statusCode: 200, body: 'Keepalive' };
   }
 
+  const ack = message.type === 'ack' ? parseAck(message.data) : null;
+  if (message.type === 'ack' && !ack) {
+    drops.note('invalidAck', now);
+    return { statusCode: 200, body: 'Dropped' };
+  }
+
+  const isRequestState = message.type === 'request_state';
+  if (isRequestState && !requestStateDamper.admit(connectionId, now)) {
+    drops.note('limited', now);
+    return { statusCode: 200, body: 'Dropped' };
+  }
+
   try {
-    // Sender must be a member of the session; read-only (overlay) connections can't inject.
     const sender = await db.getConnection({ sessionId, connectionId });
     if (!sender) {
       console.log(`drop: ${connectionId} is not a member of session ${sessionId}`);
@@ -71,42 +113,31 @@ export const main: APIGatewayProxyHandler = async (event) => {
     // can join a `relay stop … delivered=N` line with the acks for its key and
     // name the consumers that went silent. Allowed from read-only overlays
     // (handled before the guard below); carries no relayable state.
-    if (message.type === 'ack') {
-      const d = (message.data ?? {}) as {
-        of?: unknown;
-        key?: unknown;
-        page?: unknown;
-        ua?: unknown;
-      };
+    if (ack) {
       console.log(
-        `ack ${d.of ?? '?'} key=${d.key ?? '-'} page=${d.page ?? '?'} from ${connectionId} session=${sessionId} ua="${d.ua ?? '?'}"`,
+        `ack ${ack.of} key=${ack.key ?? '-'} page=${safe(ack.page ?? '?')} from ${connectionId} session=${sessionId} ua="${safeQuoted(ack.ua ?? '?')}"`,
       );
       return { statusCode: 200, body: 'Ack' };
     }
-    // Read-only (overlay) connections can't inject relayable state — with one
-    // exception: `request_state` carries no data of its own, it only prompts the
-    // read-write control panels to re-broadcast their current selection/snapshot,
-    // which the overlay is already authorized to read. Without this an overlay
-    // joining mid-event can never catch up (the board re-pushes `updateSelection`
-    // only on a change / its own OPEN / a peer panel's request), so a freshly-
-    // opened VS/SVO overlay sticks on its positional fallback until the operator
-    // pokes the board again.
-    if (sender.readOnly && message.type !== 'request_state') {
+    // Read-only (overlay) connections can't inject relayable state. Their one
+    // admitted frame, `request_state`, only prompts the panels to re-send state
+    // the overlay may already read; it is relayed canonical and to panels only.
+    if (sender.readOnly && !isRequestState) {
       console.log(`drop: read-only connection ${connectionId} tried to send ${message.type}`);
       return { statusCode: 200, body: 'Dropped' };
     }
 
     // Offline: the local WS harness management API (WS_API_ENDPOINT), not the domainName/stage URL.
-    const endpoint =
-      process.env.IS_OFFLINE === 'true'
-        ? (process.env.WS_API_ENDPOINT ?? 'http://127.0.0.1:3001')
-        : `https://${event.requestContext.domainName}/${event.requestContext.stage}`;
+    const endpoint = isOffline()
+      ? (process.env.WS_API_ENDPOINT ?? 'http://127.0.0.1:3001')
+      : `https://${event.requestContext.domainName}/${event.requestContext.stage}`;
 
     const { delivered, pruned, failed, retried } = await broadcastToSession({
       endpoint,
       sessionId,
-      payload: message,
+      payload: isRequestState ? canonicalRequestState(message, sessionId) : message,
       excludeConnectionId: connectionId,
+      includeReadOnly: !isRequestState,
     });
     // Per-message delivery trace: `pruned` means a peer's socket was already
     // dead when we relayed (it missed this message until it reconnects and

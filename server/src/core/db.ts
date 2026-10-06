@@ -112,30 +112,24 @@ const getConnectionSession = async (connectionId: string): Promise<string | null
  */
 const refreshConnectionTtl = async (params: { sessionId: string; connectionId: string }) => {
   const ddb_ttl = ttlFromNow();
-  // Independent, not transactional: the map item may legitimately be absent (a
-  // socket predating it), and only the forward row's outcome may propagate —
-  // losing its heartbeat would evict a live socket 20 min later.
-  const [forward] = await Promise.allSettled([
+  const refresh = (Key: Record<string, string>) =>
     ddb.send(
       new UpdateCommand({
         TableName: SPEEDLINE_TIMER_TABLE,
-        Key: { PK: params.sessionId, SK: params.connectionId },
+        Key,
         UpdateExpression: 'SET ddb_ttl = :ttl',
         ConditionExpression: 'attribute_exists(PK)',
         ExpressionAttributeValues: { ':ttl': ddb_ttl },
       }),
-    ),
-    ddb.send(
-      new UpdateCommand({
-        TableName: SPEEDLINE_TIMER_TABLE,
-        Key: { PK: connectionMapPk(params.connectionId), SK: CONNECTION_MAP_SK },
-        UpdateExpression: 'SET ddb_ttl = :ttl',
-        ConditionExpression: 'attribute_exists(PK)',
-        ExpressionAttributeValues: { ':ttl': ddb_ttl },
-      }),
-    ),
-  ]);
-  if (forward.status === 'rejected') throw forward.reason;
+    );
+  // Forward row first, and its failure propagates: a ping naming a session the
+  // socket is not in fails here and never reaches the map item. Not
+  // transactional, as the map item may legitimately be absent (a socket
+  // predating it) and only the forward row's heartbeat keeps a live socket.
+  await refresh({ PK: params.sessionId, SK: params.connectionId });
+  await refresh({ PK: connectionMapPk(params.connectionId), SK: CONNECTION_MAP_SK }).catch(
+    () => {},
+  );
 };
 
 const getConnection = async (params: { sessionId: string; connectionId: string }) => {

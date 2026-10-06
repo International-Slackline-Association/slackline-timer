@@ -139,6 +139,8 @@ export const broadcastToSession = async (params: {
   sessionId: string;
   payload: unknown;
   excludeConnectionId?: string;
+  /** False fans out to read-write (control-panel) connections only. */
+  includeReadOnly?: boolean;
   /** Test seam: override the retry backoff timers/jitter. Prod uses real timers. */
   retry?: Partial<RetryDeps>;
 }): Promise<{ delivered: number; pruned: number; failed: number; retried: number }> => {
@@ -146,8 +148,9 @@ export const broadcastToSession = async (params: {
   const api = apiClient(params.endpoint);
   const data = Buffer.from(JSON.stringify(params.payload), 'utf-8');
 
+  const includeReadOnly = params.includeReadOnly ?? true;
   const connections = (await db.getAllConnections(params.sessionId)).filter(
-    (c) => c.connectionId !== params.excludeConnectionId,
+    (c) => c.connectionId !== params.excludeConnectionId && (includeReadOnly || !c.readOnly),
   );
 
   const results = await mapSettled(connections, FANOUT_CONCURRENCY, async (conn) => {
