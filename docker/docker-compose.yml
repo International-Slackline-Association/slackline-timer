@@ -15,10 +15,12 @@
 services:
   localstack:
     # Community edition (free, tokenless): DynamoDB + S3 are fully supported.
-    # Pinned to the :3 line on purpose — :latest / the 2026.x builds refuse to
-    # boot without a LOCALSTACK_AUTH_TOKEN (exit 55, "License activation failed"),
-    # even for community services. Phase 2 (LocalStack Pro) revisits image + token.
-    image: localstack/localstack:3
+    # Pinned to the :3 line — :latest / the 2026.x builds refuse to boot without
+    # a LOCALSTACK_AUTH_TOKEN (exit 55, "License activation failed"), even for
+    # community services. Phase 2 (LocalStack Pro) revisits image + token.
+    # Same reference as the CI service in .github/workflows/ci.yml; Dependabot
+    # bumps neither: manual bump of both together (digest of 3.8.1).
+    image: localstack/localstack:3.8.1@sha256:b279c01f4cfb8f985a482e4014cabc1e2697b9d7a6c8c8db2e40f4d9f93687c7
     container_name: slackline-localstack
     ports:
       - '4566:4566'
