@@ -9,9 +9,9 @@
 // The only prod behaviour it synthesizes is the APIGatewayProxyEventV2 shape;
 // the authorizer context comes from running the REAL httpAuthorizer, so the
 // reader plane is exercisable locally — read tokens stay read-only, revocation is
-// honored, requireAdmin 403s, forAudience strips PII. The one deliberate
-// divergence: a bare request with no Authorization header falls back to a
-// hard-coded admin context so tooling (curl, integration probes) keeps working.
+// honored, requireAdmin 403s, forAudience strips PII. As in prod, a request
+// without an Authorization header is a 401; tooling sends the `local-dev` dummy.
+// Bind address, Host and Origin checks: lib/harnessGuard.mjs.
 //
 // Handlers are TypeScript with path-alias imports, so each is bundled once with
 // esbuild at startup and dynamic-imported as CJS — see localWsHarness.mjs
@@ -24,18 +24,15 @@ import { join } from 'node:path';
 
 import { build } from 'esbuild';
 
+import { harnessGuard } from './lib/harnessGuard.mjs';
 import { handleHealthRequest, HTTP_HARNESS_ID } from './lib/harnessHealth.mjs';
 import { applyOfflineEnv } from './offlineEnv.mjs';
 
 applyOfflineEnv();
 
 const HTTP_PORT = Number(process.env.HTTP_PORT ?? 3002);
+const guard = harnessGuard(HTTP_PORT);
 const require = createRequire(import.meta.url);
-
-// Fallback for bare tooling requests that carry no Authorization header (curl,
-// integration probes): run as an operator (admin, all comps). A request that
-// *does* carry a credential is resolved by the real httpAuthorizer instead.
-const ADMIN_AUTH = { role: 'admin', compId: '*' };
 
 const loadHandler = async (entry, name) => {
   const outfile = join(tmpdir(), `slackline-http-${name}-${process.pid}.cjs`);
@@ -108,14 +105,14 @@ const compileRoute = ([fn, method, path]) => ({
   segs: path.split('/').filter(Boolean),
 });
 
-/** Match method + path segments against a compiled route, returning its path params or null. */
+/** Match method + decoded path segments against a compiled route, returning its path params or null. */
 const matchRoute = (route, method, segs) => {
   if (route.method !== method || route.segs.length !== segs.length) return null;
   const params = {};
   for (let i = 0; i < route.segs.length; i++) {
     const tpl = route.segs[i];
     if (tpl.startsWith('{') && tpl.endsWith('}')) {
-      params[tpl.slice(1, -1)] = decodeURIComponent(segs[i]);
+      params[tpl.slice(1, -1)] = segs[i];
     } else if (tpl !== segs[i]) {
       return null;
     }
@@ -137,6 +134,15 @@ const sendJson = (res, statusCode, payload) => {
   res.end(JSON.stringify(payload));
 };
 
+/** Split the path into segments, decoding each; null on a malformed `%` escape. */
+const decodeSegments = (pathname) => {
+  try {
+    return pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  } catch {
+    return null;
+  }
+};
+
 const run = async () => {
   const handlerNames = [...new Set(ROUTES.map(([fn]) => fn))];
   const [authorize, ...handlerMains] = await Promise.all([
@@ -146,25 +152,39 @@ const run = async () => {
   const handlers = Object.fromEntries(handlerNames.map((name, i) => [name, handlerMains[i]]));
   const routes = ROUTES.map(compileRoute);
 
-  const server = createServer(async (req, res) => {
+  const serve = async (req, res) => {
+    if (!guard.isAllowedHost(req.headers.host)) {
+      sendJson(res, 421, { message: 'unexpected Host header' });
+      return;
+    }
+    const { origin } = req.headers;
+    if (origin !== undefined && !guard.isAllowedOrigin(origin)) {
+      sendJson(res, 403, { message: 'origin not allowed' });
+      return;
+    }
+    if (origin !== undefined) {
+      res.setHeader('access-control-allow-origin', origin);
+      res.setHeader('vary', 'Origin');
+    }
+
     const method = req.method ?? 'GET';
-    // CORS preflight — the harness serves the browser dev server cross-origin.
     if (method === 'OPTIONS') {
       res.writeHead(204, {
-        'access-control-allow-origin': '*',
         'access-control-allow-headers': 'Content-Type, Authorization',
         'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
       });
       res.end();
       return;
     }
-    res.setHeader('access-control-allow-origin', '*');
 
-    // Harness-identifying readiness probe (lib/harnessHealth.mjs).
     if (handleHealthRequest(req, res, HTTP_HARNESS_ID)) return;
 
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${HTTP_PORT}`);
-    const segs = url.pathname.split('/').filter(Boolean);
+    const segs = decodeSegments(url.pathname);
+    if (!segs) {
+      sendJson(res, 400, { message: 'malformed path encoding' });
+      return;
+    }
 
     let matched;
     let pathParameters;
@@ -186,14 +206,14 @@ const run = async () => {
       Object.entries(req.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(',') : v]),
     );
 
-    let auth = ADMIN_AUTH;
-    if (headers.authorization ?? headers.Authorization) {
-      const decision = await authorize({ headers, routeArn: matched.routeKey });
-      if (!decision?.isAuthorized) {
-        sendJson(res, 403, { message: 'unauthorized' });
-        return;
-      }
-      auth = decision.context;
+    if (!headers.authorization) {
+      sendJson(res, 401, { message: 'Unauthorized' });
+      return;
+    }
+    const decision = await authorize({ headers, routeArn: matched.routeKey });
+    if (!decision?.isAuthorized) {
+      sendJson(res, 403, { message: 'Forbidden' });
+      return;
     }
 
     const event = {
@@ -206,28 +226,32 @@ const run = async () => {
       pathParameters,
       requestContext: {
         http: { method, path: url.pathname },
-        authorizer: { lambda: auth },
+        authorizer: { lambda: decision.context },
       },
       body,
       isBase64Encoded: false,
     };
 
-    try {
-      const result = await handlers[matched.fn](event, {}, () => undefined);
-      res.writeHead(result.statusCode ?? 200, {
-        'content-type': 'application/json',
-        ...result.headers,
-        'access-control-allow-origin': '*',
-      });
-      res.end(result.body ?? '');
-    } catch (err) {
-      console.error(`handler ${matched.fn} threw for ${matched.routeKey}:`, err);
-      sendJson(res, 500, { message: 'harness: handler threw', error: String(err) });
-    }
+    const result = await handlers[matched.fn](event, {}, () => undefined);
+    res.writeHead(result.statusCode ?? 200, {
+      'content-type': 'application/json',
+      ...result.headers,
+    });
+    res.end(result.body ?? '');
+  };
+
+  const server = createServer((req, res) => {
+    serve(req, res).catch((err) => {
+      console.error(`harness: ${req.method} ${req.url} failed:`, err);
+      if (res.headersSent) res.end();
+      else sendJson(res, 500, { message: 'harness: request failed', error: String(err) });
+    });
   });
 
-  server.listen(HTTP_PORT, '0.0.0.0', () => {
-    console.log(`🌐 local HTTP data plane on http://127.0.0.1:${HTTP_PORT} (SAM-free harness)`);
+  server.listen(HTTP_PORT, guard.bindHost, () => {
+    console.log(
+      `🌐 local HTTP data plane on http://${guard.bindHost}:${HTTP_PORT} (SAM-free harness)`,
+    );
   });
 };
 
