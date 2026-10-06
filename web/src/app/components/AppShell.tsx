@@ -23,6 +23,7 @@ import { BrandMark } from 'app/components/BrandMark';
 import { useSelectedCompetition } from 'app/state/selectedCompetition';
 import { useQueryParams } from 'app/hooks/useQueryParams';
 import { AdminBreadcrumbs } from 'app/components/AdminBreadcrumbs';
+import { displaySurface } from 'app/pages/Stream/overlayBg';
 import { controlTargets } from 'app/theme/tokens';
 
 /**
@@ -55,12 +56,7 @@ const NAV_SECTIONS: readonly NavSection[] = [
 ];
 
 /** Projector / OBS surfaces that must stay full-bleed (no AppBar). */
-export const isChromeless = (pathname: string): boolean =>
-  pathname.startsWith('/stream/') ||
-  pathname.endsWith('/preview') ||
-  // The audience-facing Freestyle athlete display (venue twin of
-  // /stream/athletes-freestyle) is a full-bleed venue screen like the previews.
-  pathname === '/freestyle/athletes';
+export const isChromeless = (pathname: string): boolean => displaySurface(pathname) !== null;
 
 /** The nav `to` whose section the current path belongs to, or false (no tab). */
 const activeSection = (pathname: string): string | false => {

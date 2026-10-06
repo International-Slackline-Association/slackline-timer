@@ -34,7 +34,7 @@ import '@fontsource/saira-condensed/600.css';
 import '@fontsource/saira-condensed/700.css';
 import '@fontsource/saira-condensed/800.css';
 
-import { withErrorBoundry } from './components/ErrorBoundary';
+import { ControlBoundary, OverlayBoundary, withErrorBoundry } from './components/ErrorBoundary';
 import { AppShell } from './components/AppShell';
 import { AuthGate } from './auth/gate';
 import { SpeedlineControlPage } from './pages/Speedline/ControlPage';
@@ -43,7 +43,7 @@ import { SpeedlineStreamTimer } from './pages/Speedline/StreamTimer';
 import { FreestyleControlPage } from './pages/Freestyle/ControlPage';
 import { FreestylePreviewPage } from './pages/Freestyle/PreviewPage';
 import { FreestyleStreamTimer } from './pages/Freestyle/StreamTimer';
-import { FreestyleAthleteDisplay } from './pages/Freestyle/FreestyleAthleteDisplay';
+import { FreestyleVenueAthletes } from './pages/Freestyle/VenueAthletes';
 import { StreamAthletesFreestyle } from './pages/Stream/StreamAthletesFreestyle';
 import { AdminLiveRefresh } from './pages/Admin/AdminLiveRefresh';
 import { CompetitionsPage } from './pages/Admin/CompetitionsPage';
@@ -116,16 +116,15 @@ export function App() {
                 <AppShell>
                   <Routes>
                     <Route path="/" element={<Navigate to="/admin/competitions" replace />} />
-                    <Route path="/speedline/control" element={<SpeedlineControlPage />} />
-                    <Route path="/speedline/preview" element={<SpeedlinePreviewPage />} />
-                    <Route path="/freestyle/control" element={<FreestyleControlPage />} />
-                    <Route path="/freestyle/preview" element={<FreestylePreviewPage />} />
-                    {/* Full-screen audience-facing athlete display (venue twin of
-                        /stream/athletes-freestyle). */}
-                    <Route
-                      path="/freestyle/athletes"
-                      element={<FreestyleAthleteDisplay variant="venue" />}
-                    />
+                    <Route element={<ControlBoundary />}>
+                      <Route path="/speedline/control" element={<SpeedlineControlPage />} />
+                      <Route path="/freestyle/control" element={<FreestyleControlPage />} />
+                    </Route>
+                    <Route element={<OverlayBoundary />}>
+                      <Route path="/speedline/preview" element={<SpeedlinePreviewPage />} />
+                      <Route path="/freestyle/preview" element={<FreestylePreviewPage />} />
+                      <Route path="/freestyle/athletes" element={<FreestyleVenueAthletes />} />
+                    </Route>
                     {/* Pathless layout: db_update live refresh for every admin page. */}
                     <Route element={<AdminLiveRefresh />}>
                       <Route path="/admin/competitions" element={<CompetitionsPage />} />
@@ -170,25 +169,30 @@ export function App() {
                         </Suspense>
                       }
                     />
-                    <Route path="/stream/timer" element={<SpeedlineStreamTimer />} />
-                    <Route path="/stream/timer-freestyle" element={<FreestyleStreamTimer />} />
-                    <Route
-                      path="/stream/athletes-freestyle"
-                      element={<StreamAthletesFreestyle />}
-                    />
-                    <Route path="/stream/rankings/:round/:gender" element={<RankingsOverlay />} />
-                    <Route path="/stream/scorecard/:round/:gender" element={<ScoreCardOverlay />} />
-                    <Route path="/stream/vs/:round/:gender" element={<VsOverlay />} />
-                    <Route path="/stream/vs-live/:gender" element={<VsLiveOverlay />} />
-                    <Route path="/stream/winner/:round/:gender" element={<WinnerOverlay />} />
-                    <Route
-                      path="/stream/rounds-summary/:round/:gender"
-                      element={<RoundsSummaryOverlay />}
-                    />
-                    <Route path="/stream/svo/:athleteId" element={<SvoOverlay />} />
-                    <Route path="/stream/svo-live/:side" element={<SvoLiveOverlay />} />
-                    <Route path="/stream/brackets/:gender" element={<BracketsOverlay />} />
-                    <Route path="/stream/bridge" element={<BridgePage />} />
+                    <Route element={<OverlayBoundary />}>
+                      <Route path="/stream/timer" element={<SpeedlineStreamTimer />} />
+                      <Route path="/stream/timer-freestyle" element={<FreestyleStreamTimer />} />
+                      <Route
+                        path="/stream/athletes-freestyle"
+                        element={<StreamAthletesFreestyle />}
+                      />
+                      <Route path="/stream/rankings/:round/:gender" element={<RankingsOverlay />} />
+                      <Route
+                        path="/stream/scorecard/:round/:gender"
+                        element={<ScoreCardOverlay />}
+                      />
+                      <Route path="/stream/vs/:round/:gender" element={<VsOverlay />} />
+                      <Route path="/stream/vs-live/:gender" element={<VsLiveOverlay />} />
+                      <Route path="/stream/winner/:round/:gender" element={<WinnerOverlay />} />
+                      <Route
+                        path="/stream/rounds-summary/:round/:gender"
+                        element={<RoundsSummaryOverlay />}
+                      />
+                      <Route path="/stream/svo/:athleteId" element={<SvoOverlay />} />
+                      <Route path="/stream/svo-live/:side" element={<SvoLiveOverlay />} />
+                      <Route path="/stream/brackets/:gender" element={<BracketsOverlay />} />
+                      <Route path="/stream/bridge" element={<BridgePage />} />
+                    </Route>
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </AppShell>

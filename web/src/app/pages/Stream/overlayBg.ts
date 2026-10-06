@@ -19,6 +19,33 @@ const ALIASES: Record<string, string> = {
   h2r: 'transparent',
 };
 
+/**
+ * Each display surface's ground when `?bg=` is absent: the projector keys on the
+ * magenta chroma, the venue screen sits on the void, OBS sources composite on
+ * alpha. The pages pick theirs by `variant`; `displaySurface` picks the same
+ * entry by route for the error boundaries, which render with the page gone.
+ */
+export const SURFACE_GROUND = {
+  projector: colors.chromaKey,
+  venue: colors.surface.void,
+  broadcast: 'transparent',
+  stream: 'transparent',
+} as const;
+
+export type DisplaySurface = keyof typeof SURFACE_GROUND;
+
+/** The display surface a route renders, or null for an operator page. */
+export const displaySurface = (pathname: string): DisplaySurface | null => {
+  if (pathname.startsWith('/stream/')) return 'stream';
+  if (pathname.endsWith('/preview')) return 'projector';
+  if (pathname === '/freestyle/athletes') return 'venue';
+  return null;
+};
+
+/** The ground a route paints when `?bg=` is absent (alpha off the display routes). */
+export const routeGround = (pathname: string): string =>
+  SURFACE_GROUND[displaySurface(pathname) ?? 'stream'];
+
 /** `?bg=` values that flip the colour-adaptation overrides on. */
 const KEY_COMPOSITE_MODES = new Set(['h2r']);
 

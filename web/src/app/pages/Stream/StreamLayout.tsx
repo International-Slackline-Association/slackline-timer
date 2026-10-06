@@ -11,7 +11,7 @@ import { isDiscipline, type Discipline } from 'app/types';
 import { overlayTextShadow } from 'app/theme/tokens';
 import { useStreamRefresh } from 'app/pages/Stream/useStreamRefresh';
 import { refVh, refVw } from 'app/util/overlayScale';
-import { applyOverlayBodyStyle } from 'app/pages/Stream/overlayBg';
+import { applyOverlayBodyStyle, SURFACE_GROUND } from 'app/pages/Stream/overlayBg';
 import { type StreamStatus } from 'app/pages/Stream/streamStatus';
 
 /**
@@ -87,7 +87,7 @@ export const StreamLayout = ({
   // overlay starts in `error`. A valid URL starts `loading` until the body reports.
   const [status, setStatus] = useState<StreamStatus>(compId ? 'loading' : 'error');
 
-  useEffect(() => applyOverlayBodyStyle(search), [search]);
+  useEffect(() => applyOverlayBodyStyle(search, SURFACE_GROUND.stream), [search]);
 
   return (
     <Box

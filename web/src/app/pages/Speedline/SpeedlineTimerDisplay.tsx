@@ -11,7 +11,7 @@ import {
   speedlineLaneState,
   type SpeedlineLaneState,
 } from 'app/util/timerSnapshot';
-import { colors, overlayTextShadow } from 'app/theme/tokens';
+import { overlayTextShadow } from 'app/theme/tokens';
 import {
   INITIAL_SELECTION_STAMP,
   acceptSelectionStamp,
@@ -20,7 +20,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ReadyState } from 'react-use-websocket';
-import { applyOverlayBodyStyle } from 'app/pages/Stream/overlayBg';
+import { applyOverlayBodyStyle, SURFACE_GROUND } from 'app/pages/Stream/overlayBg';
 import { refVh } from 'app/util/overlayScale';
 import { activeStartLanes } from 'app/util/raceTime';
 import { Stopwatch } from './Stopwatch';
@@ -169,9 +169,16 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
     setFalseStarts(next);
   };
 
-  const { lastJsonMessage, readyState, sendWSMessage, sendAck } = useWS<StopwatchWSMessage>({
+  // The last lane-scoped frame, handed to both Stopwatches. Set inside the
+  // flushed delivery (ADR 0051), so each one commits — and runs the Stopwatch
+  // effects — before the next frame is handled.
+  const [laneFrame, setLaneFrame] = useState<StopwatchWSMessage | undefined>(undefined);
+
+  const { readyState, sendWSMessage, sendAck } = useWS<StopwatchWSMessage>({
     sessionId,
     readToken,
+    // Declared below, after the light/recovery plumbing it drives.
+    onMessage: (message) => handleFrame(message),
   });
   const link = useLinkPhase(readyState);
 
@@ -182,10 +189,7 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
 
   // The same body-style dance StreamLayout does for /stream/*; the variant only
   // sets the DEFAULT ground and `?bg=` overrides it (see this file's JSDoc).
-  useEffect(
-    () => applyOverlayBodyStyle(search, variant === 'projector' ? colors.chromaKey : 'transparent'),
-    [variant, search],
-  );
+  useEffect(() => applyOverlayBodyStyle(search, SURFACE_GROUND[variant]), [variant, search]);
 
   useEffect(() => {
     if (readyState === ReadyState.OPEN) {
@@ -196,11 +200,8 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
     }
   }, [readyState]);
 
-  useEffect(() => {
-    if (!lastJsonMessage) {
-      return;
-    }
-    const { data, type } = lastJsonMessage;
+  const handleFrame = (message: StopwatchWSMessage) => {
+    const { data, type } = message;
     // Any live timer message after open is newer truth than a pending snapshot.
     if (
       type === 'start' ||
@@ -221,6 +222,9 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         key: type === 'start' ? data.startTime : type === 'stop' ? data.stopTime : undefined,
         page: window.location.pathname,
       });
+    }
+    if (type === 'start' || type === 'stop' || type === 'resume' || type === 'reset') {
+      setLaneFrame(message);
     }
     switch (type) {
       case 'reset':
@@ -311,7 +315,7 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         // board's selection must never drive the speed display. Drop it BEFORE the
         // LWW stamp so a foreign seq can't shadow a real speed push.
         if (data.discipline !== 'speed') break;
-        const stamp = acceptSelectionStamp(selectionStampRef.current, lastJsonMessage);
+        const stamp = acceptSelectionStamp(selectionStampRef.current, message);
         if (!stamp) break;
         selectionStampRef.current = stamp;
         applyFalseStarts(data.falseStarts ?? { 1: 0, 2: 0 }, true);
@@ -319,7 +323,7 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         break;
       }
     }
-  }, [lastJsonMessage]);
+  };
 
   // Beeps for the mirrored sequence: each phase fires on its own local timer off
   // the operator's relayed anchor, so the beep is exact. Sound it only while it's
@@ -361,7 +365,7 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         <Stopwatch
           isReady={isReadyToDisplay}
           timerId={lane}
-          lastJsonMessage={lastJsonMessage}
+          laneFrame={laneFrame}
           recovery={recovery[lane]}
           size="plate"
           plateAlign={side}
@@ -391,14 +395,8 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
       {/* The graded link, split across the corner pair: the in-progress cue inside
           the grace, the alarm past it — both invisible on chroma grounds (the
           projector default). */}
-      <ConnectingBadge
-        link={link}
-        defaultBg={variant === 'projector' ? colors.chromaKey : 'transparent'}
-      />
-      <ConnectionLostBadge
-        link={link}
-        defaultBg={variant === 'projector' ? colors.chromaKey : 'transparent'}
-      />
+      <ConnectingBadge link={link} defaultBg={SURFACE_GROUND[variant]} />
+      <ConnectionLostBadge link={link} defaultBg={SURFACE_GROUND[variant]} />
       {/* Projector-only: it paints on the chroma ground too (unlike the badges
           above), but the broadcast overlay composites over live video where a
           muted tab is irrelevant — suppress it there. See AudioMutedBadge. */}

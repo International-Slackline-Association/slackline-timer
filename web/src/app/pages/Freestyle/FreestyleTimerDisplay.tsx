@@ -4,13 +4,13 @@ import { AudioMutedBadge } from 'app/components/AudioMutedBadge';
 import { ConnectingBadge } from 'app/components/ConnectingBadge';
 import { ConnectionLostBadge } from 'app/components/ConnectionLostBadge';
 import { useLinkPhase } from 'app/hooks/useLinkPhase';
-import { colors, fonts, OVERLAY_LANE, overlayTextShadow } from 'app/theme/tokens';
+import { fonts, OVERLAY_LANE, overlayTextShadow } from 'app/theme/tokens';
 import { useAthleteLookup } from 'app/hooks/useAthleteLookup';
 import { useQueryParams } from 'app/hooks/useQueryParams';
 import { CORNER_INSET_X, TimerLaneBlock } from 'app/pages/Stream/TimerLaneBlock';
 import { RankingsBody } from 'app/pages/Stream/RankingsOverlay';
 import { isGender, isMatchRound } from 'app/types';
-import { applyOverlayBodyStyle } from 'app/pages/Stream/overlayBg';
+import { applyOverlayBodyStyle, SURFACE_GROUND } from 'app/pages/Stream/overlayBg';
 import { refVh } from 'app/util/overlayScale';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -97,11 +97,7 @@ export const FreestyleTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
   // The same body-style dance StreamLayout does for /stream/*; the variant only
   // sets the DEFAULT ground and `?bg=` overrides it (see this file's JSDoc).
   useEffect(
-    () =>
-      applyOverlayBodyStyle(
-        location.search,
-        variant === 'projector' ? colors.chromaKey : 'transparent',
-      ),
+    () => applyOverlayBodyStyle(location.search, SURFACE_GROUND[variant]),
     [variant, location.search],
   );
 
@@ -139,14 +135,8 @@ export const FreestyleTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
       {/* The graded link, split across the corner pair: the in-progress cue inside
           the grace, the alarm past it — both invisible on chroma grounds (the
           projector default). */}
-      <ConnectingBadge
-        link={link}
-        defaultBg={variant === 'projector' ? colors.chromaKey : 'transparent'}
-      />
-      <ConnectionLostBadge
-        link={link}
-        defaultBg={variant === 'projector' ? colors.chromaKey : 'transparent'}
-      />
+      <ConnectingBadge link={link} defaultBg={SURFACE_GROUND[variant]} />
+      <ConnectionLostBadge link={link} defaultBg={SURFACE_GROUND[variant]} />
       {/* Projector-only: it paints on the chroma ground too (unlike the badges
           above), but the broadcast overlay composites over live video where a
           muted tab is irrelevant — suppress it there. See AudioMutedBadge. */}
