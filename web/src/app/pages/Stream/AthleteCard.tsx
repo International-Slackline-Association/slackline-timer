@@ -16,6 +16,7 @@ import {
   overlayMarkHalo,
   overlayTypeFloor,
 } from 'app/theme/tokens';
+import { cssUrl } from 'app/util/cssUrl';
 import { refVh } from 'app/util/overlayScale';
 import { resultInk } from 'app/util/resultLabel';
 
@@ -185,7 +186,7 @@ export const AthleteCard = ({
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: athlete && !athlete.photoUrl ? colors.overlay.plateFilled : undefined,
-          backgroundImage: athlete?.photoUrl ? `url(${athlete.photoUrl})` : undefined,
+          backgroundImage: cssUrl(athlete?.photoUrl),
           backgroundSize: 'cover',
           backgroundPosition: 'center top',
           backgroundRepeat: 'no-repeat',

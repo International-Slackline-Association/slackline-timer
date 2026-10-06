@@ -14,7 +14,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 
 import { useCompetition, useUpdateCompetition } from 'app/api/competitions';
-import { DEFAULT_FREESTYLE_BREAK_MS } from 'app/types';
+import { DEFAULT_FREESTYLE_BREAK_MS, FIELD_LIMITS } from 'app/types';
 import { apiErrorMessage } from 'app/util/apiError';
 
 interface EditForm {
@@ -100,7 +100,13 @@ export const EditCompetitionPage = () => {
               slotProps={{ input: { readOnly: true } }}
               disabled
             />
-            <TextField label="Name" value={form.name} onChange={update('name')} required />
+            <TextField
+              label="Name"
+              value={form.name}
+              onChange={update('name')}
+              slotProps={{ htmlInput: { maxLength: FIELD_LIMITS.competitionName } }}
+              required
+            />
             <TextField
               label="Start date"
               type="date"
@@ -123,7 +129,9 @@ export const EditCompetitionPage = () => {
               helperText="Break between freestyle runs. Defaults to 30s."
               value={form.breakSec}
               onChange={update('breakSec')}
-              slotProps={{ htmlInput: { min: 1, step: 1 } }}
+              slotProps={{
+                htmlInput: { min: 1, max: FIELD_LIMITS.breakMs.max / 1000, step: 1 },
+              }}
             />
             {updateCompetition.isError && (
               <Alert severity="error">{apiErrorMessage(updateCompetition.error)}</Alert>

@@ -3,9 +3,9 @@ import { FormControlLabel, Switch, TextField } from '@mui/material';
 import { useCreateTime, useUpdateTime } from 'app/api/times';
 import { SelectField, enumOptions } from 'app/components/SelectField';
 import { EntityFormDialog, useEntityForm } from 'app/pages/Admin/entityForm';
-import { TIME_ROUNDS, type Athlete, type Time, type TimeRound } from 'app/types';
+import { FIELD_LIMITS, TIME_ROUNDS, type Athlete, type Time, type TimeRound } from 'app/types';
 import { roundLabel } from 'app/util/rounds';
-import { DNF_SENTINEL, formatMs, isValidTimeFormat, parseTimeString } from 'app/util/time';
+import { DNF_SENTINEL, formatMs, parseTimeString } from 'app/util/time';
 
 /** Local form shape: time is edited as a `M:SS.hh` string, DNF as a toggle. */
 interface FormState {
@@ -50,11 +50,12 @@ export const TimeForm = ({
     onClose,
   });
 
-  const timeInvalid = !form.dnf && !isValidTimeFormat(form.timeStr);
+  const parsedMs = parseTimeString(form.timeStr);
+  const timeInvalid = !form.dnf && (parsedMs === null || parsedMs > FIELD_LIMITS.timeMs.max);
   const canSubmit = form.athleteId !== '' && !timeInvalid;
 
   const onSubmit = () => {
-    const timeMs = form.dnf ? DNF_SENTINEL : (parseTimeString(form.timeStr) ?? 0);
+    const timeMs = form.dnf ? DNF_SENTINEL : (parsedMs ?? 0);
     submit({
       athleteId: form.athleteId,
       round: form.round,
@@ -90,7 +91,7 @@ export const TimeForm = ({
       />
       <TextField
         label="Time"
-        helperText="Format M:SS.hh, e.g. 1:23.45"
+        helperText="Format M:SS.hh, e.g. 1:23.45 (at most 24 h)"
         value={form.timeStr}
         onChange={updateField('timeStr')}
         disabled={form.dnf}

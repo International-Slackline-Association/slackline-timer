@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { APIGatewayProxyHandlerV2WithLambdaAuthorizer } from 'aws-lambda';
 import { publishDbUpdate } from 'core/broadcast';
 import { competitionDb } from 'core/competitionDb';
-import { computeEventExpiry } from 'core/eventWindow';
+import { computePhotoUrlExpiry } from 'core/eventWindow';
 import {
   AuthContext,
   HttpError,
@@ -17,13 +17,34 @@ import {
   requireWrite,
 } from 'core/http';
 import { attachPhotoUrl, photoUrlSignerFromEnv } from 'core/photoUrl';
-import { validateAthleteInput } from 'core/validators';
+import { MAX_ATHLETES_PER_COMP, validateAthleteInput } from 'core/validators';
+
+/**
+ * A `photoKey` must sit under this competition's `photos/<compId>/` prefix: the
+ * signer would otherwise mint fresh URLs for another event's photos with this
+ * event's expiry. On PUT (`athleteId` given) a foreign key is grandfathered while
+ * unchanged — `renameCompId --skip-photos` leaves keys under the old compId
+ * (ADR 0052). The stored athlete is read only in that mismatch case.
+ */
+const assertOwnPhotoKey = async (
+  compId: string,
+  photoKey: string | undefined,
+  athleteId?: string,
+): Promise<void> => {
+  if (photoKey === undefined || photoKey.startsWith(`photos/${compId}/`)) return;
+  if (athleteId !== undefined) {
+    const stored = await competitionDb.getAthlete(compId, athleteId);
+    if (stored?.photoKey === photoKey) return;
+  }
+  throw new HttpError(400, 'invalid athlete', [`photoKey must be under photos/${compId}/`]);
+};
 
 /**
  * Athlete CRUD (mirrors timertimer's AthleteLive paths). Reads embed a
  * CloudFront-signed photoUrl that dies with the competition; deletes are
  * blocked while Times, Matches, or Scores still reference the athlete (DynamoDB has no
- * FKs — referential integrity is on us).
+ * FKs — referential integrity is on us). Create is capped at
+ * `MAX_ATHLETES_PER_COMP` (a soft cap: two concurrent creates may both pass).
  */
 export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = async (event) => {
   try {
@@ -36,7 +57,7 @@ export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = a
     const routeKey = event.routeKey;
     const signer = await photoUrlSignerFromEnv();
     const withPhoto = <T extends { photoKey?: string }>(entity: T) =>
-      attachPhotoUrl(entity, signer, computeEventExpiry(competition.endDate, Date.now()));
+      attachPhotoUrl(entity, signer, computePhotoUrlExpiry(competition.endDate, Date.now()));
 
     if (routeKey === 'GET /competitions/{compId}/athletes') {
       const athletes = await competitionDb.listAthletes(compId);
@@ -49,6 +70,10 @@ export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = a
     if (routeKey === 'POST /competitions/{compId}/athletes') {
       requireWrite(auth);
       const input = parseBody(event, validateAthleteInput, 'invalid athlete');
+      await assertOwnPhotoKey(compId, input.photoKey);
+      if ((await competitionDb.countAthletes(compId)) >= MAX_ATHLETES_PER_COMP) {
+        throw new HttpError(409, `competition already has ${MAX_ATHLETES_PER_COMP} athletes`);
+      }
 
       const athlete = { ...input, athleteId: randomUUID(), compId };
       await competitionDb.createAthlete(athlete);
@@ -73,6 +98,7 @@ export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = a
     if (routeKey === 'PUT /competitions/{compId}/athletes/{athleteId}') {
       requireWrite(auth);
       const input = parseBody(event, validateAthleteInput, 'invalid athlete');
+      await assertOwnPhotoKey(compId, input.photoKey, athleteId);
 
       const athlete = { ...input, athleteId, compId };
       await competitionDb.updateAthlete(athlete);

@@ -49,7 +49,8 @@
 // Auth: pass --profile and the script materializes that profile's (SSO) creds
 // into the env itself — no `eval "$(aws configure export-credentials …)"` dance
 // needed (the SDK can't resolve the SSO cache directly on this box; see
-// loadProfileCreds). With no --profile it uses the ambient env / default chain.
+// loadProfileCreds in lib/awsCli.mjs). With no --profile it uses the ambient
+// env / default chain.
 // Expired SSO? `aws sso login --profile <p>` first.
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -61,7 +62,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 
-import { parseArgs, resolveProfile, runAws, runMain } from '../lib/awsCli.mjs';
+import { loadProfileCreds, parseArgs, resolveProfile, runMain } from '../lib/awsCli.mjs';
 
 const DEFAULTS = {
   region: 'eu-central-2',
@@ -74,34 +75,6 @@ const compPk = (id) => `COMP#${id}`;
 const photoPrefix = (id) => `photos/${id}/`;
 const chunk = (arr, n) =>
   Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
-
-/**
- * Materialize concrete temporary credentials for `profile` into the env.
- *
- * The AWS SDK's default chain does NOT reliably resolve the SSO token cache on
- * this box: `--profile` alone fails "security token included in the request is
- * invalid" even right after `aws sso login` (the plain CLI refreshes SSO fine,
- * which is why `aws sts get-caller-identity` can succeed while this script
- * can't). The CLI's `export-credentials` DOES refresh SSO, so we shell out to it
- * and load the resulting keys into `process.env`, where the SDK's fromEnv
- * provider — first in the chain — picks them up. Same workaround the CDK deploys
- * use; see doc/dev/deploy.md §8.
- *
- * `env-no-export` emits bare `AWS_*=value` lines (no `export`, no quotes); values
- * can contain `=` and `/` (the session token), so split on the FIRST `=` only.
- * AWS_PROFILE is then cleared so the concrete env creds win outright and nothing
- * re-triggers the failing SSO role-assume.
- */
-function loadProfileCreds(profile) {
-  const out = runAws(['configure', 'export-credentials', '--format', 'env-no-export'], { profile });
-  for (const line of out.split('\n')) {
-    const eq = line.indexOf('=');
-    if (eq > 0 && line.startsWith('AWS_')) {
-      process.env[line.slice(0, eq)] = line.slice(eq + 1).trim();
-    }
-  }
-  delete process.env.AWS_PROFILE;
-}
 
 const HELP = `Rename a competition's compId across DynamoDB + S3 (dry-run unless --yes).
 

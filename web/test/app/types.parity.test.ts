@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BATTLE_ONLY_SCORE_COMPONENTS,
   DISCIPLINE,
+  FIELD_LIMITS,
   GENDERS,
   MATCH_ROUNDS,
   SCORE_COMPONENT_MAX,
@@ -80,6 +81,10 @@ describe('web ↔ server type parity', () => {
 
   it('score-component maxima are identical', () => {
     expect(SCORE_COMPONENT_MAX).toEqual(serverTypes.SCORE_COMPONENT_MAX);
+  });
+
+  it('input bounds are identical', () => {
+    expect(FIELD_LIMITS).toEqual(serverTypes.FIELD_LIMITS);
   });
 
   it('battle-only score components are identical', () => {

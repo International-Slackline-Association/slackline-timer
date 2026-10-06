@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { DNF_SENTINEL } from 'core/types';
+import { DNF_SENTINEL, FIELD_LIMITS } from 'core/types';
 import {
+  isBoundedString,
+  isFiniteInRange,
+  isId,
+  isIntInRange,
   validateAthleteInput,
   validateCompetitionInput,
   validateCompetitionUpdateInput,
@@ -137,13 +141,13 @@ describe('validateAthleteInput', () => {
       ...valid,
       country2: 'DE',
       notes: 'left-footed',
-      photoKey: 'photos/c/abc.jpg',
+      photoKey: `photos/c/${'a'.repeat(64)}.jpg`,
     });
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value.country2).toBe('DE');
       expect(r.value.notes).toBe('left-footed');
-      expect(r.value.photoKey).toBe('photos/c/abc.jpg');
+      expect(r.value.photoKey).toBe(`photos/c/${'a'.repeat(64)}.jpg`);
     }
   });
 
@@ -396,14 +400,14 @@ describe('validateScoreInput', () => {
     expect(r.ok).toBe(true);
   });
 
-  it('accepts a component exactly at its maximum, and leaves controlPenalty uncapped', () => {
+  it('accepts every component exactly at its maximum', () => {
     const atMax = validateScoreInput({
       ...valid,
       difficulty: 40,
       combo: 30,
       style: 30,
       bestTrick: 20,
-      controlPenalty: 999,
+      controlPenalty: 100,
     });
     expect(atMax.ok).toBe(true);
   });
@@ -467,5 +471,219 @@ describe('validateScoreInput', () => {
   it('rejects a non-string / empty matchId', () => {
     expect(validateScoreInput({ ...valid, matchId: 5 }).ok).toBe(false);
     expect(validateScoreInput({ ...valid, matchId: '  ' }).ok).toBe(false);
+  });
+});
+
+describe('input bounds (ADR 0052): at the bound passes, one past fails', () => {
+  const NOW = Date.UTC(2026, 9, 6);
+  const str = (n: number) => 'x'.repeat(n);
+  const HASH = 'a'.repeat(64);
+
+  it('helpers', () => {
+    expect(isBoundedString(str(3), 3)).toBe(true);
+    expect(isBoundedString(str(4), 3)).toBe(false);
+    expect(isBoundedString(3, 3)).toBe(false);
+    expect(isIntInRange(5, 0, 5)).toBe(true);
+    expect(isIntInRange(6, 0, 5)).toBe(false);
+    expect(isIntInRange(1.5, 0, 5)).toBe(false);
+    expect(isIntInRange('1', 0, 5)).toBe(false);
+    expect(isFiniteInRange(-1, -1, 0)).toBe(true);
+    expect(isFiniteInRange(Number.NaN, -1, 0)).toBe(false);
+    expect(isFiniteInRange(Infinity, 0, Infinity)).toBe(false);
+  });
+
+  it('ids: a uuid and 64 chars pass; 65 chars, bad chars and empty fail', () => {
+    expect(isId('3f2504e0-4f89-11d3-9a0c-0305e82c3301')).toBe(true);
+    expect(isId(str(FIELD_LIMITS.id))).toBe(true);
+    expect(isId(str(FIELD_LIMITS.id + 1))).toBe(false);
+    for (const bad of ['', 'a b', 'a/b', 'a.b', 'ä', 'a\n', 'a1 ', 7]) {
+      expect(isId(bad)).toBe(false);
+    }
+  });
+
+  describe('competition', () => {
+    const create = { compId: 'c', startDate: '2026-07-01', endDate: '2026-07-05' };
+    const update = { startDate: '2026-07-01', endDate: '2026-07-05' };
+
+    it('name ≤ competitionName', () => {
+      const max = FIELD_LIMITS.competitionName;
+      expect(validateCompetitionInput({ ...create, name: str(max) }).ok).toBe(true);
+      expect(validateCompetitionInput({ ...create, name: str(max + 1) }).ok).toBe(false);
+      expect(validateCompetitionUpdateInput({ ...update, name: str(max) }).ok).toBe(true);
+      expect(validateCompetitionUpdateInput({ ...update, name: str(max + 1) }).ok).toBe(false);
+    });
+
+    it('compId is an id', () => {
+      expect(validateCompetitionInput({ ...create, name: 'n', compId: str(64) }).ok).toBe(true);
+      expect(validateCompetitionInput({ ...create, name: 'n', compId: str(65) }).ok).toBe(false);
+    });
+
+    it('breakMs within 1..600 000', () => {
+      const withBreak = (breakMs: unknown) =>
+        validateCompetitionUpdateInput({ ...update, name: 'n', config: { freestyle: { breakMs } } })
+          .ok;
+      expect(withBreak(FIELD_LIMITS.breakMs.min)).toBe(true);
+      expect(withBreak(FIELD_LIMITS.breakMs.max)).toBe(true);
+      expect(withBreak(FIELD_LIMITS.breakMs.min - 1)).toBe(false);
+      expect(withBreak(FIELD_LIMITS.breakMs.max + 1)).toBe(false);
+    });
+  });
+
+  describe('athlete', () => {
+    const valid = {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      birthDate: '2000-01-31',
+      country: 'CH',
+      gender: 'female',
+    };
+    const ok = (over: Record<string, unknown>) =>
+      validateAthleteInput({ ...valid, ...over }, NOW).ok;
+
+    it.each([
+      ['firstName', FIELD_LIMITS.firstName],
+      ['lastName', FIELD_LIMITS.lastName],
+      ['shortName', FIELD_LIMITS.shortName],
+      ['notes', FIELD_LIMITS.notes],
+    ])('%s ≤ %i', (field, max) => {
+      expect(ok({ [field]: str(max) })).toBe(true);
+      expect(ok({ [field]: str(max + 1) })).toBe(false);
+    });
+
+    it('legacy name ≤ legacyName, and its split halves obey the name bounds', () => {
+      const legacy = (name: string) =>
+        validateAthleteInput({ ...valid, firstName: undefined, lastName: undefined, name }, NOW).ok;
+      const half = str(FIELD_LIMITS.firstName);
+      expect(legacy(`${half} ${half}`)).toBe(true);
+      expect(legacy(`${half} ${half}x`)).toBe(false);
+      expect(legacy(str(FIELD_LIMITS.firstName + 1))).toBe(false);
+    });
+
+    it('birthDate year within 1900..this year', () => {
+      expect(ok({ birthDate: '1900-01-01' })).toBe(true);
+      expect(ok({ birthDate: '2026-12-31' })).toBe(true);
+      expect(ok({ birthDate: '1899-12-31' })).toBe(false);
+      expect(ok({ birthDate: '2027-01-01' })).toBe(false);
+    });
+
+    it.each(['CH', 'ch', 'SUI', 'GER', '756', ' DE '])('accepts country %j', (code) => {
+      expect(ok({ country: code, country2: code })).toBe(true);
+    });
+
+    it.each(['', 'C', 'SWISS', '75', '7566', 'C1', 'Switzerland'])('rejects country %j', (code) => {
+      expect(ok({ country: code })).toBe(false);
+      expect(ok({ country2: code })).toBe(false);
+    });
+
+    it('photoKey must be a content-hashed photos/ key', () => {
+      expect(ok({ photoKey: `photos/other-comp/${HASH}.webp` })).toBe(true);
+      for (const bad of [
+        'photos/c/abc.png',
+        `photos/c/${HASH}.gif`,
+        `photos/c/${HASH.toUpperCase()}.jpg`,
+        `photos/a b/${HASH}.jpg`,
+        `photos/c/../${HASH}.jpg`,
+        `other/c/${HASH}.jpg`,
+        `photos/${str(65)}/${HASH}.jpg`,
+      ]) {
+        expect(ok({ photoKey: bad })).toBe(false);
+      }
+    });
+  });
+
+  describe('time', () => {
+    const ok = (over: Record<string, unknown>) =>
+      validateTimeInput({ athleteId: 'a1', round: 'final', timeMs: 10, ...over }, NOW).ok;
+
+    it('timeMs within 0..24 h, including the DNF sentinel', () => {
+      expect(ok({ timeMs: 0 })).toBe(true);
+      expect(ok({ timeMs: DNF_SENTINEL })).toBe(true);
+      expect(ok({ timeMs: FIELD_LIMITS.timeMs.max })).toBe(true);
+      expect(ok({ timeMs: FIELD_LIMITS.timeMs.max + 1 })).toBe(false);
+      expect(ok({ timeMs: 1e300 })).toBe(false);
+      expect(ok({ timeMs: -1 })).toBe(false);
+    });
+
+    it('startTime within 1..now + 1 day', () => {
+      expect(ok({ startTime: 1 })).toBe(true);
+      expect(ok({ startTime: NOW + FIELD_LIMITS.startTimeSkewMs })).toBe(true);
+      expect(ok({ startTime: NOW + FIELD_LIMITS.startTimeSkewMs + 1 })).toBe(false);
+      expect(ok({ startTime: 0 })).toBe(false);
+    });
+
+    it('athleteId and matchId are ids (format only)', () => {
+      expect(ok({ matchId: str(64) })).toBe(true);
+      expect(ok({ matchId: str(65) })).toBe(false);
+      expect(ok({ matchId: 'm 1' })).toBe(false);
+      expect(ok({ athleteId: 'a/1' })).toBe(false);
+    });
+  });
+
+  describe('match', () => {
+    const base = { discipline: 'speed', round: 'final', gender: 'male', position: 1 };
+    const result = (over: Record<string, unknown>) => validateMatchInput({ ...base, ...over });
+    const ok = (over: Record<string, unknown>) => result(over).ok;
+
+    it('position within 0..64', () => {
+      expect(ok({ position: 0 })).toBe(true);
+      expect(ok({ position: 64 })).toBe(true);
+      expect(ok({ position: -1 })).toBe(false);
+      expect(ok({ position: 65 })).toBe(false);
+    });
+
+    it('roundName ≤ roundName limit', () => {
+      expect(ok({ roundName: str(FIELD_LIMITS.roundName) })).toBe(true);
+      expect(ok({ roundName: str(FIELD_LIMITS.roundName + 1) })).toBe(false);
+    });
+
+    it('athlete slots are ids', () => {
+      expect(ok({ athlete1Id: 'a1', athlete2Id: 'a#2' })).toBe(false);
+      expect(ok({ athlete1Id: str(65) })).toBe(false);
+    });
+
+    it('winnerId must be one of the pair', () => {
+      expect(ok({ athlete1Id: 'a1', athlete2Id: 'a2', winnerId: 'a2' })).toBe(true);
+      expect(ok({ athlete1Id: 'a1', winnerId: 'a1' })).toBe(true);
+      const r = result({ athlete1Id: 'a1', athlete2Id: 'a2', winnerId: 'a3' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.errors.join()).toMatch(/winnerId must be athlete1Id or athlete2Id/);
+      expect(ok({ winnerId: 'a1' })).toBe(false);
+    });
+
+    it('the pair must be two different athletes', () => {
+      const r = result({ athlete1Id: 'a1', athlete2Id: 'a1' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.errors.join()).toMatch(/must differ/);
+    });
+  });
+
+  describe('score', () => {
+    const valid = {
+      athleteId: 'a1',
+      round: 'final',
+      difficulty: 1,
+      combo: 1,
+      style: 1,
+      bestTrick: 1,
+      controlPenalty: 0,
+    };
+    const ok = (over: Record<string, unknown>) => validateScoreInput({ ...valid, ...over }).ok;
+
+    it('controlPenalty ≤ controlPenaltyMax', () => {
+      expect(ok({ controlPenalty: FIELD_LIMITS.controlPenaltyMax })).toBe(true);
+      expect(ok({ controlPenalty: FIELD_LIMITS.controlPenaltyMax + 1 })).toBe(false);
+    });
+
+    it('an explicit overall ≥ overallMin, DNF included', () => {
+      expect(ok({ overall: FIELD_LIMITS.overallMin })).toBe(true);
+      expect(ok({ overall: FIELD_LIMITS.overallMin - 1 })).toBe(false);
+      expect(ok({ overall: -1e300, dnf: true })).toBe(false);
+    });
+
+    it('athleteId and matchId are ids (format only)', () => {
+      expect(ok({ matchId: 'm-1' })).toBe(true);
+      expect(ok({ matchId: 'm 1' })).toBe(false);
+      expect(ok({ athleteId: 'a 1' })).toBe(false);
+    });
   });
 });

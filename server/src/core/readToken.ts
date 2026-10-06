@@ -3,11 +3,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 /**
  * Event read tokens — the credential OBS/H2R overlays carry in their URL.
  *
- * A minimal HS256 JWT (compact JWS) minted by the admin-only `createReadToken`
- * Lambda and verified by both the HTTP API authorizer and the WS `$connect`
- * authorizer. Hand-rolled on node:crypto on purpose: the claim set is fixed
- * and tiny, and this avoids pulling a general-purpose JOSE dependency into
- * every authorizer bundle. See doc/dev/architecture.md → "Read-auth".
+ * A minimal HS256 JWT (compact JWS) minted by the `createReadToken` Lambda for
+ * an operator — an admin or a manager granted the competition (ADR 0045) — and
+ * verified by both the HTTP API authorizer and the WS `$connect` authorizer.
+ * Hand-rolled on node:crypto: the claim set is fixed and tiny, and a
+ * general-purpose JOSE dependency would ride in every authorizer bundle. See doc/dev/architecture.md → "Read-auth".
  *
  * Claims: { compId, role: 'reader', tokenVersion, iat, exp } — `exp` is capped
  * at mint time to ~10 days; `tokenVersion` is compared against the competition

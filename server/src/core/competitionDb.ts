@@ -296,6 +296,26 @@ const listAthletes = async (compId: string): Promise<Athlete[]> => {
   return items.map(itemToAthlete).sort((a, b) => a.name.localeCompare(b.name));
 };
 
+/** `Select: COUNT` still pages per 1 MB read, so sum every page. */
+const countAthletes = async (compId: string): Promise<number> => {
+  let count = 0;
+  let lastKey: Record<string, unknown> | undefined;
+  do {
+    const page = await ddb.send(
+      new QueryCommand({
+        TableName: COMPETITION_TABLE(),
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
+        ExpressionAttributeValues: { ':pk': compPk(compId), ':prefix': ATHLETE_SK_PREFIX },
+        Select: 'COUNT',
+        ExclusiveStartKey: lastKey,
+      }),
+    );
+    count += page.Count ?? 0;
+    lastKey = page.LastEvaluatedKey;
+  } while (lastKey);
+  return count;
+};
+
 const deleteAthlete = async (compId: string, athleteId: string): Promise<void> => {
   try {
     await ddb.send(
@@ -334,6 +354,7 @@ const anyMatch = async (
         KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
         FilterExpression: filter.expr,
         ExpressionAttributeValues: { ':pk': compPk(compId), ':prefix': prefix, ...filter.values },
+        ConsistentRead: true,
         Limit: 200,
         ExclusiveStartKey: lastKey,
       }),
@@ -347,7 +368,10 @@ const anyMatch = async (
 /**
  * Referential integrity is on us (no FKs in DynamoDB): deleting an athlete is
  * blocked while a Time, Match or Score references them. A cheap existence check
- * (filter + early-exit per entity), not a full partition listing.
+ * (filter + early-exit per entity), not a full partition listing. Strongly
+ * consistent, so a reference written just before the delete is seen; a write
+ * racing the delete itself stays possible (ADR 0052 keeps condition checks off
+ * the race-stop path).
  */
 const athleteHasReferences = async (
   compId: string,
@@ -682,6 +706,7 @@ export const competitionDb = {
   updateAthlete,
   getAthlete,
   listAthletes,
+  countAthletes,
   deleteAthlete,
   athleteHasReferences,
   createTime,

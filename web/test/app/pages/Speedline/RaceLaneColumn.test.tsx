@@ -301,6 +301,27 @@ describe('RaceLaneColumn', () => {
     expect(editLaneTime).toHaveBeenCalledWith(1, 83200);
   });
 
+  it('refuses a correction past the server 24 h bound', () => {
+    const editLaneTime = vi.fn();
+    render(
+      column(
+        1,
+        makeRecorder({ editLaneTime, laneFeedback: { 1: savedFeedback('t1', 83450), 2: null } }),
+      ),
+    );
+    const field = screen.getByLabelText(/correct time/i);
+    fireEvent.change(field, { target: { value: '1440:00.01' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    fireEvent.blur(field);
+    expect(editLaneTime).not.toHaveBeenCalled();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText('At most 24 h')).toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: '1440:00.00' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(editLaneTime).toHaveBeenCalledWith(1, 86_400_000);
+  });
+
   it('does not fire editLaneTime when the value is unchanged', () => {
     const editLaneTime = vi.fn();
     render(

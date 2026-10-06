@@ -8,11 +8,11 @@ import { SelectField } from 'app/components/SelectField';
 import { WhyLine } from 'app/components/WhyLine';
 import type { LaneId, RaceRecorder } from 'app/hooks/useRaceRecorder';
 import { space } from 'app/theme/tokens';
-import type { Athlete } from 'app/types';
+import { FIELD_LIMITS, type Athlete } from 'app/types';
 import { athleteOptions } from 'app/util/athleteOptions';
 import { laneName } from 'app/util/raceNames';
 import type { SpeedlineLaneState } from 'app/util/timerSnapshot';
-import { DNF_SENTINEL, formatMs, isValidTimeFormat, parseTimeString } from 'app/util/time';
+import { DNF_SENTINEL, formatMs, parseTimeString } from 'app/util/time';
 import { timeCorrectionHref } from 'app/util/timesLink';
 import { StopwatchControl } from './StopwatchControl';
 
@@ -52,12 +52,13 @@ const LaneTimeEdit = ({
   useEffect(() => setStr(formatMs(valueMs)), [valueMs]);
 
   const isDnf = valueMs === DNF_SENTINEL;
-  const invalid = !isDnf && !isValidTimeFormat(str);
+  const parsedMs = parseTimeString(str);
+  const tooLong = parsedMs !== null && parsedMs > FIELD_LIMITS.timeMs.max;
+  const invalid = !isDnf && (parsedMs === null || tooLong);
 
   const commit = (): void => {
-    if (invalid) return;
-    const ms = parseTimeString(str) ?? 0;
-    if (ms !== valueMs) onCommit(ms);
+    if (invalid || parsedMs === null) return;
+    if (parsedMs !== valueMs) onCommit(parsedMs);
   };
 
   return (
@@ -77,6 +78,8 @@ const LaneTimeEdit = ({
           <>
             Edit a DNF on the <TimesPageLink input={input} />
           </>
+        ) : tooLong ? (
+          'At most 24 h'
         ) : invalid ? (
           'M:SS.hh'
         ) : undefined
@@ -202,7 +205,7 @@ export const RaceLaneColumn = ({
           "Lane n is not stopped" before, "run has resolved" after — printed in
           a slot reserved while Resume is live, so the picker and the race pair
           hold still as the window opens and closes. No handset key reaches it
-          — see the pad effect on the ControlPage. */}
+          — see the pad handler on the ControlPage. */}
       <LockedControl reason={resumeLock}>
         <RaceButton tone="neutral" disabled={resumeLock !== null} onClick={onResume}>
           Resume Lane {lane}

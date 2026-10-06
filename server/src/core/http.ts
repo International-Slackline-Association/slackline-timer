@@ -121,11 +121,17 @@ export const forAudience = <T extends { birthDate?: string; notes?: string }>(
   return broadcast;
 };
 
+/** ~25× the largest real body (an athlete with maximal notes); API Gateway allows 10 MB. */
+export const MAX_BODY_BYTES = 32 * 1024;
+
 export const parseJsonBody = (event: { body?: string; isBase64Encoded?: boolean }): unknown => {
   if (!event.body) return {};
   const raw = event.isBase64Encoded
     ? Buffer.from(event.body, 'base64').toString('utf8')
     : event.body;
+  if (Buffer.byteLength(raw, 'utf8') > MAX_BODY_BYTES) {
+    throw new HttpError(413, `request body exceeds ${MAX_BODY_BYTES} bytes`);
+  }
   try {
     return JSON.parse(raw);
   } catch {
