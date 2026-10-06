@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import { getReadTokenSecret } from 'core/secrets';
 
 import { OFFLINE_ENV } from '../../scripts/offlineEnv.mjs';
 
@@ -29,6 +31,17 @@ describe('offlineEnv keeps local dev off the real pool', () => {
     const src = await readFile(new URL('../../scripts/offlineEnv.mjs', import.meta.url), 'utf8');
     for (const key of ['COGNITO_USER_POOL_ID', 'COGNITO_CLIENT_ID', 'COGNITO_TIMER_GROUP']) {
       expect(src).toContain(`${key}: process.env.${key} ??`);
+    }
+  });
+});
+
+describe('offlineEnv read-token secret', () => {
+  it('clears the read-token secret minimum, so local overlay links work', async () => {
+    vi.stubEnv('READ_TOKEN_SECRET', OFFLINE_ENV.READ_TOKEN_SECRET);
+    try {
+      await expect(getReadTokenSecret()).resolves.toBe(OFFLINE_ENV.READ_TOKEN_SECRET);
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 });

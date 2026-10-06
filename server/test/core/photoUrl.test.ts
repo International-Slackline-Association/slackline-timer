@@ -1,7 +1,20 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { attachPhotoUrl, createPhotoUrlSigner, photoUrlSignerFromEnv } from 'core/photoUrl';
+const { getSignedUrlSpy } = vi.hoisted(() => ({ getSignedUrlSpy: vi.fn() }));
+
+vi.mock('@aws-sdk/cloudfront-signer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@aws-sdk/cloudfront-signer')>();
+  getSignedUrlSpy.mockImplementation(actual.getSignedUrl);
+  return { ...actual, getSignedUrl: getSignedUrlSpy };
+});
+
+import {
+  PHOTO_URL_MEMO_MAX_ENTRIES,
+  attachPhotoUrl,
+  createPhotoUrlSigner,
+  photoUrlSignerFromEnv,
+} from 'core/photoUrl';
 
 const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
@@ -31,6 +44,48 @@ describe('createPhotoUrlSigner', () => {
     const sig = (u: string) => new URL(u).searchParams.get('Signature');
     expect(sig(a)).not.toBe(sig(b));
     expect(sig(a)).not.toBe(sig(c));
+  });
+});
+
+describe('signed-URL memo', () => {
+  // The memo is per container (module state), so each test signs at its own expiry.
+  const sign = createPhotoUrlSigner({
+    cdnDomain: 'dphotos.cloudfront.net',
+    keyPairId: 'KMEMO',
+    privateKeyPem,
+  });
+
+  afterEach(() => getSignedUrlSpy.mockClear());
+
+  it('signs a photo once per expiry window and returns the same URL', () => {
+    const expiresAt = Date.parse('2030-01-01T06:00:00Z');
+    const first = sign('photos/c/memo.jpg', expiresAt);
+    expect(sign('photos/c/memo.jpg', expiresAt)).toBe(first);
+    expect(getSignedUrlSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-signs for the next expiry window', () => {
+    const first = sign('photos/c/window.jpg', Date.parse('2030-01-02T06:00:00Z'));
+    const next = sign('photos/c/window.jpg', Date.parse('2030-01-02T12:00:00Z'));
+    expect(next).not.toBe(first);
+    expect(getSignedUrlSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('starts over once the memo outgrows its cap', async () => {
+    const actual = await vi.importActual<typeof import('@aws-sdk/cloudfront-signer')>(
+      '@aws-sdk/cloudfront-signer',
+    );
+    const expiresAt = Date.parse('2030-01-03T06:00:00Z');
+    getSignedUrlSpy.mockImplementation(({ url }: { url: string }) => `${url}?unsigned`);
+    try {
+      for (let i = 0; i <= PHOTO_URL_MEMO_MAX_ENTRIES; i++) sign(`photos/c/${i}.jpg`, expiresAt);
+      getSignedUrlSpy.mockClear();
+
+      sign('photos/c/0.jpg', expiresAt);
+      expect(getSignedUrlSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      getSignedUrlSpy.mockImplementation(actual.getSignedUrl);
+    }
   });
 });
 

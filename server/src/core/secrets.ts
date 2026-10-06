@@ -53,8 +53,29 @@ const secretAccessor =
     }
   };
 
-/** HMAC secret for event read tokens (authorizer, httpAuthorizer, createReadToken). */
-export const getReadTokenSecret = secretAccessor('READ_TOKEN_SECRET', 'READ_TOKEN_SECRET_PARAM');
+const READ_TOKEN_SECRET_MIN_BYTES = 32;
+let shortReadTokenSecretLogged = false;
+const readTokenSecret = secretAccessor('READ_TOKEN_SECRET', 'READ_TOKEN_SECRET_PARAM');
+
+/**
+ * HMAC secret for event read tokens (authorizer, httpAuthorizer, createReadToken).
+ * Read tokens are public, so a short secret is brute-forceable offline from any
+ * overlay URL: under 32 UTF-8 bytes it resolves `undefined`, which every caller
+ * treats as "not configured" (authorizers deny, minting answers 503).
+ */
+export const getReadTokenSecret = async (): Promise<string | undefined> => {
+  const secret = await readTokenSecret();
+  if (secret === undefined || Buffer.byteLength(secret, 'utf8') >= READ_TOKEN_SECRET_MIN_BYTES) {
+    return secret;
+  }
+  if (!shortReadTokenSecretLogged) {
+    shortReadTokenSecretLogged = true;
+    console.error(
+      `the read-token secret is too short (minimum ${READ_TOKEN_SECRET_MIN_BYTES} bytes): read tokens are refused until it is rotated`,
+    );
+  }
+  return undefined;
+};
 
 /** RSA private key (PEM) signing CloudFront photo URLs (athletes, rankings). */
 export const getPhotoPrivateKey = secretAccessor('PHOTO_PRIVATE_KEY', 'PHOTO_PRIVATE_KEY_PARAM');
