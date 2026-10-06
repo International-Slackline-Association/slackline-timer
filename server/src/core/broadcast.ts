@@ -189,27 +189,29 @@ export const broadcastToSession = async (params: {
   return { delivered, pruned, failed, retried };
 };
 
+type SessionConnection = Awaited<ReturnType<typeof db.getAllConnections>>[number];
+
 /**
- * Force-close every read-only (overlay) connection of a session — the WS side
- * of read-token revocation. Bumping `tokenVersion` only blocks the *next*
- * `$connect`; an already-open overlay keeps receiving the live feed until its
- * socket drops (up to the connection-row TTL). So on revoke we also drop the
- * open sockets, matching the documented "revokes instantly" (ADR 0003 / 0026).
- * A closed reader reconnects with the same now-stale token and is denied.
+ * Force-close the connections of a session that `match` selects — the WS side
+ * of revocation. A credential check (token version, manager grant) only gates
+ * the *next* `$connect`; an open socket keeps its access until it drops (up to
+ * API Gateway's 2 h cap), so a revoke also closes the matching sockets
+ * (ADR 0026, 0053). A closed client that reconnects is then denied.
  * A 410 (already gone) counts as disconnected and prunes the row, like broadcast.
  * Shares the bounded-concurrency + 429 retry of `broadcastToSession`.
  */
-export const disconnectSessionReaders = async (params: {
+export const disconnectSession = async (params: {
   endpoint: string;
   sessionId: string;
+  match: (connection: SessionConnection) => boolean;
   retry?: Partial<RetryDeps>;
 }): Promise<{ disconnected: number }> => {
   const deps = defaultRetryDeps(params.retry);
   const api = apiClient(params.endpoint);
 
-  const readers = (await db.getAllConnections(params.sessionId)).filter((c) => c.readOnly);
+  const targets = (await db.getAllConnections(params.sessionId)).filter(params.match);
 
-  const results = await mapSettled(readers, FANOUT_CONCURRENCY, async (conn) => {
+  const results = await mapSettled(targets, FANOUT_CONCURRENCY, async (conn) => {
     try {
       await sendWithRetry(
         () => api.send(new DeleteConnectionCommand({ ConnectionId: conn.connectionId })),
@@ -227,13 +229,20 @@ export const disconnectSessionReaders = async (params: {
   let disconnected = 0;
   for (const result of results) {
     if (result.status === 'rejected') {
-      console.error('disconnect reader failed:', result.reason);
+      console.error('disconnect failed:', result.reason);
     } else {
       disconnected += 1;
     }
   }
   return { disconnected };
 };
+
+/** Read-token revocation: close every overlay (read-only) socket of the session. */
+export const disconnectSessionReaders = (params: {
+  endpoint: string;
+  sessionId: string;
+  retry?: Partial<RetryDeps>;
+}): Promise<{ disconnected: number }> => disconnectSession({ ...params, match: (c) => c.readOnly });
 
 export type DbUpdateEntity = 'competition' | 'athlete' | 'time' | 'match' | 'score';
 export type DbUpdateAction = 'created' | 'updated' | 'deleted';

@@ -17,7 +17,13 @@ export const main: APIGatewayProxyHandler = async (event) => {
       // Set by the $connect authorizer for event-read-token (overlay)
       // connections; the messageHandler drops anything they try to send.
       const readOnly = event.requestContext.authorizer?.readOnly === 'true';
-      await db.addConnection({ connectionId, sessionId, readOnly });
+      const principal: unknown = event.requestContext.authorizer?.principal;
+      await db.addConnection({
+        connectionId,
+        sessionId,
+        readOnly,
+        principal: typeof principal === 'string' ? principal : undefined,
+      });
       return { statusCode: 200, body: 'Connected.' };
     } catch (err) {
       console.error(err);

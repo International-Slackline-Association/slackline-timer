@@ -24,6 +24,7 @@ vi.mock('core/db', () => ({
 import {
   FANOUT_CONCURRENCY,
   broadcastToSession,
+  disconnectSession,
   disconnectSessionReaders,
   publishDbUpdate,
 } from 'core/broadcast';
@@ -179,6 +180,56 @@ describe('broadcastToSession', () => {
 
     expect(result).toEqual({ delivered: 60, pruned: 0, failed: 0, retried: 0 });
     expect(peak).toBeLessThanOrEqual(FANOUT_CONCURRENCY);
+  });
+});
+
+describe('disconnectSession', () => {
+  const rows = (...pairs: [id: string, principal?: string][]) =>
+    pairs.map(([connectionId, principal]) => ({
+      sessionId: 's1',
+      connectionId,
+      readOnly: false,
+      principal,
+    }));
+
+  const disconnectSub = (sub: string) =>
+    disconnectSession({
+      endpoint: 'https://ws.example.com/prod',
+      sessionId: 's1',
+      match: (c) => c.principal === sub,
+    });
+
+  it("closes only the matching principal's sockets", async () => {
+    getAllConnectionsMock.mockResolvedValue(
+      rows(['mgr-a-1', 'mgr-a'], ['admin', 'admin-sub'], ['mgr-a-2', 'mgr-a'], ['legacy']),
+    );
+
+    const result = await disconnectSub('mgr-a');
+
+    expect(result).toEqual({ disconnected: 2 });
+    const closed = sendMock.mock.calls.map(([cmd]: PostCommand[]) => cmd.input.ConnectionId);
+    expect(closed).toEqual(['mgr-a-1', 'mgr-a-2']);
+  });
+
+  it('prunes an already-gone (410) match and counts it disconnected', async () => {
+    getAllConnectionsMock.mockResolvedValue(rows(['mgr-a-1', 'mgr-a'], ['other', 'mgr-b']));
+    sendMock.mockRejectedValue(gone());
+
+    await expect(disconnectSub('mgr-a')).resolves.toEqual({ disconnected: 1 });
+    expect(removeConnectionMock).toHaveBeenCalledTimes(1);
+    expect(removeConnectionMock).toHaveBeenCalledWith({ sessionId: 's1', connectionId: 'mgr-a-1' });
+  });
+
+  it('counts a non-410 close failure as not disconnected', async () => {
+    getAllConnectionsMock.mockResolvedValue(rows(['mgr-a-1', 'mgr-a']));
+    sendMock.mockRejectedValue(
+      Object.assign(new Error('forbidden'), { $metadata: { httpStatusCode: 403 } }),
+    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(disconnectSub('mgr-a')).resolves.toEqual({ disconnected: 0 });
+    expect(removeConnectionMock).not.toHaveBeenCalled();
+    error.mockRestore();
   });
 });
 

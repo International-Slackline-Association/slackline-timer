@@ -52,6 +52,8 @@ const addConnection = async (params: {
   connectionId: string;
   /** Overlay (read-token) connections may listen but never inject messages. */
   readOnly?: boolean;
+  /** The authorizer's principal (Cognito sub, `reader:<compId>`, offline dummy); a grant revoke matches on it. */
+  principal?: string;
 }) => {
   const ddb_ttl = ttlFromNow();
   await ddb.send(
@@ -65,6 +67,7 @@ const addConnection = async (params: {
               SK: params.connectionId,
               ddb_ttl,
               ...(params.readOnly ? { readOnly: true } : {}),
+              ...(params.principal ? { principal: params.principal } : {}),
             },
           },
         },
@@ -202,6 +205,8 @@ const getAllConnections = async (sessionId: string) => {
     sessionId: item.PK as string,
     connectionId: item.SK as string,
     readOnly: item.readOnly === true,
+    // Absent on rows written before ADR 0053; those age out within the 2 h socket cap.
+    principal: typeof item.principal === 'string' ? item.principal : undefined,
   }));
 };
 

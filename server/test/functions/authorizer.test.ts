@@ -59,7 +59,7 @@ describe('WS $connect authorizer', () => {
     const res = await invoke({ Authorization: 'cognito-token', sessionId: COMP });
 
     expect(effectOf(res)).toBe('Allow');
-    expect(res.context).toEqual({ readOnly: 'false' });
+    expect(res.context).toEqual({ readOnly: 'false', principal: 'admin-sub' });
     expect(getManagerGrantMock).not.toHaveBeenCalled();
   });
 
@@ -79,7 +79,7 @@ describe('WS $connect authorizer', () => {
     const res = await invoke({ Authorization: 'cognito-token', sessionId: COMP });
 
     expect(effectOf(res)).toBe('Allow');
-    expect(res.context).toEqual({ readOnly: 'false' });
+    expect(res.context).toEqual({ readOnly: 'false', principal: 'mgr-sub' });
     expect(getManagerGrantMock).toHaveBeenCalledWith(COMP, 'mgr-sub');
   });
 
@@ -117,9 +117,36 @@ describe('WS $connect authorizer', () => {
 
     const ownSession = await invoke({ Authorization: token, sessionId: COMP });
     expect(effectOf(ownSession)).toBe('Allow');
-    expect(ownSession.context).toEqual({ readOnly: 'true' });
+    expect(ownSession.context).toEqual({ readOnly: 'true', principal: `reader:${COMP}` });
 
     const foreignSession = await invoke({ Authorization: token, sessionId: 'other-comp' });
     expect(effectOf(foreignSession)).toBe('Deny');
+  });
+
+  it('denies every read token when the secret is unavailable or too short', async () => {
+    verifyMock.mockRejectedValue(new Error('not a cognito token'));
+    getReadTokenSecretMock.mockResolvedValue(undefined);
+    const { token } = mintReadToken({
+      compId: COMP,
+      tokenVersion: 3,
+      expiresAt: Date.now() + 60_000,
+      secret: SECRET,
+    });
+
+    expect(effectOf(await invoke({ Authorization: token, sessionId: COMP }))).toBe('Deny');
+    expect(getCompetitionMock).not.toHaveBeenCalled();
+  });
+
+  it('admits the offline local-dev dummy as an operator principal', async () => {
+    vi.stubEnv('IS_OFFLINE', 'true');
+    try {
+      const res = await invoke({ Authorization: 'local-dev', sessionId: COMP });
+
+      expect(effectOf(res)).toBe('Allow');
+      expect(res.context).toEqual({ readOnly: 'false', principal: 'local-dev-operator' });
+      expect(verifyMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
