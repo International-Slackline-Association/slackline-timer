@@ -18,7 +18,7 @@ declare global {
       PHOTO_PRIVATE_KEY?: string;
       /** SSM SecureString parameter name for the photo private key (ADR 0025). */
       PHOTO_PRIVATE_KEY_PARAM?: string;
-      /** Offline only (IS_OFFLINE): LocalStack S3 endpoint for the S3 client. */
+      /** Offline only (core/offline.ts): LocalStack S3 endpoint for the S3 client. */
       S3_ENDPOINT?: string;
       /** Offline only: browser-reachable base for unsigned S3 object URLs. */
       S3_PUBLIC_URL?: string;

@@ -3,8 +3,9 @@ import { CfnWebACL } from 'aws-cdk-lib/aws-wafv2';
 
 // ADR 0031 §5: authored default-OFF. Baseline posture is API throttling + Budgets;
 // WAF is provisioned only during observed abuse because its standing monthly cost
-// can rival the app's idle bill. Shared rule set for REGIONAL (API Gateway) and
-// CLOUDFRONT (must be created in us-east-1). Enable/disable runbook: doc/dev/deploy.md §6.3.
+// can rival the app's idle bill. CLOUDFRONT scope only (created in us-east-1): a
+// regional ACL cannot attach to HTTP or WebSocket APIs (REST only), so API-level
+// WAF needs a CloudFront edge in front of the API. Runbook: doc/dev/deploy.md §6.3.
 
 // Per-IP request budget over the WAF 5-minute window. Sized well above a live
 // admin + ~15 overlays refreshing on db_update (a browser source behind one NAT
@@ -40,7 +41,7 @@ export function defineWafToggle(stack: Stack): CfnCondition {
 export function makeRateBasedWebAcl(
   stack: Stack,
   id: string,
-  opts: { scope: 'REGIONAL' | 'CLOUDFRONT'; namePrefix: string; condition: CfnCondition },
+  opts: { scope: 'CLOUDFRONT'; namePrefix: string; condition: CfnCondition },
 ): CfnWebACL {
   const webAcl = new CfnWebACL(stack, id, {
     scope: opts.scope,

@@ -108,8 +108,8 @@ export class BillingStack extends Stack {
 
     // ── AWS WAF for CloudFront (ADR 0031 §5), authored default-OFF ──────────────
     // CloudFront-scoped WAF must be provisioned in us-east-1, so the WebACL for the
-    // web CloudFront distribution rides in this us-east-1 stack (its regional
-    // counterpart for the API GW endpoints lives in the eu-central-2 backend stack).
+    // web CloudFront distribution rides in this us-east-1 stack. The APIs have no
+    // WAF: a regional ACL cannot attach to HTTP/WebSocket APIs (infra/waf.ts).
     // Gated on WafEnabled so a normal deploy provisions no WAF resource / no standing
     // cost. Enable: `cdk deploy slackline-timer-v1-billing --parameters WafEnabled=true`,
     // then attach the exported WebAclArn to the web stack (doc/dev/deploy.md §6.3).

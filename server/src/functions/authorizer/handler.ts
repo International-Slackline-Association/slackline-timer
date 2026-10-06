@@ -1,6 +1,7 @@
 import { APIGatewayAuthorizerResult, APIGatewayRequestAuthorizerHandler } from 'aws-lambda';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { competitionDb } from 'core/competitionDb';
+import { isOffline } from 'core/offline';
 import { isValidOperatorSessionId } from 'core/operatorSession';
 import { verifyReadToken } from 'core/readToken';
 import { getReadTokenSecret } from 'core/secrets';
@@ -35,7 +36,7 @@ export const main: APIGatewayRequestAuthorizerHandler = async (event) => {
     const token = raw.replace(/^Bearer\s+/i, '');
 
     // Offline: accept the web's `local-dev` dummy as an operator (no Cognito locally).
-    if (process.env.IS_OFFLINE === 'true' && token === 'local-dev') {
+    if (isOffline() && token === 'local-dev') {
       return allowPolicy(event.methodArn, 'local-dev-operator', { readOnly: 'false' });
     }
 
