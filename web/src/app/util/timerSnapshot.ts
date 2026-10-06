@@ -40,6 +40,56 @@ export const isCountdownSnapshot = (
   snapshot: SpeedlineSnapshot | CountdownSnapshot,
 ): snapshot is CountdownSnapshot => !isSpeedlineSnapshot(snapshot);
 
+// The wire-boundary half of the same two guards (ADR 0051): `unknown` in, every
+// field a consumer reads checked. The relay frame guard runs these once per
+// frame, so the typed discriminators above can stay one-field cheap.
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+const isNumberOrNull = (v: unknown): boolean => v === null || typeof v === 'number';
+const isOptional = (v: unknown, check: (v: unknown) => boolean): boolean =>
+  v === undefined || check(v);
+const isNumber = (v: unknown): boolean => typeof v === 'number';
+const isBoolean = (v: unknown): boolean => typeof v === 'boolean';
+
+/** `{ 1: number; 2: number }` — the per-lane tallies (false starts, run wins). */
+export const isLanePair = (v: unknown): boolean =>
+  isObject(v) && typeof v[1] === 'number' && typeof v[2] === 'number';
+
+const isSpeedlineTimerRow = (v: unknown): boolean =>
+  isObject(v) &&
+  typeof v.timerId === 'number' &&
+  isNumberOrNull(v.startTime) &&
+  isNumberOrNull(v.stopTime);
+
+export const isSpeedlineSnapshotShape = (v: unknown): v is SpeedlineSnapshot =>
+  isObject(v) &&
+  typeof v.isPreviewEnabled === 'boolean' &&
+  typeof v.signalPhase === 'number' &&
+  typeof v.text === 'string' &&
+  Array.isArray(v.timers) &&
+  v.timers.every(isSpeedlineTimerRow) &&
+  isOptional(v.at, isNumber) &&
+  isOptional(v.falseStarts, isLanePair);
+
+const isCountdownTimerRow = (v: unknown): boolean =>
+  isObject(v) &&
+  typeof v.timerId === 'number' &&
+  typeof v.remainingMs === 'number' &&
+  typeof v.isRunning === 'boolean' &&
+  isOptional(v.startedAt, isNumber) &&
+  isOptional(v.breakStartedAt, isNumber) &&
+  isOptional(v.onBreak, isBoolean) &&
+  isOptional(v.breakRemainingMs, isNumber) &&
+  isOptional(v.breaksLeft, isNumber) &&
+  isOptional(v.armedMs, isNumber);
+
+export const isCountdownSnapshotShape = (v: unknown): v is CountdownSnapshot =>
+  isObject(v) &&
+  typeof v.isPreviewEnabled === 'boolean' &&
+  Array.isArray(v.timers) &&
+  v.timers.every(isCountdownTimerRow);
+
 // ---------------------------------------------------------------------------
 // Speedline
 // ---------------------------------------------------------------------------

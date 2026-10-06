@@ -11,7 +11,7 @@ vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
   const actual = await importOriginal<typeof import('app/hooks/useWebSocket')>();
   return {
     ...actual,
-    useWS: () => ({ lastJsonMessage: null, readyState: 1, sendWSMessage: vi.fn() }),
+    useWS: () => ({ readyState: 1, sendWSMessage: vi.fn() }),
   };
 });
 

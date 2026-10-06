@@ -6,10 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CountdownWSMessage, FreestyleSelection } from 'app/hooks/useWebSocket';
 
 // The display opens a receiver socket for the countdown + name push. Stub it so
-// no real socket opens (the realtime path is deliberately untested) and feed it
-// the message under test as `lastJsonMessage`.
-const { lastMessage, wsParams, readyState, playAudio, audioBlocked } = vi.hoisted(() => ({
-  lastMessage: { current: null as CountdownWSMessage | null },
+// no real socket opens, and hand it the frame under test through the captured
+// `onMessage` (`deliverFrames`).
+const { wsParams, readyState, playAudio, audioBlocked } = vi.hoisted(() => ({
   wsParams: { current: null as { sessionId: string; readToken?: string } | null },
   // Mutable so a suite can drive a CLOSED -> OPEN cycle: the feed re-seeds its
   // surface once per socket, which is only observable across a reconnect.
@@ -19,12 +18,17 @@ const { lastMessage, wsParams, readyState, playAudio, audioBlocked } = vi.hoiste
 }));
 vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
   const actual = await importOriginal<typeof import('app/hooks/useWebSocket')>();
+  const { useCapturedSocket } = await import('../../../util/wsMock');
   return {
     ...actual,
-    useWS: (params: { sessionId: string; readToken?: string }) => {
+    useWS: (params: {
+      sessionId: string;
+      readToken?: string;
+      onMessage?: (frame: never) => void;
+    }) => {
       wsParams.current = params;
+      useCapturedSocket(params);
       return {
-        lastJsonMessage: lastMessage.current,
         readyState: readyState.current,
         sendWSMessage: vi.fn(),
       };
@@ -73,6 +77,7 @@ vi.mock('app/hooks/useAthleteLookup', () => {
 });
 
 import { FreestyleTimerDisplay } from 'app/pages/Freestyle/FreestyleTimerDisplay';
+import { deliver as deliverFrames } from '../../../util/wsMock';
 
 const tree = (
   client: QueryClient,
@@ -86,10 +91,9 @@ const tree = (
   </QueryClientProvider>
 );
 
-// `repaint` re-renders the same display so a freshly-set lastMessage flows in —
-// standing in for a message arriving over the (mocked) socket. The QueryClient is
-// created ONCE per display: a fresh one per repaint changes the feed's message
-// effect dependency, which silently re-applies the last message on every render.
+// `repaint` re-renders the same display (a socket state change); frames arrive
+// through `deliverFrames`. The QueryClient is created ONCE per display, so a
+// repaint keeps the cache.
 const renderDisplay = (variant: 'projector' | 'broadcast' = 'projector', search?: string) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(tree(client, variant, search));
@@ -135,10 +139,9 @@ const renderPastWarmup = (
   variant: 'projector' | 'broadcast' = 'projector',
   search?: string,
 ) => {
-  lastMessage.current = endWarmupMessage;
   const view = renderDisplay(variant, search);
-  lastMessage.current = msg;
-  view.repaint();
+  deliverFrames(endWarmupMessage);
+  if (msg) deliverFrames(msg);
   return view;
 };
 
@@ -164,12 +167,11 @@ describe('FreestyleTimerDisplay lane athlete banners', () => {
   // updateSelection, which must repaint the banners. Re-rendering with a fresh
   // message stands in for the post-reconnect re-push.
   it('repaints the banners when the selection is re-pushed after a reconnect', () => {
-    const { repaint } = renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
+    renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
 
     expect(screen.getByText('Jane')).toBeInTheDocument();
 
-    lastMessage.current = laneAthletesMessage('a3', 'a4');
-    repaint();
+    deliverFrames(laneAthletesMessage('a3', 'a4'));
 
     expect(screen.getByText('Aiko')).toBeInTheDocument();
     expect(screen.getByText('Bruno')).toBeInTheDocument();
@@ -179,15 +181,14 @@ describe('FreestyleTimerDisplay lane athlete banners', () => {
   // Lane athletes are intentionally NOT cleared on reset_countdown (the
   // selection persists across runs of the same run).
   it('keeps the banners through a reset_countdown', () => {
-    const { repaint } = renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
+    renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
 
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'reset_countdown',
       timerId: 1,
       data: { remainingMs: 60_000 },
-    };
-    repaint();
+    });
 
     expect(screen.getByText('Jane')).toBeInTheDocument();
     expect(screen.getByText('John')).toBeInTheDocument();
@@ -207,14 +208,12 @@ describe('FreestyleTimerDisplay relay session', () => {
   // "default" sessionId fallback that made the $connect authorizer reject the
   // handshake and blank the overlay.
   it('opens the relay on ?compId= for the broadcast overlay', () => {
-    lastMessage.current = null;
     renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
     expect(wsParams.current?.sessionId).toBe('worlds-2026');
     expect(wsParams.current?.readToken).toBe('abc');
   });
 
   it('opens the relay on ?sessionId= for the projector', () => {
-    lastMessage.current = null;
     renderDisplay('projector', '?sessionId=worlds-2026');
     expect(wsParams.current?.sessionId).toBe('worlds-2026');
   });
@@ -222,7 +221,6 @@ describe('FreestyleTimerDisplay relay session', () => {
 
 describe('FreestyleTimerDisplay standings panel', () => {
   it('shows the standings for a valid freestyle (Match) round', () => {
-    lastMessage.current = null;
     renderDisplay('projector', '?sessionId=worlds-2026&round=final&gender=male');
     expect(screen.getByTestId('standings')).toBeInTheDocument();
   });
@@ -230,7 +228,6 @@ describe('FreestyleTimerDisplay standings panel', () => {
   it('hides the standings for `training` — not a freestyle (Score-plane) round', () => {
     // The panel queries the Score plane (discipline="freestyle"), which reuses
     // MATCH_ROUNDS. `training` is a Time-plane-only round, so it must NOT validate.
-    lastMessage.current = null;
     renderDisplay('projector', '?sessionId=worlds-2026&round=training&gender=male');
     expect(screen.queryByTestId('standings')).not.toBeInTheDocument();
   });
@@ -240,46 +237,41 @@ describe('FreestyleTimerDisplay standings panel', () => {
 // the lane row to a single centred hero (lane 1).
 describe('FreestyleTimerDisplay quali single-hero collapse', () => {
   it('renders only the lane 1 hero when the board says quali', () => {
-    const { repaint } = renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
+    renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
     expect(screen.getByText('John')).toBeInTheDocument();
 
-    lastMessage.current = laneAthletesMessage('a1', 'a2', 'quali');
-    repaint();
+    deliverFrames(laneAthletesMessage('a1', 'a2', 'quali'));
 
     expect(screen.getByText('Jane')).toBeInTheDocument();
     expect(screen.queryByText('John')).not.toBeInTheDocument();
   });
 
   it('restores the two-lane row when the board switches back to battle', () => {
-    const { repaint } = renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
+    renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
 
-    lastMessage.current = laneAthletesMessage('a1', 'a2', 'quali');
-    repaint();
+    deliverFrames(laneAthletesMessage('a1', 'a2', 'quali'));
     expect(screen.queryByText('John')).not.toBeInTheDocument();
 
-    lastMessage.current = laneAthletesMessage('a1', 'a2', 'battle');
-    repaint();
+    deliverFrames(laneAthletesMessage('a1', 'a2', 'battle'));
     expect(screen.getByText('John')).toBeInTheDocument();
   });
 
   it('justifies battle clocks to their lane edges and the quali hero to the centre', () => {
-    const { repaint } = renderPastWarmup(laneAthletesMessage('a1', 'a2', 'battle'), 'broadcast');
+    renderPastWarmup(laneAthletesMessage('a1', 'a2', 'battle'), 'broadcast');
     const justify = () =>
       screen
         .getAllByTestId('countdown-plate')
         .map((plate) => window.getComputedStyle(plate).justifyContent);
     expect(justify()).toEqual(['flex-start', 'flex-end']);
 
-    lastMessage.current = laneAthletesMessage('a1', 'a2', 'quali');
-    repaint();
+    deliverFrames(laneAthletesMessage('a1', 'a2', 'quali'));
     expect(justify()).toEqual(['center']);
   });
 
   it('keeps the two-lane default when the selection carries no mode (pre-0036 board)', () => {
-    const { repaint } = renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
+    renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
 
-    lastMessage.current = laneAthletesMessage('a1', 'a2', undefined);
-    repaint();
+    deliverFrames(laneAthletesMessage('a1', 'a2', undefined));
     expect(screen.getByText('Jane')).toBeInTheDocument();
     expect(screen.getByText('John')).toBeInTheDocument();
   });
@@ -287,14 +279,14 @@ describe('FreestyleTimerDisplay quali single-hero collapse', () => {
 
 describe('FreestyleTimerDisplay warm-up band slot', () => {
   it('reveals the WARM-UP slot on a timerId 0 start_countdown', () => {
-    lastMessage.current = {
+    renderDisplay();
+
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 0,
       data: { remainingMs: 300_000 },
-    };
-
-    renderDisplay();
+    });
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
     // The slot holds the left corner, so its clock hugs the left edge.
@@ -308,13 +300,13 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
   // room has seeded shows the pending warm-up (not only one that already
   // started) — here off the operator's re-arm.
   it('shows the pending warm-up slot once the room seeds it', () => {
-    lastMessage.current = {
+    renderDisplay();
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'reset_countdown',
       timerId: 0,
       data: { remainingMs: 300_000 },
-    };
-    renderDisplay();
+    });
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
     expect(screen.getByText('05:00')).toBeInTheDocument();
@@ -325,7 +317,6 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
   // defaults' fabricated `WARM-UP 00:00`: on air a wrong number is worse than
   // none, and the gap is what tells the operator to look.
   it('renders no clock at all while the surface is unseeded', () => {
-    lastMessage.current = null;
     renderDisplay();
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
@@ -339,7 +330,9 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
   // warm-up's armed remainingMs (buildCountdownSnapshot with isRunning:false), the
   // feed maps it into recovery[0], and the warm-up slot's Countdown renders it.
   it('shows the armed warm-up budget from a pre-competition snapshot (not 00:00)', () => {
-    lastMessage.current = {
+    renderDisplay();
+
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'state_snapshot',
       data: {
@@ -352,9 +345,7 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
           { timerId: 2, remainingMs: 60_000, isRunning: false },
         ],
       },
-    } as unknown as CountdownWSMessage;
-
-    renderDisplay();
+    } as unknown as CountdownWSMessage);
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
     expect(screen.getByText('05:00')).toBeInTheDocument();
@@ -364,15 +355,14 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
   // preview-warmup-only-clock: during warm-up the band shows ONLY the warm-up
   // slot — the athlete lane row (clocks + banners) must not leak beside it.
   it('hides the athlete lane row while the warm-up slot is active', () => {
-    lastMessage.current = {
+    renderDisplay('projector');
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 0,
       data: { remainingMs: 300_000 },
-    };
-    const { repaint } = renderDisplay('projector');
-    lastMessage.current = laneAthletesMessage('a1', 'a2');
-    repaint();
+    });
+    deliverFrames(laneAthletesMessage('a1', 'a2'));
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
     expect(screen.queryByText(/^Jane$/)).not.toBeInTheDocument();
@@ -380,22 +370,21 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
   });
 
   it('drops the warm-up slot once a lane run starts', () => {
-    lastMessage.current = {
+    renderDisplay();
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 0,
       data: { remainingMs: 300_000 },
-    };
-    const { repaint } = renderDisplay();
+    });
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
 
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 1,
       data: { remainingMs: 90_000 },
-    };
-    repaint();
+    });
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
@@ -403,22 +392,21 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
   // STATUS athlete-display-post-warmup-handoff: the shared feed hands off to the
   // lanes when the warm-up ENDS (stopped or run out), not only on the next run.
   it('drops the warm-up slot when the operator stops the warm-up', () => {
-    lastMessage.current = {
+    renderDisplay();
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 0,
       data: { remainingMs: 300_000 },
-    };
-    const { repaint } = renderDisplay();
+    });
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
 
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'stop_countdown',
       timerId: 0,
       data: { remainingMs: 120_000 },
-    };
-    repaint();
+    });
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
@@ -436,7 +424,8 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
 
-    lastMessage.current = {
+    renderDisplay();
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'state_snapshot',
       data: {
@@ -449,19 +438,17 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
           { timerId: 2, remainingMs: 60_000, isRunning: false },
         ],
       },
-    } as unknown as CountdownWSMessage;
-    const { repaint } = renderDisplay();
+    } as unknown as CountdownWSMessage);
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
 
     // The operator starts lane 1 directly — the warm-up slot hands off and the
     // lane clock mounts from this live message (shared wire epoch = now).
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 1,
       data: { remainingMs: 120_000, startedAt: 0 },
-    };
-    repaint();
+    });
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
 
     act(() => {
@@ -482,18 +469,16 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
 
-    lastMessage.current = {
+    renderDisplay();
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 0,
       data: { remainingMs: 1_000 },
-    };
-    renderDisplay();
+    });
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
 
-    // The warm-up slot's own Countdown crosses zero and its onExpire hands off
-    // (no repaint: a rerender would mint a fresh QueryClient and re-process the
-    // retained start message — a test-only artifact of the per-render client).
+    // The warm-up slot's own Countdown crosses zero and its onExpire hands off.
     act(() => {
       vi.setSystemTime(2_000);
       vi.advanceTimersToNextTimer();
@@ -531,15 +516,16 @@ describe('FreestyleTimerDisplay per-channel snapshot seeding', () => {
   // its live 01:00 stands against the snapshot's 00:30, while the still-silent
   // lane 1 takes the snapshot's 02:00 instead of resting at a fabricated 00:00.
   it('applies a silent channel row even though lane 2 spoke since the socket opened', () => {
-    lastMessage.current = resetLane(2, 60_000);
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(resetLane(2, 60_000));
 
-    lastMessage.current = snapshot([
-      { timerId: 0, remainingMs: 300_000, isRunning: false },
-      { timerId: 1, remainingMs: 120_000, isRunning: false, armedMs: 120_000 },
-      { timerId: 2, remainingMs: 30_000, isRunning: false, armedMs: 60_000 },
-    ]);
-    repaint();
+    deliverFrames(
+      snapshot([
+        { timerId: 0, remainingMs: 300_000, isRunning: false },
+        { timerId: 1, remainingMs: 120_000, isRunning: false, armedMs: 120_000 },
+        { timerId: 2, remainingMs: 30_000, isRunning: false, armedMs: 60_000 },
+      ]),
+    );
 
     expect(screen.getByText('02:00')).toBeInTheDocument();
     expect(screen.getByText('01:00')).toBeInTheDocument();
@@ -550,21 +536,20 @@ describe('FreestyleTimerDisplay per-channel snapshot seeding', () => {
   it('shows the athlete band when the joined room has already warmed up', () => {
     // `Set both lanes` — reset traffic on lanes 1/2 — races the control's reply
     // to this display's request_state.
-    lastMessage.current = resetLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = resetLane(2, 60_000);
-    repaint();
-    lastMessage.current = laneAthletesMessage('a1', 'a2');
-    repaint();
+    renderDisplay();
+    deliverFrames(resetLane(1, 60_000));
+    deliverFrames(resetLane(2, 60_000));
+    deliverFrames(laneAthletesMessage('a1', 'a2'));
 
-    lastMessage.current = snapshot([
-      // The warm-up already ran earlier in the session (spent), the lanes are
-      // armed for the next match.
-      { timerId: 0, remainingMs: 0, isRunning: false },
-      { timerId: 1, remainingMs: 60_000, isRunning: false, armedMs: 60_000 },
-      { timerId: 2, remainingMs: 60_000, isRunning: false, armedMs: 60_000 },
-    ]);
-    repaint();
+    deliverFrames(
+      snapshot([
+        // The warm-up already ran earlier in the session (spent), the lanes are
+        // armed for the next match.
+        { timerId: 0, remainingMs: 0, isRunning: false },
+        { timerId: 1, remainingMs: 60_000, isRunning: false, armedMs: 60_000 },
+        { timerId: 2, remainingMs: 60_000, isRunning: false, armedMs: 60_000 },
+      ]),
+    );
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
     expect(screen.getByText('Jane')).toBeInTheDocument();
@@ -577,12 +562,14 @@ describe('FreestyleTimerDisplay per-channel snapshot seeding', () => {
   // `armedMs` is a match in progress, so a joiner must not paint the pending
   // warm-up hero over the athletes.
   it('keeps the athlete band when a snapshot lane holds less than its armed budget', () => {
-    lastMessage.current = snapshot([
-      { timerId: 0, remainingMs: 300_000, isRunning: false },
-      { timerId: 1, remainingMs: 22_000, isRunning: false, armedMs: 60_000 },
-      { timerId: 2, remainingMs: 60_000, isRunning: false, armedMs: 60_000 },
-    ]);
     renderDisplay();
+    deliverFrames(
+      snapshot([
+        { timerId: 0, remainingMs: 300_000, isRunning: false },
+        { timerId: 1, remainingMs: 22_000, isRunning: false, armedMs: 60_000 },
+        { timerId: 2, remainingMs: 60_000, isRunning: false, armedMs: 60_000 },
+      ]),
+    );
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
     expect(screen.getByText('00:22')).toBeInTheDocument();
@@ -598,7 +585,6 @@ describe('FreestyleTimerDisplay per-channel snapshot seeding', () => {
 describe('FreestyleTimerDisplay surface seeding (once per socket)', () => {
   afterEach(() => {
     readyState.current = 1;
-    lastMessage.current = null;
   });
 
   const pendingWarmupSnapshot: CountdownWSMessage = {
@@ -622,35 +608,33 @@ describe('FreestyleTimerDisplay surface seeding (once per socket)', () => {
   });
 
   it('keeps the lane band when a peer join snapshot lands on a seeded display', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
 
-    lastMessage.current = pendingWarmupSnapshot;
-    repaint();
+    deliverFrames(pendingWarmupSnapshot);
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
 
   it('still takes the snapshot on a display that has heard nothing', () => {
-    lastMessage.current = pendingWarmupSnapshot;
     renderDisplay();
+    deliverFrames(pendingWarmupSnapshot);
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
     expect(screen.getByText('05:00')).toBeInTheDocument();
   });
 
   it('accepts one fresh seed again after a CLOSED -> OPEN reconnect', () => {
-    lastMessage.current = startLane(1, 60_000);
     const { repaint } = renderDisplay();
+    deliverFrames(startLane(1, 60_000));
 
     readyState.current = 3;
     repaint();
     readyState.current = 1;
     repaint();
 
-    lastMessage.current = pendingWarmupSnapshot;
-    repaint();
+    deliverFrames(pendingWarmupSnapshot);
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
   });
@@ -674,22 +658,19 @@ describe('FreestyleTimerDisplay lane row refresh', () => {
   });
 
   it('opens the idle lane on its armed budget when the warm-up hero clears', () => {
-    lastMessage.current = laneMessage('start_countdown', 0, 300_000);
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(laneMessage('start_countdown', 0, 300_000));
 
     // Both lanes are armed behind the running warm-up hero (distinct budgets so
     // the assertions cannot confuse them).
-    lastMessage.current = laneMessage('reset_countdown', 1, 120_000);
-    repaint();
-    lastMessage.current = laneMessage('reset_countdown', 2, 90_000);
-    repaint();
+    deliverFrames(laneMessage('reset_countdown', 1, 120_000));
+    deliverFrames(laneMessage('reset_countdown', 2, 90_000));
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
     expect(screen.queryByText('01:30')).not.toBeInTheDocument();
 
     // The first Start of the match hands the band to the lanes, mounting both
     // clocks: lane 1 off the message it just received, lane 2 off its row.
-    lastMessage.current = laneMessage('start_countdown', 1, 120_000);
-    repaint();
+    deliverFrames(laneMessage('start_countdown', 1, 120_000));
 
     expect(screen.getByText('02:00')).toBeInTheDocument();
     expect(screen.getByText('01:30')).toBeInTheDocument();
@@ -722,15 +703,17 @@ describe('FreestyleTimerDisplay best-trick band', () => {
   });
 
   it("shows each player's round count on both banners (no centre tally)", () => {
-    lastMessage.current = bestTrickMessage({
-      cap: 5,
-      tries: { 1: 2, 2: 1 },
-      turn: 1,
-      clockRunning: false,
-      rev: 0,
-    });
-
     renderDisplay('projector');
+
+    deliverFrames(
+      bestTrickMessage({
+        cap: 5,
+        tries: { 1: 2, 2: 1 },
+        turn: 1,
+        clockRunning: false,
+        rev: 0,
+      }),
+    );
 
     // Both lanes' banners carry their own "Best Trick <tries>/<cap>" for the
     // whole session (only the clock follows the turn); the old centre tally
@@ -746,42 +729,41 @@ describe('FreestyleTimerDisplay best-trick band', () => {
   // LWW seq (ADR 0038 §4), one hop further out: the losing side of a crossed
   // panel edit arriving late must not clear a fresher tally off the hero.
   it('ignores a stale-stamped selection (last-writer-wins by seq)', () => {
-    lastMessage.current = {
+    renderDisplay('projector');
+    deliverFrames({
       ...bestTrickMessage({ cap: 5, tries: { 1: 2, 2: 1 }, turn: 1, clockRunning: false, rev: 0 }),
       senderId: 'panel-b',
       seq: 100,
-    };
-    const { repaint } = renderDisplay('projector');
+    });
     expect(screen.getByText('Best Trick 2/5')).toBeInTheDocument();
 
-    lastMessage.current = { ...bestTrickMessage(null), senderId: 'panel-c', seq: 99 };
-    repaint();
+    deliverFrames({ ...bestTrickMessage(null), senderId: 'panel-c', seq: 99 });
 
     expect(screen.getByText('Best Trick 2/5')).toBeInTheDocument();
   });
 
   it('swaps the lane run clocks for the best-trick layout, keeping the banners', () => {
-    const { repaint } = renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
+    renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
 
     // Arm lane 1 with a distinctive budget so its clock is tellable from the
     // try clock.
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'reset_countdown',
       timerId: 1,
       data: { remainingMs: 120_000 },
-    };
-    repaint();
+    });
     expect(screen.getAllByText('02:00').length).toBeGreaterThan(0);
 
-    lastMessage.current = bestTrickMessage({
-      cap: 3,
-      tries: { 1: 0, 2: 0 },
-      turn: null,
-      clockRunning: false,
-      rev: 0,
-    });
-    repaint();
+    deliverFrames(
+      bestTrickMessage({
+        cap: 3,
+        tries: { 1: 0, 2: 0 },
+        turn: null,
+        clockRunning: false,
+        rev: 0,
+      }),
+    );
 
     // Both banners keep their round count for the whole session (even with no
     // active turn). The name banners stay (match layout), but the lane run clocks
@@ -793,23 +775,24 @@ describe('FreestyleTimerDisplay best-trick band', () => {
   });
 
   it('clears the best-trick layout when bestTrick goes absent (phase disarmed)', () => {
-    lastMessage.current = bestTrickMessage({
-      cap: 3,
-      tries: { 1: 0, 2: 0 },
-      turn: 1,
-      clockRunning: false,
-      rev: 0,
-    });
-    const { repaint } = renderDisplay('projector');
+    renderDisplay('projector');
+    deliverFrames(
+      bestTrickMessage({
+        cap: 3,
+        tries: { 1: 0, 2: 0 },
+        turn: 1,
+        clockRunning: false,
+        rev: 0,
+      }),
+    );
     expect(screen.getAllByText('Best Trick 0/3')).toHaveLength(2);
 
-    lastMessage.current = bestTrickMessage(null);
-    repaint();
+    deliverFrames(bestTrickMessage(null));
     expect(screen.queryByText(/Best Trick/)).not.toBeInTheDocument();
   });
 
   it('shows the try clock under the turn athlete once the board arms the window', () => {
-    const { repaint } = renderPastWarmup(
+    renderPastWarmup(
       bestTrickMessage({ cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: false, rev: 0 }),
       'projector',
     );
@@ -817,13 +800,12 @@ describe('FreestyleTimerDisplay best-trick band', () => {
     // The board's ARM broadcast resets the try channel to the 30 s window; the
     // mounted try clock adopts it (the selection push precedes this reset on the
     // acting panel, so the clock is already mounted when it lands).
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'reset_countdown',
       timerId: 3,
       data: { remainingMs: 30_000 },
-    };
-    repaint();
+    });
 
     expect(screen.getByText('00:30')).toBeInTheDocument();
   });
@@ -834,39 +816,38 @@ describe('FreestyleTimerDisplay best-trick band', () => {
   // live timerId-3 message (nextRecovery) so the remount seeds the frozen
   // value instead of resting at the UNSEEDED 00:00.
   it('keeps the try-clock value across a turn flip (remount reseeds from the row)', () => {
-    const { repaint } = renderPastWarmup(
+    renderPastWarmup(
       bestTrickMessage({ cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: false, rev: 0 }),
       'projector',
     );
 
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 3,
       data: { remainingMs: 30_000, startedAt: Date.now() },
-    };
-    repaint();
+    });
     // END_TRY resets the wire clock to the full window (the next athlete gets a
     // fresh window, not the leftover), so recovery[3] now holds 30 s.
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'reset_countdown',
       timerId: 3,
       data: { remainingMs: 30_000 },
-    };
-    repaint();
+    });
     expect(screen.getByText('00:30')).toBeInTheDocument();
 
     // The turn flips: the clock moves under the lane 2 banner and, reseeded from
     // the row, shows the full start window (not a leftover, not 00:00).
-    lastMessage.current = bestTrickMessage({
-      cap: 3,
-      tries: { 1: 1, 2: 0 },
-      turn: 2,
-      clockRunning: false,
-      rev: 0,
-    });
-    repaint();
+    deliverFrames(
+      bestTrickMessage({
+        cap: 3,
+        tries: { 1: 1, 2: 0 },
+        turn: 2,
+        clockRunning: false,
+        rev: 0,
+      }),
+    );
 
     expect(screen.getByText('00:30')).toBeInTheDocument();
     expect(screen.queryByText('00:00')).not.toBeInTheDocument();
@@ -877,27 +858,26 @@ describe('FreestyleTimerDisplay best-trick band', () => {
   // element type + position), carrying the frozen try remaining across the
   // timerId swap.
   it('does not leak the try-clock state into the lane clocks on disarm', () => {
-    const { repaint } = renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
+    renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
 
-    lastMessage.current = bestTrickMessage({
-      cap: 3,
-      tries: { 1: 0, 2: 0 },
-      turn: 2,
-      clockRunning: false,
-      rev: 0,
-    });
-    repaint();
-    lastMessage.current = {
+    deliverFrames(
+      bestTrickMessage({
+        cap: 3,
+        tries: { 1: 0, 2: 0 },
+        turn: 2,
+        clockRunning: false,
+        rev: 0,
+      }),
+    );
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'stop_countdown',
       timerId: 3,
       data: { remainingMs: 27_000 },
-    };
-    repaint();
+    });
     expect(screen.getByText('00:27')).toBeInTheDocument();
 
-    lastMessage.current = bestTrickMessage(null);
-    repaint();
+    deliverFrames(bestTrickMessage(null));
 
     expect(screen.queryByText('00:27')).not.toBeInTheDocument();
     expect(screen.queryByText('Best Trick')).not.toBeInTheDocument();
@@ -912,18 +892,17 @@ describe('FreestyleTimerDisplay best-trick band', () => {
   it('does not replay the try-end beep when the turn flips after a local try timeout', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
-    const { repaint } = renderPastWarmup(
+    renderPastWarmup(
       bestTrickMessage({ cap: 3, tries: { 1: 1, 2: 0 }, turn: 1, clockRunning: true, rev: 0 }),
       'projector',
     );
 
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 3,
       data: { remainingMs: 1_000, startedAt: 0 },
-    };
-    repaint();
+    });
 
     act(() => {
       vi.setSystemTime(2_000);
@@ -936,14 +915,15 @@ describe('FreestyleTimerDisplay best-trick band', () => {
     const afterTimeout = playAudio.mock.calls.filter(([sound]) => sound === 'short').length;
     expect(afterTimeout).toBeGreaterThan(0);
 
-    lastMessage.current = bestTrickMessage({
-      cap: 3,
-      tries: { 1: 1, 2: 0 },
-      turn: 2,
-      clockRunning: false,
-      rev: 0,
-    });
-    repaint();
+    deliverFrames(
+      bestTrickMessage({
+        cap: 3,
+        tries: { 1: 1, 2: 0 },
+        turn: 2,
+        clockRunning: false,
+        rev: 0,
+      }),
+    );
     act(() => {
       vi.setSystemTime(4_000);
       vi.advanceTimersToNextTimer();
@@ -954,18 +934,17 @@ describe('FreestyleTimerDisplay best-trick band', () => {
   });
 
   it('keeps the round count on the turn banner while the try window runs', () => {
-    const { repaint } = renderPastWarmup(
+    renderPastWarmup(
       bestTrickMessage({ cap: 3, tries: { 1: 1, 2: 0 }, turn: 1, clockRunning: true, rev: 0 }),
       'projector',
     );
 
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 3,
       data: { remainingMs: 30_000 },
-    };
-    repaint();
+    });
 
     // The turn banner keeps its "Best Trick <tries>/<cap>" count during the run
     // (there is no centre tally to hide); the running try clock shows alongside.
@@ -974,37 +953,38 @@ describe('FreestyleTimerDisplay best-trick band', () => {
   });
 
   it('takes precedence over a stale warm-up slot', () => {
-    lastMessage.current = {
+    renderDisplay('projector');
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 0,
       data: { remainingMs: 300_000 },
-    };
-    const { repaint } = renderDisplay('projector');
+    });
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
 
-    lastMessage.current = bestTrickMessage({
-      cap: 3,
-      tries: { 1: 0, 2: 0 },
-      turn: 1,
-      clockRunning: true,
-      rev: 0,
-    });
-    repaint();
+    deliverFrames(
+      bestTrickMessage({
+        cap: 3,
+        tries: { 1: 0, 2: 0 },
+        turn: 1,
+        clockRunning: true,
+        rev: 0,
+      }),
+    );
     expect(screen.getAllByText('Best Trick 0/3')).toHaveLength(2);
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
 
   it('plays the short beep when a best-trick try starts (timerId 3)', () => {
     playAudio.mockClear();
-    lastMessage.current = {
+    renderDisplay('projector');
+
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 3,
       data: { remainingMs: 30_000 },
-    };
-
-    renderDisplay('projector');
+    });
 
     expect(playAudio).toHaveBeenCalledWith('short');
   });
@@ -1022,14 +1002,14 @@ describe('FreestyleTimerDisplay run-zero beep', () => {
     playAudio.mockClear();
     vi.useFakeTimers();
     vi.setSystemTime(0);
-    lastMessage.current = {
+    renderDisplay('projector');
+
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 1,
       data: { remainingMs: 2_000 },
-    };
-
-    renderDisplay('projector');
+    });
 
     // A start_countdown for a performance lane (timerId ≠ 0) rings no beep on its
     // own; the only 'long' call must come from the run crossing zero.
@@ -1051,14 +1031,12 @@ describe('FreestyleTimerDisplay audio-muted badge (projector-only)', () => {
   // PA. On the broadcast overlay it is pure clutter composited over live video and
   // is suppressed regardless of the (irrelevant) tab audio state.
   it('shows the badge on the projector while audio is blocked', () => {
-    lastMessage.current = null;
     audioBlocked.current = true;
     renderDisplay('projector');
     expect(screen.getByTestId('audio-muted')).toBeInTheDocument();
   });
 
   it('suppresses the badge on the broadcast overlay even when audio is blocked', () => {
-    lastMessage.current = null;
     audioBlocked.current = true;
     renderDisplay('broadcast');
     expect(screen.queryByTestId('audio-muted')).toBeNull();
@@ -1104,12 +1082,11 @@ describe('FreestyleTimerDisplay cross-mode snapshot tolerance', () => {
   } as unknown as CountdownWSMessage;
 
   it('keeps both idle lane clocks when a foreign Speedline snapshot lands last', () => {
-    lastMessage.current = armedLanes;
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(armedLanes);
     expect(screen.getAllByText('02:00').length).toBe(2);
 
-    lastMessage.current = foreignSpeedlineSnapshot;
-    repaint();
+    deliverFrames(foreignSpeedlineSnapshot);
 
     expect(screen.getAllByText('02:00').length).toBe(2);
     expect(screen.queryByText(/NaN/)).toBeNull();

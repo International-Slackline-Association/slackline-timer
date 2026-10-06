@@ -265,7 +265,6 @@ export const useFreestyleBoard = (sessionId: string) => {
 
   const {
     sendWSMessage,
-    peerMessage,
     link,
     enabledPreview,
     togglePreview,
@@ -406,6 +405,8 @@ export const useFreestyleBoard = (sessionId: string) => {
       }
       return true;
     },
+    // Declared below, past the drains it feeds; runs only on a frame.
+    onPeerMessage: (message) => applyPeerCountdown(message),
   });
 
   // Which surface wears the newest peer-panel action (ADR 0038 / brief §4.10):
@@ -451,8 +452,8 @@ export const useFreestyleBoard = (sessionId: string) => {
   // re-broadcast a mirrored event (the short start beep rides the drain: every
   // surface beeps, ADR 0015 §3). Write-free by construction: nothing here
   // touches the recorder's POST paths.
-  useEffect(() => {
-    if (!peerMessage || !('timerId' in peerMessage)) return;
+  const applyPeerCountdown = (peerMessage: CountdownWSMessage) => {
+    if (!('timerId' in peerMessage)) return;
     const at = Date.now();
     const battleEvent = peerBattleEvent(peerMessage, at);
     if (battleEvent) {
@@ -465,13 +466,13 @@ export const useFreestyleBoard = (sessionId: string) => {
       return;
     }
     warmup.applyPeerMessage(peerMessage, at);
-  }, [peerMessage]);
+  };
 
   // ---- Lane action dispatchers (passed to the presentational controls) -------
   const laneActions = useMemo(
     () => ({
       start: (lane: PlayerId) => dispatch({ type: 'START', lane, at: Date.now() }),
-      stop: (lane: PlayerId) => dispatch({ type: 'STOP', lane, at: Date.now() }),
+      stop: (lane: PlayerId, at: number = Date.now()) => dispatch({ type: 'STOP', lane, at }),
       // A single-lane Reset re-arms that lane to what it was last armed to — never
       // to the Run (s) draft (brief §4.5): clearing one lane after a fall must not
       // silently re-format it behind the operator's back.

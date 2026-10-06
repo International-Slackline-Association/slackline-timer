@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   waitForElementToBeRemoved,
   within,
 } from '@testing-library/react';
@@ -18,6 +19,8 @@ import { telemetryTheme } from 'app/theme/theme';
 import { deskColumns, deskMedia } from 'app/theme/tokens';
 
 import { px } from '../../../util/computedUnits';
+import { pressPad, pressPads } from '../../../util/gamepadMock';
+import { deliver as deliverFrames } from '../../../util/wsMock';
 import {
   COMPACT_HEIGHT_PX,
   COMPACT_PX,
@@ -34,36 +37,32 @@ vi.mock('app/api/client', async (importOriginal) => {
   return { ...actual, apiFetch: apiFetchMock };
 });
 
-// The page's single relay socket (ADR 0043). `receiverMessage` is the incoming
-// peer message a rerender delivers; `readyState` is the link a rerender reports.
+// The page's single relay socket (ADR 0043). Peer frames arrive through the
+// captured `onMessage` (`deliverFrames`); `readyState` is the link a rerender
+// reports.
 const { sockets } = vi.hoisted(() => ({
   sockets: {
     senderSend: vi.fn(),
-    receiverMessage: null as StopwatchWSMessage | null,
     readyState: 1,
   },
 }));
 vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
   const actual = await importOriginal<typeof import('app/hooks/useWebSocket')>();
+  const { useCapturedSocket } = await import('../../../util/wsMock');
   return {
     ...actual,
-    useWS: () => ({
-      sendWSMessage: sockets.senderSend,
-      readyState: sockets.readyState,
-      lastJsonMessage: sockets.receiverMessage,
-      senderId: 'own-sender-id',
-    }),
+    useWS: (params: { onMessage?: (frame: never) => void }) => {
+      useCapturedSocket(params);
+      return {
+        sendWSMessage: sockets.senderSend,
+        readyState: sockets.readyState,
+        senderId: 'own-sender-id',
+      };
+    },
   };
 });
 
-// The handset, as the page sees it: one press token per press, so pressing the
-// same button twice still fires (the `seq` the real hook mints).
-const { gamepad } = vi.hoisted(() => ({
-  gamepad: { press: undefined as { button: number; seq: number } | undefined, seq: 0 },
-}));
-vi.mock('app/hooks/useGamepads', () => ({
-  useGamepads: () => ({ lastPressedGamepadButton: gamepad.press }),
-}));
+vi.mock('app/hooks/useGamepads', () => import('../../../util/gamepadMock'));
 // The pad registry the handset card reads for presence; the press itself comes
 // through the `useGamepads` mock above.
 vi.mock('app/state/gamepadSelection', () => ({
@@ -111,20 +110,7 @@ const renderPage = () => {
   );
   const refresh = () =>
     rendered.rerender(<QueryClientProvider client={queryClient}>{pageTree()}</QueryClientProvider>);
-  const deliver = (message: StopwatchWSMessage) => {
-    act(() => {
-      sockets.receiverMessage = message;
-      refresh();
-    });
-  };
-  /** A physical handset press (doc/dev/buzzer-hardware.md indices). */
-  const pressPad = (button: number) => {
-    act(() => {
-      gamepad.seq += 1;
-      gamepad.press = { button, seq: gamepad.seq };
-      refresh();
-    });
-  };
+  const deliver = (message: StopwatchWSMessage) => deliverFrames(message);
   /** The socket moving to another `ReadyState` (0 connecting … 3 closed). */
   const relink = (readyState: number) => {
     act(() => {
@@ -152,8 +138,6 @@ const writeCalls = () =>
 describe('SpeedlineControlPage peer mirroring (ADR 0038)', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
-    gamepad.press = undefined;
     playAudioMock.mockReset();
     // Reads resolve empty; any write would be caught by writeCalls().
     apiFetchMock.mockReset().mockResolvedValue([]);
@@ -472,8 +456,6 @@ describe('SpeedlineControlPage peer mirroring (ADR 0038)', () => {
 describe('SpeedlineControlPage health chips', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
-    gamepad.press = undefined;
     playAudioMock.mockReset();
     apiFetchMock.mockReset().mockResolvedValue([]);
     audio.blocked = false;
@@ -504,9 +486,7 @@ describe('SpeedlineControlPage health chips', () => {
 describe('SpeedlineControlPage clocks on a down link', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
     sockets.readyState = 1;
-    gamepad.press = undefined;
     apiFetchMock.mockReset().mockResolvedValue([]);
     audio.blocked = false;
   });
@@ -551,8 +531,6 @@ describe('SpeedlineControlPage clocks on a down link', () => {
 describe('SpeedlineControlPage live-control contract (FREESTYLE_BOARD_UX §6)', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
-    gamepad.press = undefined;
     playAudioMock.mockReset();
     apiFetchMock.mockReset().mockResolvedValue([]);
     audio.blocked = false;
@@ -631,8 +609,6 @@ describe('SpeedlineControlPage live-control contract (FREESTYLE_BOARD_UX §6)', 
 describe('SpeedlineControlPage lock why-lines (FREESTYLE_BOARD_UX §4.7)', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
-    gamepad.press = undefined;
     playAudioMock.mockReset();
     apiFetchMock.mockReset().mockResolvedValue([]);
     audio.blocked = false;
@@ -725,8 +701,6 @@ describe('SpeedlineControlPage lock why-lines (FREESTYLE_BOARD_UX §4.7)', () =>
 describe('SpeedlineControlPage handset behind a question (FREESTYLE_BOARD_UX §4.8)', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
-    gamepad.press = undefined;
     playAudioMock.mockReset();
     apiFetchMock.mockReset().mockResolvedValue([]);
     audio.blocked = false;
@@ -788,8 +762,6 @@ describe('SpeedlineControlPage handset behind a question (FREESTYLE_BOARD_UX §4
 describe('SpeedlineControlPage live-run Reset and Abort', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
-    gamepad.press = undefined;
     playAudioMock.mockReset();
     apiFetchMock.mockReset().mockResolvedValue([]);
   });
@@ -895,8 +867,6 @@ describe('SpeedlineControlPage live-run Reset and Abort', () => {
 describe('SpeedlineControlPage desk', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
-    gamepad.press = undefined;
     apiFetchMock.mockReset().mockResolvedValue([]);
   });
 
@@ -1035,8 +1005,6 @@ describe('SpeedlineControlPage desk', () => {
 describe('SpeedlineControlPage setup strip', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
-    gamepad.press = undefined;
     apiFetchMock.mockReset().mockResolvedValue([]);
   });
 
@@ -1111,8 +1079,6 @@ describe('SpeedlineControlPage setup strip', () => {
 describe('SpeedlineControlPage lane resume', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
-    gamepad.press = undefined;
     playAudioMock.mockReset();
     apiFetchMock.mockReset().mockResolvedValue([]);
   });
@@ -1251,8 +1217,6 @@ describe('SpeedlineControlPage lane resume', () => {
 describe('SpeedlineControlPage lane DNF', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
-    sockets.receiverMessage = null;
-    gamepad.press = undefined;
     playAudioMock.mockReset();
     // The DNF press needs an athlete on the lane — it is the one live control
     // gated on the recording selection rather than on the race.
@@ -1310,5 +1274,76 @@ describe('SpeedlineControlPage lane DNF', () => {
     // One stop frame, from the Stop press — the DNF corrects the record, and
     // a second frame would move the frozen numeral to the moment of the press.
     expect(sends('stop')).toHaveLength(1);
+  });
+});
+
+/**
+ * Both lanes' reds ride one Buzz! dongle, so a dead heat lands buttons 10 and 15
+ * in the same poll. Each press must stop its lane and record its Time, timed
+ * off the press itself rather than when the board got round to it.
+ */
+describe('SpeedlineControlPage handset dead heat', () => {
+  beforeEach(() => {
+    sockets.senderSend = vi.fn();
+    playAudioMock.mockReset();
+    apiFetchMock
+      .mockReset()
+      .mockImplementation((path: string) =>
+        Promise.resolve(path.includes('/athletes') ? ATHLETES : []),
+      );
+  });
+
+  const stopSends = () =>
+    (sockets.senderSend.mock.calls as [StopwatchWSMessage][])
+      .map(([m]) => m)
+      .filter((m): m is Extract<StopwatchWSMessage, { type: 'stop' }> => m.type === 'stop');
+
+  const timePosts = () =>
+    (apiFetchMock.mock.calls as [string, { method?: string; body?: unknown } | undefined][]).filter(
+      ([path, opts]) => path.endsWith('/times') && opts?.method === 'POST',
+    );
+
+  /** Both lanes recording and a peer-started race running since `startTime`. */
+  const racingPage = async (startTime: number) => {
+    const page = renderPage();
+    await screen.findAllByRole('option', { name: 'Jane Doe' });
+    fireEvent.change(screen.getByLabelText(/lane 1 athlete/i), { target: { value: 'a1' } });
+    fireEvent.change(screen.getByLabelText(/lane 2 athlete/i), { target: { value: 'a2' } });
+    page.deliver({
+      type: 'start',
+      sessionId: 'c1',
+      senderId: 'peer-panel',
+      data: { startTime, lanes: [1, 2] },
+    });
+    return page;
+  };
+
+  it('stops both lanes and records both Times when the reds land in one frame', async () => {
+    const startTime = Date.now() - 8000;
+    await racingPage(startTime);
+
+    const at = startTime + 7421;
+    pressPads([10, 15], at);
+
+    expect(stopSends().map((m) => m.data)).toEqual([
+      { timerId: 1, stopTime: at },
+      { timerId: 2, stopTime: at },
+    ]);
+    expect(stopButton(1)).toBeDisabled();
+    expect(stopButton(2)).toBeDisabled();
+    await waitFor(() => expect(timePosts()).toHaveLength(2));
+    expect(timePosts().map(([, opts]) => (opts?.body as { athleteId: string }).athleteId)).toEqual([
+      'a1',
+      'a2',
+    ]);
+  });
+
+  it('never stops a lane before its start', async () => {
+    const startTime = Date.now() - 50;
+    await racingPage(startTime);
+
+    pressPad(10, startTime - 100);
+
+    expect(stopSends().map((m) => m.data)).toEqual([{ timerId: 1, stopTime: startTime }]);
   });
 });

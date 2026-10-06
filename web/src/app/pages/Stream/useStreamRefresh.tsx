@@ -51,15 +51,34 @@ export const useStreamRefresh = (
   discipline?: Discipline,
 ): { selection: LiveSelection | null; readyState: ReadyState } => {
   const queryClient = useQueryClient();
-  const { lastJsonMessage, readyState, sendWSMessage } = useWS<StreamMessage>({
-    sessionId: compId,
-    readToken,
-  });
   const [selection, setSelection] = useState<LiveSelection | null>(null);
   // LWW seq (ADR 0038 §4), one hop out from the panels: crossed concurrent
   // panel edits reach the overlay in arbitrary arrival order, so drop the
   // losing (stale-stamped) side exactly like the control panels do.
   const selectionStampRef = useRef<SelectionStamp>(INITIAL_SELECTION_STAMP);
+  // Per frame, off this render's `compId`/`discipline` (ADR 0051): a prop
+  // change re-processes nothing — no frame is held to re-read.
+  const handleFrame = (message: StreamMessage) => {
+    if (message.type === 'db_update') {
+      for (const queryKey of dbUpdateQueryKeys(compId, message.data.entity)) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+    } else if (message.type === 'updateSelection') {
+      // Discipline crosstalk guard (see the hook doc): drop the other board's
+      // selection before the stamp so this overlay's own pick isn't disturbed.
+      if (discipline && message.data.discipline !== discipline) return;
+      const stamp = acceptSelectionStamp(selectionStampRef.current, message);
+      if (stamp) {
+        selectionStampRef.current = stamp;
+        setSelection(message.data);
+      }
+    }
+  };
+  const { readyState, sendWSMessage } = useWS<StreamMessage>({
+    sessionId: compId,
+    readToken,
+    onMessage: handleFrame,
+  });
 
   // On every OPEN transition, catch up on both channels an overlay can miss
   // while it was disconnected (or before it ever connected):
@@ -80,23 +99,6 @@ export const useStreamRefresh = (
       sendWSMessage({ type: 'request_state', data: {} });
     }
   }, [readyState, queryClient, compId, sendWSMessage]);
-
-  useEffect(() => {
-    if (lastJsonMessage?.type === 'db_update') {
-      for (const queryKey of dbUpdateQueryKeys(compId, lastJsonMessage.data.entity)) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
-    } else if (lastJsonMessage?.type === 'updateSelection') {
-      // Discipline crosstalk guard (see the hook doc): drop the other board's
-      // selection before the stamp so this overlay's own pick isn't disturbed.
-      if (discipline && lastJsonMessage.data.discipline !== discipline) return;
-      const stamp = acceptSelectionStamp(selectionStampRef.current, lastJsonMessage);
-      if (stamp) {
-        selectionStampRef.current = stamp;
-        setSelection(lastJsonMessage.data);
-      }
-    }
-  }, [lastJsonMessage, queryClient, compId, discipline]);
 
   return { selection, readyState };
 };

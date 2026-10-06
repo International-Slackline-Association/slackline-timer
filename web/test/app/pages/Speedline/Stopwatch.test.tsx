@@ -14,7 +14,6 @@ describe('Stopwatch hero time numerals', () => {
     // formatted time renders without driving the live interval.
     render(
       <Stopwatch
-        lastJsonMessage={undefined}
         isReady
         timerId={1}
         recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
@@ -42,7 +41,6 @@ describe('Stopwatch hero time numerals', () => {
     // ControlPage's narrow column and not overflow onto the centre controls.
     render(
       <Stopwatch
-        lastJsonMessage={undefined}
         isReady
         timerId={1}
         recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
@@ -59,7 +57,6 @@ describe('Stopwatch hero time numerals', () => {
   it('replaces the tiny "(Unofficial)" marker with a legible UNOFFICIAL tag', () => {
     render(
       <Stopwatch
-        lastJsonMessage={undefined}
         isReady
         timerId={1}
         recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
@@ -72,9 +69,7 @@ describe('Stopwatch hero time numerals', () => {
   });
 
   it('renders an idle lane in slate (ink.hi)', () => {
-    render(
-      <Stopwatch lastJsonMessage={undefined} isReady timerId={1} recovery={{ kind: 'idle' }} />,
-    );
+    render(<Stopwatch isReady timerId={1} recovery={{ kind: 'idle' }} />);
     const time = screen.getByText('0:00.00');
     expect(window.getComputedStyle(time).color).toBe('rgb(51, 60, 78)');
   });
@@ -83,9 +78,7 @@ describe('Stopwatch hero time numerals', () => {
     // The slate idle digits are otherwise dim; keyed over dark footage they need
     // the standard protection halo (slate stack) to survive — not just running/
     // finished states.
-    render(
-      <Stopwatch lastJsonMessage={undefined} isReady timerId={1} recovery={{ kind: 'idle' }} />,
-    );
+    render(<Stopwatch isReady timerId={1} recovery={{ kind: 'idle' }} />);
     const shadow = window.getComputedStyle(screen.getByText('0:00.00')).textShadow;
     expect(shadow).not.toBe('');
     expect(shadow).not.toBe('none');
@@ -99,7 +92,6 @@ describe('Stopwatch hero time numerals', () => {
     // halo rather than the recessive idle slate.
     render(
       <Stopwatch
-        lastJsonMessage={undefined}
         isReady
         timerId={1}
         recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
@@ -115,19 +107,12 @@ describe('Stopwatch hero time numerals', () => {
 
   it('inks idle and stopped plate digits in the overlay name ink (one black per frame)', () => {
     const { unmount } = render(
-      <Stopwatch
-        lastJsonMessage={undefined}
-        isReady
-        timerId={1}
-        recovery={{ kind: 'idle' }}
-        size="plate"
-      />,
+      <Stopwatch isReady timerId={1} recovery={{ kind: 'idle' }} size="plate" />,
     );
     expect(window.getComputedStyle(screen.getByText('0:00.00')).color).toBe('rgb(35, 31, 32)');
     unmount();
     render(
       <Stopwatch
-        lastJsonMessage={undefined}
         isReady
         timerId={1}
         recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
@@ -140,7 +125,6 @@ describe('Stopwatch hero time numerals', () => {
   it('keeps running plate digits in running teal', () => {
     render(
       <Stopwatch
-        lastJsonMessage={undefined}
         isReady
         timerId={1}
         recovery={{ kind: 'running', startTime: Date.now() }}
@@ -153,14 +137,7 @@ describe('Stopwatch hero time numerals', () => {
   });
 
   it('renders a running lane in running teal', () => {
-    render(
-      <Stopwatch
-        lastJsonMessage={undefined}
-        isReady
-        timerId={1}
-        recovery={{ kind: 'running', startTime: Date.now() }}
-      />,
-    );
+    render(<Stopwatch isReady timerId={1} recovery={{ kind: 'running', startTime: Date.now() }} />);
     const time = screen.getByText(/^\d+:\d\d\.\d\d$/);
     // Running resolves through --tl-running (canonical #13A89E in tokens.css;
     // jsdom doesn't resolve var()).
@@ -177,7 +154,7 @@ describe('Stopwatch hero time numerals', () => {
       type: 'start',
       data: { startTime: 1_000_000, lanes: [1, 2] },
     };
-    const { rerender } = render(<Stopwatch lastJsonMessage={start} isReady timerId={1} />);
+    const { rerender } = render(<Stopwatch laneFrame={start} isReady timerId={1} />);
     // The marker row stays mounted (space reserved so the numeral never jumps)
     // but is only VISIBLE once the lane resolves.
     expect(screen.getByText('UNOFFICIAL')).not.toBeVisible();
@@ -187,7 +164,7 @@ describe('Stopwatch hero time numerals', () => {
       type: 'stop',
       data: { timerId: 1, stopTime: 1_000_030 },
     };
-    rerender(<Stopwatch lastJsonMessage={stop} isReady timerId={1} />);
+    rerender(<Stopwatch laneFrame={stop} isReady timerId={1} />);
 
     // Frozen at 30ms → 0:00.03, with the resolved marker shown.
     expect(screen.getByText('0:00.03')).toBeInTheDocument();
@@ -204,9 +181,7 @@ describe('Stopwatch hero time numerals', () => {
       stopTime: 83_450,
       elapsedMs: 83_450,
     } as const;
-    const { rerender } = render(
-      <Stopwatch lastJsonMessage={undefined} isReady timerId={2} recovery={finished} />,
-    );
+    const { rerender } = render(<Stopwatch isReady timerId={2} recovery={finished} />);
     expect(screen.getByText('1:23.45')).toBeInTheDocument();
 
     const soloStart: StopwatchWSMessage = {
@@ -214,7 +189,7 @@ describe('Stopwatch hero time numerals', () => {
       type: 'start',
       data: { startTime: 1_000_000, lanes: [1] },
     };
-    rerender(<Stopwatch lastJsonMessage={soloStart} isReady timerId={2} recovery={finished} />);
+    rerender(<Stopwatch laneFrame={soloStart} isReady timerId={2} recovery={finished} />);
 
     expect(screen.getByText('0:00.00')).toBeInTheDocument();
     expect(screen.getByText('UNOFFICIAL')).not.toBeVisible();
@@ -225,7 +200,7 @@ describe('Stopwatch hero time numerals', () => {
       type: 'stop',
       data: { timerId: 2, stopTime: 1_005_000 },
     };
-    rerender(<Stopwatch lastJsonMessage={stop} isReady timerId={2} recovery={finished} />);
+    rerender(<Stopwatch laneFrame={stop} isReady timerId={2} recovery={finished} />);
     expect(screen.getByText('0:00.00')).toBeInTheDocument();
   });
 
@@ -235,14 +210,14 @@ describe('Stopwatch hero time numerals', () => {
       type: 'start',
       data: { startTime: 1_000_000, lanes: [2] },
     };
-    const { rerender } = render(<Stopwatch lastJsonMessage={soloStart} isReady timerId={2} />);
+    const { rerender } = render(<Stopwatch laneFrame={soloStart} isReady timerId={2} />);
 
     const stop: StopwatchWSMessage = {
       sessionId: 's',
       type: 'stop',
       data: { timerId: 2, stopTime: 1_000_030 },
     };
-    rerender(<Stopwatch lastJsonMessage={stop} isReady timerId={2} />);
+    rerender(<Stopwatch laneFrame={stop} isReady timerId={2} />);
     expect(screen.getByText('0:00.03')).toBeInTheDocument();
     expect(screen.getByText('UNOFFICIAL')).toBeVisible();
   });
@@ -255,7 +230,7 @@ describe('Stopwatch hero time numerals', () => {
       type: 'stop',
       data: { timerId: 1, stopTime: 1_000_030 },
     };
-    render(<Stopwatch lastJsonMessage={stop} isReady timerId={1} />);
+    render(<Stopwatch laneFrame={stop} isReady timerId={1} />);
 
     expect(screen.getByText('UNOFFICIAL')).not.toBeVisible();
     expect(screen.getByText('0:00.00')).toBeInTheDocument();
@@ -285,8 +260,8 @@ describe('Stopwatch hero time numerals', () => {
 
     /** Run lane 1 and freeze it at 4.00s, the state a missed `resume` leaves. */
     const frozenLane = () => {
-      const view = render(<Stopwatch lastJsonMessage={start} isReady timerId={1} />);
-      view.rerender(<Stopwatch lastJsonMessage={stop} isReady timerId={1} />);
+      const view = render(<Stopwatch laneFrame={start} isReady timerId={1} />);
+      view.rerender(<Stopwatch laneFrame={stop} isReady timerId={1} />);
       expect(screen.getByText('0:04.00')).toBeInTheDocument();
       return view;
     };
@@ -297,7 +272,7 @@ describe('Stopwatch hero time numerals', () => {
 
       rerender(
         <Stopwatch
-          lastJsonMessage={stop}
+          laneFrame={stop}
           isReady
           timerId={1}
           recovery={{ kind: 'running', startTime: 1_000_000, assertedAt: 1_005_000 }}
@@ -314,7 +289,7 @@ describe('Stopwatch hero time numerals', () => {
 
       rerender(
         <Stopwatch
-          lastJsonMessage={stop}
+          laneFrame={stop}
           isReady
           timerId={1}
           recovery={{ kind: 'running', startTime: 1_000_000, assertedAt: 1_003_000 }}
@@ -330,7 +305,7 @@ describe('Stopwatch hero time numerals', () => {
 
       rerender(
         <Stopwatch
-          lastJsonMessage={stop}
+          laneFrame={stop}
           isReady
           timerId={1}
           recovery={{ kind: 'running', startTime: 1_000_000 }}
@@ -343,11 +318,11 @@ describe('Stopwatch hero time numerals', () => {
     it('still freezes a running lane on a snapshot of the same run that finished', () => {
       // The HWC 2026 missed-stop rule, unchanged by the stamp: a snapshot is the
       // only way a display that never received the stop stops running forever.
-      const { rerender } = render(<Stopwatch lastJsonMessage={start} isReady timerId={1} />);
+      const { rerender } = render(<Stopwatch laneFrame={start} isReady timerId={1} />);
 
       rerender(
         <Stopwatch
-          lastJsonMessage={start}
+          laneFrame={start}
           isReady
           timerId={1}
           recovery={{
@@ -366,7 +341,7 @@ describe('Stopwatch hero time numerals', () => {
 
   it('renders from the controlled laneState prop, ignoring the loopback message', () => {
     // On the control page the Stopwatch is presentational: the page owns lane
-    // state and passes it down as `laneState`. The loopback `lastJsonMessage`
+    // state and passes it down as `laneState`. The loopback `laneFrame`
     // must NOT drive it (no AWS-echo dependency), so a start message present in
     // the same render is ignored while an idle laneState keeps the lane at rest.
     const start: StopwatchWSMessage = {
@@ -375,7 +350,7 @@ describe('Stopwatch hero time numerals', () => {
       data: { startTime: Date.now(), lanes: [1, 2] },
     };
     const { rerender } = render(
-      <Stopwatch lastJsonMessage={start} isReady timerId={1} laneState={{ kind: 'idle' }} />,
+      <Stopwatch laneFrame={start} isReady timerId={1} laneState={{ kind: 'idle' }} />,
     );
     expect(screen.getByText('0:00.00')).toBeInTheDocument();
     expect(screen.getByText('UNOFFICIAL')).not.toBeVisible();
@@ -384,7 +359,7 @@ describe('Stopwatch hero time numerals', () => {
     // driven purely by the prop change (not a message).
     rerender(
       <Stopwatch
-        lastJsonMessage={start}
+        laneFrame={start}
         isReady
         timerId={1}
         laneState={{ kind: 'finished', startTime: 0, stopTime: 12_340, elapsedMs: 12_340 }}
@@ -411,7 +386,7 @@ describe('Stopwatch hero time numerals', () => {
         type: 'start',
         data: { startTime: 1_000_000, lanes: [1, 2] },
       };
-      const { rerender } = render(<Stopwatch lastJsonMessage={start} isReady timerId={1} />);
+      const { rerender } = render(<Stopwatch laneFrame={start} isReady timerId={1} />);
       // The 50ms tick callback the running lane scheduled.
       const tick = setSpy.mock.calls[0]?.[0] as () => void;
       expect(tick).toBeTypeOf('function');
@@ -423,7 +398,7 @@ describe('Stopwatch hero time numerals', () => {
         type: 'stop',
         data: { timerId: 1, stopTime: 1_000_030 },
       };
-      rerender(<Stopwatch lastJsonMessage={stop} isReady timerId={1} />);
+      rerender(<Stopwatch laneFrame={stop} isReady timerId={1} />);
       expect(screen.getByText('0:00.03')).toBeInTheDocument();
 
       // A tick queued before the stop now runs its callback body. It must NOT
@@ -441,12 +416,7 @@ describe('Stopwatch hero time numerals', () => {
       const setSpy = vi.spyOn(globalThis, 'setInterval');
       vi.setSystemTime(2_000_000);
       const { rerender } = render(
-        <Stopwatch
-          lastJsonMessage={undefined}
-          isReady
-          timerId={1}
-          laneState={{ kind: 'running', startTime: 2_000_000 }}
-        />,
+        <Stopwatch isReady timerId={1} laneState={{ kind: 'running', startTime: 2_000_000 }} />,
       );
       const tick = setSpy.mock.calls[0]?.[0] as () => void;
       expect(tick).toBeTypeOf('function');
@@ -454,7 +424,6 @@ describe('Stopwatch hero time numerals', () => {
       vi.setSystemTime(2_000_500);
       rerender(
         <Stopwatch
-          lastJsonMessage={undefined}
           isReady
           timerId={1}
           laneState={{ kind: 'finished', startTime: 2_000_000, stopTime: 2_000_030, elapsedMs: 30 }}
@@ -475,7 +444,6 @@ describe('Stopwatch clock plate', () => {
   const plateOf = (elapsedMs: number, plateAlign?: 'left' | 'right' | 'center') => {
     const view = render(
       <Stopwatch
-        lastJsonMessage={undefined}
         isReady
         timerId={1}
         recovery={{ kind: 'finished', startTime: 0, stopTime: elapsedMs, elapsedMs }}
@@ -499,7 +467,6 @@ describe('Stopwatch clock plate', () => {
     const before = window.getComputedStyle(plate()).width;
     rerender(
       <Stopwatch
-        lastJsonMessage={undefined}
         isReady
         timerId={1}
         recovery={{ kind: 'finished', startTime: 1, stopTime: 600_001, elapsedMs: 600_000 }}

@@ -258,11 +258,18 @@ export const useFreestyleTimerFeed = () => {
   // arrival order — exactly like the control panels do.
   const selectionStampRef = useRef<SelectionStamp>(INITIAL_SELECTION_STAMP);
 
-  const { lastJsonMessage, readyState, sendWSMessage } = useWS<
-    CountdownWSMessage | DbUpdateWSMessage
-  >({
+  // The frame the clocks behind this feed apply — every frame through
+  // `clockFeedMessage`, set inside the flushed delivery (ADR 0051) so each
+  // commits before the next is handled.
+  const [countdownMessage, setCountdownMessage] = useState<CountdownWSMessage | undefined>(
+    undefined,
+  );
+
+  const { readyState, sendWSMessage } = useWS<CountdownWSMessage | DbUpdateWSMessage>({
     sessionId,
     readToken,
+    // Declared below, after the request_state-on-OPEN effect.
+    onMessage: (message) => handleFrame(message),
   });
 
   useEffect(() => {
@@ -276,11 +283,9 @@ export const useFreestyleTimerFeed = () => {
     }
   }, [readyState]);
 
-  useEffect(() => {
-    if (!lastJsonMessage) {
-      return;
-    }
-    const { data, type } = lastJsonMessage;
+  const handleFrame = (message: CountdownWSMessage | DbUpdateWSMessage) => {
+    setCountdownMessage(clockFeedMessage(message));
+    const { data, type } = message;
     if (
       type === 'start_countdown' ||
       type === 'stop_countdown' ||
@@ -290,7 +295,7 @@ export const useFreestyleTimerFeed = () => {
     ) {
       // The warm-up-surface rule, applied incrementally (the same predicate the
       // snapshot path below re-derives with — one home, util/warmupSurface).
-      const timerId = lastJsonMessage.timerId;
+      const timerId = message.timerId;
       liveChannelsRef.current.add(timerId);
       // A live fold always returns a seeded surface, so this message IS the seed
       // when nothing preceded it.
@@ -298,7 +303,7 @@ export const useFreestyleTimerFeed = () => {
       // This message supersedes the channel's recovered snapshot row — refresh
       // or drop it per `nextRecovery`.
       const at = Date.now();
-      setRecovery((lanes) => nextRecovery(lanes, lastJsonMessage, at));
+      setRecovery((lanes) => nextRecovery(lanes, message, at));
       setWarmupSurface((current) =>
         nextWarmupSurface({ kind: 'live', current, action: { type, timerId } }),
       );
@@ -315,7 +320,7 @@ export const useFreestyleTimerFeed = () => {
     }
     switch (type) {
       case 'updatePreview':
-        setIsPreviewEnabled(lastJsonMessage.data.enabled);
+        setIsPreviewEnabled(message.data.enabled);
         break;
       // The board's best-trick tally: reveal/clear the hero and update the turn.
       // The explicit mode rides the same message (ADR 0036).
@@ -324,24 +329,24 @@ export const useFreestyleTimerFeed = () => {
         // board's selection must never drive the freestyle athlete display. Drop
         // it BEFORE the LWW stamp so a foreign seq can't shadow a real freestyle
         // push (this display's stamp ref then tracks only freestyle selections).
-        if (lastJsonMessage.data.discipline !== 'freestyle') break;
-        const stamp = acceptSelectionStamp(selectionStampRef.current, lastJsonMessage);
+        if (message.data.discipline !== 'freestyle') break;
+        const stamp = acceptSelectionStamp(selectionStampRef.current, message);
         if (!stamp) break;
         selectionStampRef.current = stamp;
-        setBestTrick(lastJsonMessage.data.bestTrick ?? null);
-        setFreestyleMode(lastJsonMessage.data.freestyleMode ?? null);
-        setNextUp(lastJsonMessage.data.nextUp ?? null);
-        setQualiNextUp(lastJsonMessage.data.qualiNextUp ?? null);
+        setBestTrick(message.data.bestTrick ?? null);
+        setFreestyleMode(message.data.freestyleMode ?? null);
+        setNextUp(message.data.nextUp ?? null);
+        setQualiNextUp(message.data.qualiNextUp ?? null);
         setLaneAthleteIds({
-          1: lastJsonMessage.data.athlete1Id,
-          2: lastJsonMessage.data.athlete2Id,
+          1: message.data.athlete1Id,
+          2: message.data.athlete2Id,
         });
         break;
       }
       case 'db_update':
         // A competition write landed in this room — re-fetch just that entity's
         // branch (scores/times also feed rankings) rather than every active query.
-        for (const queryKey of dbUpdateQueryKeys(sessionId, lastJsonMessage.data.entity)) {
+        for (const queryKey of dbUpdateQueryKeys(sessionId, message.data.entity)) {
           void queryClient.invalidateQueries({ queryKey });
         }
         break;
@@ -393,7 +398,7 @@ export const useFreestyleTimerFeed = () => {
         break;
       }
     }
-  }, [lastJsonMessage, queryClient]);
+  };
 
   // The warm-up ran out on a display surface (its hero's Countdown crossed zero):
   // hand off to the armed lanes, exactly as an operator stop does
@@ -417,8 +422,6 @@ export const useFreestyleTimerFeed = () => {
       })),
     [],
   );
-
-  const countdownMessage = clockFeedMessage(lastJsonMessage);
 
   return {
     sessionId,

@@ -7,21 +7,30 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { matchKeys } from 'app/api/matches';
 import { rankingKeys } from 'app/api/rankings';
 
+import { deliver as deliverFrames } from '../../../util/wsMock';
+
 const { wsState, useWSMock } = vi.hoisted(() => {
-  const wsState = { lastJsonMessage: null as unknown, readyState: 0 };
+  const wsState = { readyState: 0 };
   // One STABLE sendWSMessage (it sits in useStreamRefresh's effect deps; a
   // per-render identity would re-fire the on-OPEN invalidation every render).
   const sendWSMessage = vi.fn();
   return {
     wsState,
-    useWSMock: vi.fn(() => ({
-      lastJsonMessage: wsState.lastJsonMessage,
+    useWSMock: vi.fn((_params: { sessionId: string }) => ({
       readyState: wsState.readyState,
       sendWSMessage,
     })),
   };
 });
-vi.mock('app/hooks/useWebSocket', () => ({ useWS: useWSMock }));
+vi.mock('app/hooks/useWebSocket', async () => {
+  const { useCapturedSocket } = await import('../../../util/wsMock');
+  return {
+    useWS: (params: { sessionId: string; onMessage?: (frame: never) => void }) => {
+      useCapturedSocket(params);
+      return useWSMock(params);
+    },
+  };
+});
 
 import { AdminLiveRefresh } from 'app/pages/Admin/AdminLiveRefresh';
 import { SelectedCompetitionProvider } from 'app/state/selectedCompetition';
@@ -45,8 +54,8 @@ const renderShell = (compId: string | null) => {
       </SelectedCompetitionProvider>
     </QueryClientProvider>
   );
-  const view = render(tree());
-  return { invalidate, rerenderShell: () => view.rerender(tree()) };
+  render(tree());
+  return { invalidate };
 };
 
 const invalidatedKeys = (invalidate: { mock: { calls: unknown[][] } }) =>
@@ -54,7 +63,6 @@ const invalidatedKeys = (invalidate: { mock: { calls: unknown[][] } }) =>
 
 afterEach(() => {
   window.localStorage.clear();
-  wsState.lastJsonMessage = null;
   wsState.readyState = ReadyState.CONNECTING;
   useWSMock.mockClear();
 });
@@ -72,15 +80,14 @@ describe('AdminLiveRefresh', () => {
 
   it('invalidates the entity branches of an incoming db_update', () => {
     wsState.readyState = ReadyState.OPEN;
-    const { invalidate, rerenderShell } = renderShell(COMP);
+    const { invalidate } = renderShell(COMP);
     invalidate.mockClear();
 
-    wsState.lastJsonMessage = {
+    deliverFrames({
       type: 'db_update',
       sessionId: COMP,
       data: { entity: 'match', action: 'updated', id: 'm1' },
-    };
-    rerenderShell();
+    });
 
     expect(invalidatedKeys(invalidate)).toEqual([matchKeys.all(COMP), rankingKeys.all(COMP)]);
   });

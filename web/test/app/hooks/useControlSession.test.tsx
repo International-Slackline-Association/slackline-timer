@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReadyState } from 'react-use-websocket';
@@ -14,7 +14,8 @@ import type {
 } from 'app/hooks/useWebSocket';
 
 // One useWS call — the session's single relay socket (ADR 0043). The mock
-// controls its readyState and the incoming (peer-only) lastJsonMessage.
+// controls its readyState; incoming (peer-only) frames reach the captured
+// `onMessage` (`receive` below).
 const { useWSMock } = vi.hoisted(() => ({ useWSMock: vi.fn() }));
 vi.mock('app/hooks/useWebSocket', () => ({ useWS: useWSMock }));
 
@@ -26,8 +27,10 @@ vi.mock('app/state/selectedCompetition', () => ({
   useSelectedCompetition: useSelectedCompetitionMock,
 }));
 
+import { deliver as deliverFrames, deliverTo, useCapturedSocket } from '../../util/wsMock';
 import {
   PEER_ANSWER_MS,
+  REQUEST_STATE_ANSWER_MS,
   SELF_SAVE_DELAY_MS,
   useControlSession,
   useSessionId,
@@ -79,19 +82,30 @@ const baseParams = () => ({
 });
 
 let senderSend: ReturnType<typeof vi.fn>;
-let socketState: { readyState: ReadyState; lastJsonMessage: unknown };
+let socketState: { readyState: ReadyState };
 
 // This page's per-mount id — stamped on outgoing selections as the LWW tiebreak.
 const OWN_SENDER_ID = 'own-sender-id';
 
 const configureSocket = () => {
   senderSend = vi.fn();
-  useWSMock.mockImplementation(() => ({
-    sendWSMessage: senderSend,
-    readyState: socketState.readyState,
-    lastJsonMessage: socketState.lastJsonMessage,
-    senderId: OWN_SENDER_ID,
-  }));
+  useWSMock.mockImplementation((params: { onMessage?: (frame: never) => void }) => {
+    useCapturedSocket(params);
+    return {
+      sendWSMessage: senderSend,
+      readyState: socketState.readyState,
+      senderId: OWN_SENDER_ID,
+    };
+  });
+};
+
+/** Swap in a fresh send spy and re-render on an OPEN link, then hand the hook
+ * one peer frame through its captured `onMessage`. */
+const receive = (rerender: () => void, message: unknown) => {
+  socketState = { readyState: ReadyState.OPEN };
+  configureSocket();
+  rerender();
+  deliverFrames(message);
 };
 
 /** The selection payloads pushed so far, in order. */
@@ -111,13 +125,14 @@ const selectionFrames = (): { seq?: number; echo?: true }[] =>
 const selectionStamps = (): number[] => selectionFrames().map((message) => message.seq as number);
 
 beforeEach(() => {
-  socketState = { readyState: ReadyState.OPEN, lastJsonMessage: null };
+  socketState = { readyState: ReadyState.OPEN };
   useQueryParamsMock.mockReturnValue({ sessionId: 'default' });
   useSelectedCompetitionMock.mockReturnValue({ compId: 'comp-1' });
   configureSocket();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -174,11 +189,11 @@ describe('useControlSession', () => {
   it('re-pushes names + selection on a socket re-open (reconnect recovery)', () => {
     const { rerender } = renderHook(() => useControlSession(baseParams()));
 
-    socketState = { readyState: ReadyState.CLOSED, lastJsonMessage: null };
+    socketState = { readyState: ReadyState.CLOSED };
     configureSocket();
     rerender();
     senderSend.mockClear();
-    socketState = { readyState: ReadyState.OPEN, lastJsonMessage: null };
+    socketState = { readyState: ReadyState.OPEN };
     configureSocket();
     rerender();
 
@@ -238,7 +253,7 @@ describe('useControlSession', () => {
   });
 
   it('does not push while the socket is not OPEN', () => {
-    socketState = { readyState: ReadyState.CONNECTING, lastJsonMessage: null };
+    socketState = { readyState: ReadyState.CONNECTING };
     configureSocket();
     renderHook(() => useControlSession(baseParams()));
     expect(senderSend).not.toHaveBeenCalled();
@@ -259,9 +274,7 @@ describe('useControlSession', () => {
     act(() => result.current.togglePreview()); // preview now disabled
 
     senderSend.mockClear();
-    socketState = { readyState: ReadyState.OPEN, lastJsonMessage: { type: 'request_state' } };
-    configureSocket();
-    rerender();
+    receive(rerender, { type: 'request_state' });
 
     expect(senderSend).toHaveBeenCalledWith({
       type: 'state_snapshot',
@@ -273,9 +286,7 @@ describe('useControlSession', () => {
     const { rerender } = renderHook(() => useControlSession(baseParams()));
 
     senderSend.mockClear();
-    socketState = { readyState: ReadyState.OPEN, lastJsonMessage: { type: 'request_state' } };
-    configureSocket();
-    rerender();
+    receive(rerender, { type: 'request_state' });
 
     expect(senderSend).toHaveBeenCalledWith({
       type: 'updateSelection',
@@ -289,9 +300,7 @@ describe('useControlSession', () => {
     const { rerender } = renderHook(() => useControlSession({ ...baseParams(), laneNames }));
 
     senderSend.mockClear();
-    socketState = { readyState: ReadyState.OPEN, lastJsonMessage: { type: 'request_state' } };
-    configureSocket();
-    rerender();
+    receive(rerender, { type: 'request_state' });
 
     expect(senderSend).toHaveBeenCalledWith({ type: 'updateLaneNames', data: laneNames });
   });
@@ -305,12 +314,94 @@ describe('useControlSession', () => {
     const { rerender } = renderHook(() => useControlSession(baseParams()));
 
     senderSend.mockClear();
-    socketState = { readyState: ReadyState.OPEN, lastJsonMessage: { type: 'request_state' } };
-    configureSocket();
-    rerender();
+    receive(rerender, { type: 'request_state' });
 
     const types = senderSend.mock.calls.map(([m]) => m.type);
     expect(types.indexOf('updateSelection')).toBeLessThan(types.indexOf('state_snapshot'));
+  });
+});
+
+describe('useControlSession request_state answer coalescing', () => {
+  const TRIPLE = ['updateSelection', 'state_snapshot', 'updateLaneNames'];
+  const ask = (senderId: string) => deliverFrames({ type: 'request_state', senderId, data: {} });
+  const answerTypes = () =>
+    senderSend.mock.calls.map(([message]) => message.type).filter((type) => TRIPLE.includes(type));
+  const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+
+  it('answers a lone request at once', () => {
+    vi.useFakeTimers();
+    renderHook(() => useControlSession(baseParams()));
+    senderSend.mockClear();
+
+    ask('joiner-1');
+
+    expect(answerTypes()).toEqual(TRIPLE);
+  });
+
+  it('answers a burst with one immediate and one trailing triple, built from the latest state', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useControlSession(baseParams()));
+    senderSend.mockClear();
+
+    ask('joiner-0');
+    for (let i = 1; i < 5; i++) {
+      advance(50);
+      ask(`joiner-${i}`);
+    }
+    act(() => result.current.togglePreview());
+    expect(answerTypes()).toEqual(TRIPLE);
+
+    advance(REQUEST_STATE_ANSWER_MS - 200);
+
+    expect(answerTypes()).toEqual([...TRIPLE, ...TRIPLE]);
+    const snapshots = senderSend.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'state_snapshot');
+    expect(snapshots.at(-1).data.isPreviewEnabled).toBe(false);
+
+    advance(REQUEST_STATE_ANSWER_MS);
+    expect(answerTypes()).toHaveLength(6);
+  });
+
+  it('restarts the window after a trailing answer', () => {
+    vi.useFakeTimers();
+    renderHook(() => useControlSession(baseParams()));
+    ask('joiner-1');
+    ask('joiner-2');
+    advance(REQUEST_STATE_ANSWER_MS);
+    senderSend.mockClear();
+
+    advance(100);
+    ask('joiner-3');
+    expect(answerTypes()).toEqual([]);
+
+    advance(REQUEST_STATE_ANSWER_MS - 100);
+    expect(answerTypes()).toEqual(TRIPLE);
+  });
+
+  it('answers a request after a quiet window at once again', () => {
+    vi.useFakeTimers();
+    renderHook(() => useControlSession(baseParams()));
+    ask('joiner-1');
+    advance(REQUEST_STATE_ANSWER_MS);
+    senderSend.mockClear();
+
+    ask('joiner-2');
+
+    expect(answerTypes()).toEqual(TRIPLE);
+  });
+
+  it('drops a pending answer on unmount', () => {
+    vi.useFakeTimers();
+    const { unmount } = renderHook(() => useControlSession(baseParams()));
+    ask('joiner-1');
+    ask('joiner-2');
+    senderSend.mockClear();
+
+    unmount();
+    advance(REQUEST_STATE_ANSWER_MS);
+
+    expect(answerTypes()).toEqual([]);
   });
 });
 
@@ -322,12 +413,8 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
     timers: [],
   });
 
-  /** Deliver an incoming peer message and rerender so the hook sees it. */
-  const deliver = (rerender: () => void, message: unknown) => {
-    socketState = { readyState: ReadyState.OPEN, lastJsonMessage: message };
-    configureSocket();
-    rerender();
-  };
+  /** Deliver an incoming peer message (see `receive`). */
+  const deliver = receive;
 
   it('sends request_state once the socket is OPEN (mirror-on-open)', () => {
     renderHook(() => useControlSession(baseParams()));
@@ -335,7 +422,7 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
   });
 
   it('does not request state while the socket is not OPEN', () => {
-    socketState = { readyState: ReadyState.CONNECTING, lastJsonMessage: null };
+    socketState = { readyState: ReadyState.CONNECTING };
     configureSocket();
     renderHook(() => useControlSession(baseParams()));
     expect(senderSend).not.toHaveBeenCalledWith({ type: 'request_state', data: {} });
@@ -386,7 +473,11 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
     const applySnapshot = vi.fn().mockReturnValue(true);
     const { rerender } = renderHook(() => useControlSession({ ...baseParams(), applySnapshot }));
 
-    deliver(rerender, { type: 'start', senderId: 'peer-panel', data: { startTime: 1000 } });
+    deliver(rerender, {
+      type: 'start',
+      senderId: 'peer-panel',
+      data: { startTime: 1000, lanes: [1, 2] },
+    });
     deliver(rerender, { type: 'state_snapshot', senderId: 'peer-panel', data: snapshot(false) });
 
     expect(applySnapshot).not.toHaveBeenCalled();
@@ -568,15 +659,16 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
 
   /**
    * A panel whose page REACTS to a peer timer frame the way the real board does:
-   * the reaction is a state write in an effect declared after the session hook
-   * (`useFreestyleBoard`'s peer-countdown effect), so the derived selection it
-   * produces can only land in the NEXT commit — batched with the hook's own
-   * `setLastPeerEvent`, which is the commit the forward is consumed in. That
-   * one-commit gap is the whole causal signal: a change already present in the
-   * render the peer frame arrived in cannot have come from it.
+   * the reaction is a state write in the page's `onPeerMessage`
+   * (`useFreestyleBoard`'s peer-countdown handler), so the derived selection it
+   * produces can only land in the NEXT commit — the frame's own, together with
+   * the hook's `setLastPeerEvent`, which is the commit the forward is consumed
+   * in. That one-commit gap is the whole causal signal: a change already present
+   * in the render the peer frame arrived in cannot have come from it.
    */
   const reactingPanel = (react: (message: WSMessage) => Partial<FreestyleSelection> | null) => {
     let board: FreestyleSelection = selection;
+    let bump: (update: (n: number) => number) => void = () => {};
     const params = {
       ...baseParams(),
       get selection() {
@@ -585,17 +677,17 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
       applySelection: (sel: LiveSelection) => {
         if (sel.discipline === 'freestyle') board = sel;
       },
-    };
-    const { rerender } = renderHook(() => {
-      const [, bump] = useState(0);
-      const session = useControlSession(params);
-      useEffect(() => {
-        const patch = session.peerMessage ? react(session.peerMessage) : null;
+      onPeerMessage: (message: WSMessage) => {
+        const patch = react(message);
         if (!patch) return;
         board = { ...board, ...patch };
         bump((n) => n + 1);
-      }, [session.peerMessage]);
-      return session;
+      },
+    };
+    const { rerender } = renderHook(() => {
+      const [, setTick] = useState(0);
+      bump = setTick;
+      return useControlSession(params);
     });
     return { rerender };
   };
@@ -655,13 +747,16 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
     ]);
   });
 
-  it('claims fresh authority for a local edit committed alongside a peer selection', () => {
+  it('claims fresh authority for a local edit already on screen when a peer selection lands', () => {
     // The commit window is not intent: a peer frame landing in the render the
     // operator acted in used to consume the forward, so the LOCAL edit went out
     // as a re-statement — and a re-statement loses every tie by design, so every
     // peer dropped it (`fs best-trick: B's tally consumes the try`). The
     // adoption can only land a commit later, so a change already on screen when
-    // the frame arrives is this operator's, and mints its own authority.
+    // the frame arrives is this operator's, and mints its own authority. Frames
+    // commit on their own (ADR 0051), so the edit's commit always precedes the
+    // frame's: the claim leaves first, and an adoption that reproduces it
+    // re-states nothing.
     const panel = mirroringPanel((sel) => ({ ...sel, round: 'quarter' }));
     const { rerender } = renderHook(() => useControlSession(panel.params));
     panel.edit({ round: 'quarter' });
@@ -675,7 +770,6 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
         seq: expect.any(Number),
       },
     ]);
-    expect(selectionStamps()[0]).toBeGreaterThan(roomStamp);
   });
 
   it('claims fresh authority for a local edit committed alongside a peer timer frame', () => {
@@ -790,7 +884,6 @@ describe.each([
   interface PanelSim {
     id: string;
     send: ReturnType<typeof vi.fn>;
-    inbox: unknown;
     selection: FreestyleSelection;
     /** What this panel's page ends up holding after adopting a peer selection —
      * identity for a faithful mirror, a rebuilt value for one whose adoption
@@ -829,7 +922,6 @@ describe.each([
     const panel: PanelSim = {
       id,
       send: vi.fn(),
-      inbox: null,
       selection,
       adopt,
       outbox: [],
@@ -847,12 +939,16 @@ describe.each([
   };
 
   const wireSockets = () => {
-    useWSMock.mockImplementation(() => ({
-      sendWSMessage: active.send,
-      readyState: ReadyState.OPEN,
-      lastJsonMessage: active.inbox,
-      senderId: active.id,
-    }));
+    // A socket is named by the panel it mounted for; every render reads the
+    // panel being driven.
+    useWSMock.mockImplementation((params: { onMessage?: (frame: never) => void }) => {
+      useCapturedSocket(params, active.id);
+      return {
+        sendWSMessage: active.send,
+        readyState: ReadyState.OPEN,
+        senderId: active.id,
+      };
+    });
   };
 
   const mountPanel = (panel: PanelSim) => {
@@ -864,8 +960,8 @@ describe.each([
   };
 
   const deliver = (panel: PanelSim, message: unknown) => {
-    panel.inbox = message;
-    renderPanel(panel);
+    active = panel;
+    deliverTo((tag) => tag === panel.id, message);
   };
 
   const localEdit = (panel: PanelSim, patch: Partial<FreestyleSelection>) => {
@@ -873,12 +969,12 @@ describe.each([
     renderPanel(panel);
   };
 
-  /** An operator edit and a peer frame landing in the SAME render — the commit
-   * window the stamp forward used to be armed by, regardless of intent. */
+  /** An operator edit and a peer frame back to back: the edit's commit, then the
+   * frame's — the closest the per-frame receive path (ADR 0051) lets them get,
+   * and the window the stamp forward used to be armed by, regardless of intent. */
   const collide = (panel: PanelSim, patch: Partial<FreestyleSelection>, message: unknown) => {
-    panel.selection = { ...panel.selection, ...patch };
-    panel.inbox = message;
-    renderPanel(panel);
+    localEdit(panel, patch);
+    deliver(panel, message);
   };
 
   it('two panels editing simultaneously converge within a bounded number of round trips', () => {
@@ -1074,18 +1170,14 @@ describe.each([
 });
 
 describe('useControlSession peer presence (FREESTYLE_BOARD_UX §3/§4.10)', () => {
-  /** Deliver an incoming peer message and rerender so the hook sees it. */
-  const deliver = (rerender: () => void, message: unknown) => {
-    socketState = { readyState: ReadyState.OPEN, lastJsonMessage: message };
-    configureSocket();
-    rerender();
-  };
+  /** Deliver an incoming peer message (see `receive`). */
+  const deliver = receive;
 
   const reopen = (rerender: () => void) => {
-    socketState = { readyState: ReadyState.CLOSED, lastJsonMessage: null };
+    socketState = { readyState: ReadyState.CLOSED };
     configureSocket();
     rerender();
-    socketState = { readyState: ReadyState.OPEN, lastJsonMessage: null };
+    socketState = { readyState: ReadyState.OPEN };
     configureSocket();
     rerender();
   };
@@ -1277,16 +1369,11 @@ describe('useControlSession self-snapshot (solo panel recovery)', () => {
     });
 
     const { result, rerender } = renderHook(() => useControlSession(selfParams({ applySnapshot })));
-    socketState = {
-      readyState: ReadyState.OPEN,
-      lastJsonMessage: {
-        type: 'state_snapshot',
-        senderId: 'peer-panel',
-        data: { isPreviewEnabled: true, signalPhase: 0, text: '', timers: [] },
-      },
-    };
-    configureSocket();
-    rerender();
+    receive(rerender, {
+      type: 'state_snapshot',
+      senderId: 'peer-panel',
+      data: { isPreviewEnabled: true, signalPhase: 0, text: '', timers: [] },
+    });
     expect(applySnapshot).toHaveBeenCalledTimes(1);
 
     act(() => vi.advanceTimersByTime(PEER_ANSWER_MS));
@@ -1389,7 +1476,7 @@ describe('useControlSession self-snapshot (solo panel recovery)', () => {
       });
 
     const mountUnreachable = (overrides: Parameters<typeof selfParams>[0] = {}) => {
-      socketState = { readyState: ReadyState.CONNECTING, lastJsonMessage: null };
+      socketState = { readyState: ReadyState.CONNECTING };
       configureSocket();
       return renderHook(() => useControlSession(selfParams(overrides)));
     };
@@ -1419,16 +1506,11 @@ describe('useControlSession self-snapshot (solo panel recovery)', () => {
       act(() => vi.advanceTimersByTime(GRACE_MS));
       expect(result.current.selfRecovered).toBe(true);
 
-      socketState = { readyState: ReadyState.OPEN, lastJsonMessage: null };
+      socketState = { readyState: ReadyState.OPEN };
       configureSocket();
       rerender();
       const peerSnapshot = { isPreviewEnabled: false, signalPhase: 0, text: '', timers: [] };
-      socketState = {
-        readyState: ReadyState.OPEN,
-        lastJsonMessage: { type: 'state_snapshot', senderId: 'peer-panel', data: peerSnapshot },
-      };
-      configureSocket();
-      rerender();
+      receive(rerender, { type: 'state_snapshot', senderId: 'peer-panel', data: peerSnapshot });
 
       expect(applySnapshot).toHaveBeenLastCalledWith(peerSnapshot);
       expect(result.current.enabledPreview).toBe(false);
@@ -1443,7 +1525,7 @@ describe('useControlSession self-snapshot (solo panel recovery)', () => {
       const { rerender } = mountUnreachable({ applySnapshot: () => true });
       act(() => vi.advanceTimersByTime(GRACE_MS));
 
-      socketState = { readyState: ReadyState.OPEN, lastJsonMessage: null };
+      socketState = { readyState: ReadyState.OPEN };
       configureSocket();
       rerender();
 

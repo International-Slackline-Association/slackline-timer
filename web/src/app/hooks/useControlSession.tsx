@@ -83,6 +83,12 @@ export const PEER_ANSWER_MS = 2_000;
  * save, which is the same run one action older. */
 export const SELF_SAVE_DELAY_MS = 250;
 
+/** The `request_state` answer window (ADR 0050). The first ask in a quiet
+ * window is answered at once; later asks inside it yield one trailing answer at
+ * its end, built then, and the window restarts. So a reconnect storm of N
+ * joiners costs each panel at most one triple per window rather than N. */
+export const REQUEST_STATE_ANSWER_MS = 500;
+
 /**
  * The last board change another panel made here — the token a surface flashes
  * its "by other panel" cue off (brief §3/§4.10). `seq` is monotonic so a repeat
@@ -137,6 +143,10 @@ export interface UseControlSessionParams<T extends WSMessage> {
    * called once a live timer message has been seen since (re)open
    * (live-beats-snapshot — the preview's proven recovery rule). */
   applySnapshot?: (snapshot: SpeedlineSnapshot | CountdownSnapshot) => boolean;
+  /** The page's own peer handling (ADR 0038 timer mirroring), called for every
+   * peer frame after this hook's bookkeeping, inside the same flushed delivery
+   * (ADR 0051) — so both halves' state writes land in one commit. */
+  onPeerMessage?: (message: T) => void;
 }
 
 /**
@@ -168,18 +178,19 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
     buildSnapshot,
     applySelection,
     applySnapshot,
+    onPeerMessage,
   } = params;
 
   // One socket for both directions (ADR 0043): the relay excludes the sending
   // *connection* from its fan-out, so everything arriving here is peer traffic
   // by construction — no self-echo exists to discriminate. `senderId` stays on
-  // the envelope as the selection LWW tiebreak (ADR 0038 §4).
+  // the envelope as the selection LWW tiebreak (ADR 0038 §4). `handlePeer` is
+  // declared below; it only runs once a frame arrives.
   const {
     sendWSMessage: sendRaw,
-    lastJsonMessage: peerMessage,
     readyState,
     senderId,
-  } = useWS<T>({ sessionId });
+  } = useWS<T>({ sessionId, onMessage: (frame) => handlePeer(frame) });
 
   // The socket's owner grades its own link, once (ADR 0024 reconnects are
   // unbounded, so the link has five states, not two): every surface that
@@ -190,9 +201,8 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
   const [peerState, setPeerState] = useState<PeerState>('awaiting');
   const [lastPeerEvent, setLastPeerEvent] = useState<PeerEvent | null>(null);
   const peerSeqRef = useRef<number>(0);
-  // The peer-message handler runs in an effect keyed only on peerMessage, so
-  // mirror the preview flag + the live selection into refs to avoid replying with
-  // a stale snapshot / stale selection.
+  // The request_state answer fires from a timeout renders after the ask, so it
+  // reads the preview flag + the live selection through refs.
   const enabledPreviewRef = useRef<boolean>(true);
   const selectionRef = useRef<LiveSelection>(selection);
   selectionRef.current = selection;
@@ -219,6 +229,8 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
   const sessionIdRef = useRef<string>(sessionId);
   sessionIdRef.current = sessionId;
   const saveTimerRef = useRef<number | null>(null);
+  const answerTimerRef = useRef<number | null>(null);
+  const answerPendingRef = useRef<boolean>(false);
   // Whether a peer has spoken since this (re)open — the ref twin of `peerState`,
   // read from the grace timeout, which cannot see the state it just set.
   const peerAnsweredRef = useRef<boolean>(false);
@@ -416,7 +428,7 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
 
   /**
    * The only writer of the preview ref+state pair — the ref exists solely so the
-   * peer effect can answer a `request_state` without a stale flag, and a site
+   * coalesced `request_state` answer reads no stale flag, and a site
    * that set one without the other would answer for a preview nobody is
    * showing. Write-free by design: mirroring a peer's flag must not re-broadcast
    * it, so the toggle adds its own `updatePreview` rather than this doing it.
@@ -494,11 +506,43 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
     return () => window.clearTimeout(timeoutId);
   }, [readyState]);
 
+  // Fired through a ref: the trailing timeout was scheduled renders earlier,
+  // and the answer must go out through this render's senders.
+  const answerRequestStateRef = useRef(() => {});
+  answerRequestStateRef.current = () => {
+    // The answer RE-STATES a value this panel merely holds, so it forwards the
+    // stamp it holds rather than minting fresh authority for it: a mirror
+    // answering a joiner mid-event otherwise put its pre-adoption tally above
+    // the acting panel's live edit, at every consumer, until the next edit. A
+    // panel holding nothing yet (seq 0) still mints under the
+    // `stampAnchoredRef` rule, so the joiner-defaults guard is intact.
+    const held = selectionStampRef.current;
+    sendSelection(selectionRef.current, held.seq > 0 ? held : null);
+    sendWSMessage(buildSnapshot(enabledPreviewRef.current));
+    sendWSMessage(buildLaneNames(laneNamesRef.current));
+  };
+
+  const openAnswerWindow = () => {
+    answerRequestStateRef.current();
+    answerTimerRef.current = window.setTimeout(closeAnswerWindow, REQUEST_STATE_ANSWER_MS);
+  };
+  const closeAnswerWindow = () => {
+    answerTimerRef.current = null;
+    if (!answerPendingRef.current) return;
+    answerPendingRef.current = false;
+    openAnswerWindow();
+  };
+  const answerRequestState = () => {
+    if (answerTimerRef.current === null) openAnswerWindow();
+    else answerPendingRef.current = true;
+  };
+
   // Peer traffic (the relay never echoes our own sends back — single socket).
-  // Answer a request_state with the current selection AND the snapshot AND the
-  // lane names: each carries state a snapshot doesn't (the selection's best-of-3
-  // runWins / best-trick tally, the lane names' resolved athlete labels), and
-  // all three are otherwise only pushed on selection-change or socket OPEN.
+  // Answer request_state asks, coalesced per REQUEST_STATE_ANSWER_MS, with the
+  // current selection AND the snapshot AND the lane names: each carries state a
+  // snapshot doesn't (the selection's best-of-3 runWins / best-trick tally, the
+  // lane names' resolved athlete labels), and all three are otherwise only
+  // pushed on selection-change or socket OPEN.
   // Every control panel answers — converged panels agree, last writer wins at
   // the consumer.
   // Selection is answered BEFORE the snapshot on purpose (defense-in-depth): the
@@ -509,9 +553,8 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
   // Peer `updateSelection` mirrors into the recorder; `updateLaneNames` does NOT
   // (names re-derive locally from the mirrored athlete ids — mirroring the
   // derived copy would fight the local derivation).
-  useEffect(() => {
-    if (!peerMessage) return;
-    const message: WSMessage = peerMessage;
+  const handlePeer = (frame: T) => {
+    const message: WSMessage = frame;
     if (LIVE_TIMER_TYPES.has(message.type)) {
       liveSinceOpenRef.current = true;
       // A mirrored peer action is this board's state too (ADR 0038), so it is
@@ -541,19 +584,9 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
       mirroredStampRef.current = { stamp: selectionStampRef.current, heldSignature: signature };
     }
     switch (message.type) {
-      case 'request_state': {
-        // The answer RE-STATES a value this panel merely holds, so it forwards
-        // the stamp it holds rather than minting fresh authority for it: a
-        // mirror answering a joiner mid-event otherwise put its pre-adoption
-        // tally above the acting panel's live edit, at every consumer, until
-        // the next edit. A panel holding nothing yet (seq 0) still mints under
-        // the `stampAnchoredRef` rule, so the joiner-defaults guard is intact.
-        const held = selectionStampRef.current;
-        sendSelection(selectionRef.current, held.seq > 0 ? held : null);
-        sendWSMessage(buildSnapshot(enabledPreviewRef.current));
-        sendWSMessage(buildLaneNames(laneNamesRef.current));
+      case 'request_state':
+        answerRequestState();
         break;
-      }
       case 'updateSelection': {
         // LWW drop (see selectionStampRef); unstamped pre-feature messages pass.
         const stamp = acceptSelectionStamp(selectionStampRef.current, message);
@@ -583,7 +616,8 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
         }
         break;
     }
-  }, [peerMessage]);
+    onPeerMessage?.(frame);
+  };
 
   // Push the lane/player names on every selection change and once the socket
   // reaches OPEN, so a preview/overlay that connects after a selection still
@@ -620,6 +654,7 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
   // leave a timeout to fire into a torn-down panel.
   useEffect(
     () => () => {
+      if (answerTimerRef.current !== null) window.clearTimeout(answerTimerRef.current);
       if (saveTimerRef.current === null) return;
       window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
@@ -640,10 +675,6 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
 
   return {
     sendWSMessage,
-    /** The incoming stream — pure peer traffic (the relay excludes the sending
-     * connection, so a page never receives its own sends). What a control page
-     * applies peer timer messages from. */
-    peerMessage,
     readyState,
     /** The graded link the health surfaces report (see `useLinkPhase`). */
     link,
