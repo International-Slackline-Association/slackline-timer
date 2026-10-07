@@ -303,7 +303,7 @@ describe('Countdown controlled display (control page, ADR 0032)', () => {
 // are the skin table's (test/app/util/countdownSkin.test.ts); what these three
 // pin is that the component WIRES that skin onto the numeral, the frame and the
 // caption — which is what needs the DOM.
-describe('Countdown control variant on-light tiers (FREESTYLE_BOARD_UX §6)', () => {
+describe('Countdown control variant on-light tiers (freestyle-board-ux §6)', () => {
   const frameOf = (numeral: HTMLElement) =>
     window.getComputedStyle(numeral.parentElement as HTMLElement);
 

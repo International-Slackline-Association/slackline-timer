@@ -137,7 +137,7 @@ const clockFrame = (): HTMLElement => {
 
 // The try window is a competition clock: it takes the lane cards' `control`
 // scale, so the §6 frame tiers name its state at a squint like theirs do.
-describe('BestTrickPanel try clock frame tiers (FREESTYLE_BOARD_UX §6)', () => {
+describe('BestTrickPanel try clock frame tiers (freestyle-board-ux §6)', () => {
   it('strokes a resting window thin and neutral', () => {
     render(<BestTrickPanel {...baseProps} series={initialTrySeries(3)} />);
     const frame = window.getComputedStyle(clockFrame());
@@ -154,7 +154,7 @@ describe('BestTrickPanel try clock frame tiers (FREESTYLE_BOARD_UX §6)', () => 
   });
 });
 
-describe('BestTrickPanel state word (FREESTYLE_BOARD_UX §3/§6)', () => {
+describe('BestTrickPanel state word (freestyle-board-ux §3/§6)', () => {
   it.each([
     ['waiting on the first attempt', initialTrySeries(3), 'NEXT · Aiko'],
     ['a window is open', runningOn(2, { 1: 1, 2: 1 }), 'TRY OPEN · Bruno'],
@@ -187,7 +187,7 @@ describe('BestTrickPanel state word (FREESTYLE_BOARD_UX §3/§6)', () => {
   });
 });
 
-describe('BestTrickPanel live-control contract (FREESTYLE_BOARD_UX §6)', () => {
+describe('BestTrickPanel live-control contract (freestyle-board-ux §6)', () => {
   const minHeight = (control: HTMLElement): number =>
     px(window.getComputedStyle(control).minHeight);
 
@@ -263,7 +263,7 @@ describe('BestTrickPanel live-control contract (FREESTYLE_BOARD_UX §6)', () => 
  * primary-looking action beside End try, in the one family the live path may
  * not use.
  */
-describe('BestTrickPanel cap pair paint (FREESTYLE_BOARD_UX §6)', () => {
+describe('BestTrickPanel cap pair paint (freestyle-board-ux §6)', () => {
   // The tones resolve through the TELEMETRY palette the app installs in
   // `app/index.tsx`; a bare render would read MUI's own defaults.
   const renderThemed = (ui: ReactElement) =>
@@ -320,7 +320,7 @@ describe('BestTrickPanel cap pair paint (FREESTYLE_BOARD_UX §6)', () => {
  * is a `panel` Paper like them. The disarmed step keeps §2's one-line
  * `[Begin best trick]` row: there is nothing yet for a card to hold.
  */
-describe('BestTrickPanel surface (FREESTYLE_BOARD_UX §6)', () => {
+describe('BestTrickPanel surface (freestyle-board-ux §6)', () => {
   /** §6's race target: the width half of `>=56 x 120`. */
   const RACE_RESERVE_PX = 120;
   const computed = (el: Element) => window.getComputedStyle(el);
@@ -648,7 +648,7 @@ describe('BestTrickPanel — Leave best trick guard', () => {
 const blockerOf = (control: HTMLElement): string | null =>
   control.parentElement?.getAttribute('title') ?? null;
 
-describe('BestTrickPanel interlocks (FREESTYLE_BOARD_UX §4.7)', () => {
+describe('BestTrickPanel interlocks (freestyle-board-ux §4.7)', () => {
   it('locks Begin best trick while a lane still runs, and says who', () => {
     render(<BestTrickPanel {...baseProps} series={null} runningLane={2} />);
     const begin = screen.getByRole('button', { name: /begin best trick/i });
