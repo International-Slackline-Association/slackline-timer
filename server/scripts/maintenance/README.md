@@ -22,7 +22,7 @@ stayed isolated past a rollback buffer.
 **Usage** (run from anywhere; the script cd's into `server/` for the CDK app):
 
 ```bash
-# Dry run, both regions — prints what would be reclaimed, changes nothing:
+# Dry run, all three regions — prints what would be reclaimed, changes nothing:
 node scripts/maintenance/gcBootstrapAssets.mjs
 
 # Actually reclaim (all three regions):
