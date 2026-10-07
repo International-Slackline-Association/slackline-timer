@@ -28,11 +28,12 @@ describe('Countdown hero time numerals', () => {
     const computed = window.getComputedStyle(time);
     expect(computed.fontFamily).toContain('JetBrains Mono');
     expect(computed.fontVariantNumeric).toBe('tabular-nums');
-    // Race-state color language replaces the old black fill + white stroke.
+    // No text stroke: the race-state color carries the numeral.
     expect(computed.webkitTextStroke).toBe('');
-    // Viewport-relative hero sizing (DESIGN_SYSTEM §4) — a vw-driven clamp so the
-    // numeral fills a projector screen, not a fixed MUI h3. jsdom 29's CSS parser
-    // drops clamp() from computed fontSize, so assert the emotion-injected rule.
+    // Viewport-relative hero sizing (design-system §4) — a vw-driven clamp so
+    // the numeral fills a projector screen, not a fixed MUI h3. jsdom 29's CSS
+    // parser drops clamp() from computed fontSize, so assert the
+    // emotion-injected rule.
     const css = [...document.querySelectorAll('style')].map((s) => s.textContent).join('');
     expect(css).toContain('clamp(');
     expect(css).toContain('vw');
@@ -205,9 +206,8 @@ describe('Countdown hero time numerals', () => {
 // Controlled mode (the Speedline `Stopwatch.laneState` pattern): the control
 // page's reducers own timer state and drive the clock through `display`. The
 // props are a discriminated union, so a controlled clock cannot even be handed
-// a message, a recovery snapshot or a socket-readiness gate — the former
-// "ignores the message stream / the recovery side channel while controlled"
-// tests are now type errors instead of runtime assertions.
+// a message, a recovery snapshot or a socket-readiness gate — "ignores the
+// message stream while controlled" is a type error, not a runtime assertion.
 describe('Countdown controlled display (control page, ADR 0032)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -593,13 +593,13 @@ describe('Countdown wall-clock anchoring (drift on a throttled tab)', () => {
   });
 });
 
-// The bug this whole change fixes: `start_countdown`/`start_break` used to carry
-// only a duration, so each receiver re-anchored to its own receipt time and the
-// countdowns smeared across overlays (whole-second flooring amplified any
-// sub-second delivery-latency spread into a full 1s on-screen difference). With
-// the shared `startedAt` epoch on the wire, two receivers that process the SAME
-// message at DIFFERENT receipt times must derive the SAME remaining and land on
-// the SAME whole second — proving overlays converge.
+// Were `start_countdown`/`start_break` to carry only a duration, each receiver
+// would re-anchor to its own receipt time and the countdowns smear across
+// overlays (whole-second flooring amplifies any sub-second delivery-latency
+// spread into a full 1s on-screen difference). With the shared `startedAt`
+// epoch on the wire, two receivers that process the SAME message at DIFFERENT
+// receipt times must derive the SAME remaining and land on the SAME whole
+// second — proving overlays converge.
 describe('Countdown wire-anchor convergence (the smear regression)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -616,9 +616,9 @@ describe('Countdown wire-anchor convergence (the smear regression)', () => {
       data: { remainingMs: 90_000, startedAt: 0 },
     };
     // Receiver A processes 1.2s after the start; receiver B 0.5s later still —
-    // the delivery-latency spread that used to smear them by a whole second.
-    // Both anchor to the shared startedAt=0, so their FIRST paint already agrees
-    // (the old receipt-anchored seed would differ across the two mounts).
+    // a delivery-latency spread that smears receipt-anchored clocks by a whole
+    // second. Both anchor to the shared startedAt=0, so their FIRST paint
+    // already agrees.
     vi.setSystemTime(1_200);
     const a = render(<Countdown mode="feed" message={start} isReady timerId={1} />);
     vi.setSystemTime(1_700);

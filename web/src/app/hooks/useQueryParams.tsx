@@ -27,18 +27,14 @@ export const useQueryParams = () => {
 };
 
 /**
- * The relay session id for the shared timer displays, which are mounted under two
- * URL conventions: the projector `/…/preview?sessionId=` and the broadcast
- * `/stream/timer*?compId=`. The `/stream/*` overlays are addressed by `compId`
- * (every sibling overlay reads it via StreamLayout's `useStreamCompId`, and the
- * event read token is scoped to that `compId`), so a broadcast timer overlay MUST
- * open its WS on `compId` — otherwise it connects on the `"default"` sessionId
- * fallback and the read-token `$connect` authorizer rejects the handshake
- * ("scoped to <compId>, not session default"), the socket never reaches OPEN, and
- * the OPEN-gated display paints a blank frame. `compId` wins when present, else
- * the projector's `sessionId` (default `"default"`). compId === sessionId for the
- * relay by design (doc/dev/architecture.md → "Scoping"), so this only reconciles
- * the two param names.
+ * The relay session id for the shared timer displays, mounted under two URL
+ * conventions: the projector `/…/preview?sessionId=` and the broadcast
+ * `/stream/timer*?compId=`. `compId` wins when present, else `sessionId`
+ * (default `"default"`); compId === sessionId for the relay
+ * (doc/dev/architecture.md → "Scoping"), so this only reconciles the two param
+ * names. A broadcast overlay falling back to `"default"` would be rejected by
+ * the read-token `$connect` authorizer (the token is scoped to its `compId`),
+ * never reach OPEN, and paint a blank frame.
  */
 export const useRelaySessionId = (): string => {
   const { search } = useLocation();

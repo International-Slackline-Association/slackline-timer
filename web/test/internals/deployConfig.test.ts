@@ -11,8 +11,8 @@ import { BACKEND_OUTPUTS, BUILD_VARS, buildEnv, liveStack } from '../../internal
  * Guards what the web deploy resolves before it builds
  * (web/internals/deployConfig.mjs). `vite build` fails without the six
  * VITE_APP_* vars and the two WEB_CSP_* inputs, so the only question is WHERE
- * they come from: a missing one
- * must stop the deploy rather than bake in a stale committed value.
+ * they come from: a missing one must stop the deploy rather than bake in a stale
+ * committed value.
  */
 
 const STACK = { name: 'a-backend-stack', region: 'eu-central-2' };

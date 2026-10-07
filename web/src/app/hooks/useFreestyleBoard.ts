@@ -74,19 +74,20 @@ export interface NoopPress {
  * three timer machines (battle lanes, best-trick series, warm-up channel), the
  * relay session that mirrors them to peers and previews, the effect drains and
  * expiry timeouts at the edge, the ADVANCE routing, and the format/mode input
- * they all read. `ControlPage` is then layout over this hook's return —
- * a change to the board's behaviour is a change here, a change to its shape is
- * a change there (FREESTYLE_BOARD_UX Round 2).
+ * they all read. `ControlPage` is layout over this hook's return — a change to
+ * the board's behaviour is a change here, a change to its shape is a change
+ * there.
  *
- * The HSM discipline is unchanged (ADR 0032): the reducers stay the single
- * owners of truth, effects run at the edge *because* state changed, and nothing
- * below re-derives state a machine already holds. The hook mounts the score
- * recorder too — the board's mode picks its default recording round, so the
- * recorder cannot be mounted above it.
+ * HSM discipline (ADR 0032): the reducers are the single owners of truth,
+ * effects run at the edge *because* state changed, and nothing below
+ * re-derives state a machine already holds. The hook mounts the score recorder
+ * too — the board's mode picks its default recording round, so the recorder
+ * cannot be mounted above it.
+ *
+ * Bare § references are freestyle-board-ux
+ * (doc/dev/design-system/freestyle-board-ux.md).
  */
 export const useFreestyleBoard = (sessionId: string) => {
-  // Name the tab: an operator runs this board beside a preview and the admin,
-  // and `index.html`'s one static title makes all three look alike.
   useDocumentTitle('Freestyle Timer');
 
   // Quali vs battle is an EXPLICIT operator toggle (ADR 0036) — not inferred
@@ -108,7 +109,7 @@ export const useFreestyleBoard = (sessionId: string) => {
   // Quali break length is per-competition config (ADR 0019 §6), default 30 s.
   const breakMs = selectedComp?.config?.freestyle?.breakMs ?? DEFAULT_FREESTYLE_BREAK_MS;
 
-  // The QUALI next-up athlete (`freestyle-quali-next-up`): quali runs one
+  // The QUALI next-up athlete: quali runs one
   // athlete at a time, so — unlike battle's `nextUp`, which is a slot the
   // `advanceTarget` rule derives — nothing on the board knows who follows. The
   // operator names it, it rides `updateSelection` (so a peer panel mirrors it
@@ -120,7 +121,7 @@ export const useFreestyleBoard = (sessionId: string) => {
     setQualiNextUpState(athleteId || null);
   }, []);
 
-  // The Run (s) field: a DRAFT budget (brief §4.5), applied to the lanes only by
+  // The Run (s) field: a DRAFT budget (§4.5), applied to the lanes only by
   // `Set both lanes` / a mode switch. What a lane currently holds is its own
   // `armedMs`, so typing here re-arms nothing and locks nothing.
   const [runSeconds, setRunSeconds] = useState<number>(
@@ -182,10 +183,10 @@ export const useFreestyleBoard = (sessionId: string) => {
   // sends/beeps.
   const warmup = useWarmupChannel(FREESTYLE_FORMAT_PRESETS[mode].warmupSeconds);
 
-  // Audio plays on BOTH surfaces (ADR 0015 §3). Here on the control page:
-  // short beep on break open, long beep on run/break expiry; the reducers emit
-  // these as effects and the drains below play them. FreestyleTimerDisplay
-  // mounts its own useSignalAudio for the preview.
+  // Audio plays on BOTH surfaces (ADR 0015 §3). Here the reducers emit the
+  // tones as effects (`short` on a start/break open, `long` at run expiry,
+  // `alert2` at break expiry) and the drains below play them; the preview
+  // surfaces sound their own (`useFreestyleTimerFeed`).
   const { audioElement, playAudio, audioBlocked } = useSignalAudio();
 
   // Which panel carries the horn (see `panelSoundMemory`): a per-device switch
@@ -212,7 +213,7 @@ export const useFreestyleBoard = (sessionId: string) => {
     });
   }, []);
 
-  // What the board is holding, asked once (brief §4.5). `boardLive` (a clock is
+  // What the board is holding, asked once (§4.5). `boardLive` (a clock is
   // ticking) arms the leave guard and locks the two second DRAFTS; while
   // `boardHoldsState` (anything a re-arm would discard) locks the two format
   // controls, which say `blocker` instead of asking a question. One answer, so
@@ -248,9 +249,8 @@ export const useFreestyleBoard = (sessionId: string) => {
   // The format a mode carries (rules F4/F5): the board shape, the Run (s) draft
   // and the warm-up default. Shared by the local switch — which then re-arms the
   // lanes with SET_BUDGETS — and by the peer path, which must NOT dispatch: the
-  // acting panel's own `reset_countdown`s arrive on the wire (S24 was this half
-  // being missing, leaving a mirrored panel on the old format's budgets).
-  // It deliberately touches no lane state, `armedMs` included: a re-arm is the
+  // acting panel's own `reset_countdown`s arrive on the wire.
+  // It touches no lane state, `armedMs` included: a re-arm is the
   // only thing that may, and it always reaches this panel as one — PEER_RESET on
   // a live flip, the snapshot's own `armedMs` on a join — so a mirrored panel
   // never keeps the old preset's armed budget and re-arms the room to it
@@ -300,16 +300,14 @@ export const useFreestyleBoard = (sessionId: string) => {
       // on the wire.
       qualiNextUp: mode === 'quali' ? qualiNextUp : null,
     },
-    // Session-scoped messages address the whole session, not a lane, so they
-    // carry no timerId (ws-session-message-family) — a lane consumer filters
-    // them out on the missing key just as it did the old timerId:-1 sentinel.
+    // Session-scoped: no timerId (see `SessionWSMessage`).
     buildPreview: (enabled) => ({ type: 'updatePreview', data: { enabled } }),
     buildLaneNames: (data) => ({
       type: 'updateLaneNames',
       data: { ...data, discipline: 'freestyle' },
     }),
     buildSelection: (data) => ({ type: 'updateSelection', data }),
-    // The reducer state IS the snapshot source (ADR 0032), replacing laneStateRef.
+    // The reducer state IS the snapshot source (ADR 0032).
     buildSnapshot: (isPreviewEnabled) => ({
       type: 'state_snapshot',
       data: buildCountdownSnapshot({
@@ -364,7 +362,7 @@ export const useFreestyleBoard = (sessionId: string) => {
       if (flippedTo !== null) applyFormat(flippedTo);
       recorder.applySelection(sel);
       dispatchTry({ type: 'PEER_SELECTION', bestTrick: sel.bestTrick });
-      // Alternation off the wire (brief §4.11): `lastRan` is control-local, so
+      // Alternation off the wire (§4.11): `lastRan` is control-local, so
       // a panel that joined mid-match has none — but the room's `nextUp` names
       // the lane that has NOT run, which is the same information inverted. The
       // reducer holds the three guards; this edge just forwards the hint.
@@ -409,7 +407,7 @@ export const useFreestyleBoard = (sessionId: string) => {
     onPeerMessage: (message) => applyPeerCountdown(message),
   });
 
-  // Which surface wears the newest peer-panel action (ADR 0038 / brief §4.10):
+  // Which surface wears the newest peer-panel action (ADR 0038 / §4.10):
   // the lane a mirrored countdown message addressed, or the selection row.
   // `useControlSession` reports ONE event, so the routing is a single decision
   // and lives here — the page reads a token per surface and cannot invent a
@@ -424,14 +422,14 @@ export const useFreestyleBoard = (sessionId: string) => {
   }, [lastPeerEvent]);
 
   // Drain each reducer's effects at the edge (rule 4: effects run because state
-  // changed) — relay sends (unchanged contract) + control-surface beeps. All
+  // changed) — relay sends + control-surface beeps. All
   // three deps are identity-stable, so an idle render re-runs none of them.
   useEffectDrain(store.effects, sendWSMessage, playPanelAudio, dispatch);
   useEffectDrain(trySeriesStore.effects, sendWSMessage, playPanelAudio, dispatchTry);
   useEffectDrain(warmup.effects, sendWSMessage, playPanelAudio, warmup.dispatch);
 
-  // Schedule the run/break zero-crossing as a wall-clock timeout keyed on the
-  // lane's phase + anchor, and the try and warm-up windows' the same way.
+  // Schedule each run/break, try and warm-up zero-crossing as a wall-clock
+  // timeout keyed on its computed deadline.
   useLaneExpiry(1, battle[1], dispatch);
   useLaneExpiry(2, battle[2], dispatch);
   useTryExpiry(trySeries, dispatchTry);
@@ -474,7 +472,7 @@ export const useFreestyleBoard = (sessionId: string) => {
       start: (lane: PlayerId) => dispatch({ type: 'START', lane, at: Date.now() }),
       stop: (lane: PlayerId, at: number = Date.now()) => dispatch({ type: 'STOP', lane, at }),
       // A single-lane Reset re-arms that lane to what it was last armed to — never
-      // to the Run (s) draft (brief §4.5): clearing one lane after a fall must not
+      // to the Run (s) draft (§4.5): clearing one lane after a fall must not
       // silently re-format it behind the operator's back.
       reset: (lane: PlayerId) =>
         dispatch({ type: 'RESET', lane, budgetMs: battleRef.current[lane].armedMs }),
@@ -528,7 +526,7 @@ export const useFreestyleBoard = (sessionId: string) => {
   const answerBlocked = useCallback((lock: Lock) => answerNoop(lockReason(lock)), [answerNoop]);
 
   // The one-button ADVANCE (ADR 0037): buzzer/Space/pad-10/the plate step the
-  // whole sequence. `advanceRoute` (the pure router, FREESTYLE_BOARD_UX §4.1)
+  // whole sequence. `advanceRoute` (the pure router, §4.1)
   // decides WHICH machine and which event — the two reducers stay independent
   // and the board renders its promise from the same route — and this edge only
   // stamps the wall clock and dispatches.
@@ -581,7 +579,7 @@ export const useFreestyleBoard = (sessionId: string) => {
   // normalizes an out-of-mode recording round via requestRound, which rides the
   // existing ADR 0033 "Change the round?" confirm when a match is selected.
   // Nothing to confirm: the toggle is inert while the board holds anything, so
-  // by the time it can be pressed the re-arm destroys nothing (brief §4.5).
+  // by the time it can be pressed the re-arm destroys nothing (§4.5).
   const applyMode = (next: FreestyleMode) => {
     if (holdsState || next === mode) {
       return;

@@ -180,12 +180,11 @@ describe.skipIf(!reachable)('connections db integration', () => {
 });
 
 /**
- * The relay Lambda driven with the **real** API Gateway event shapes — the
- * regression fence for the never-reaped-connection bug: `$disconnect` carries no
- * `queryStringParameters` (they exist on `$connect` only), so a handler that
- * needs the sessionId from the query string 400s and the row survives until its
- * TTL. `scripts/localWsHarness.mjs` used to pass them on close, which is exactly
- * why local dev never reproduced production.
+ * The relay Lambda driven with the **real** API Gateway event shapes:
+ * `$disconnect` carries no `queryStringParameters` (they exist on `$connect`
+ * only), so a handler that needs the sessionId from the query string 400s and
+ * the row survives until its TTL. `scripts/localWsHarness.mjs` mirrors this on
+ * close; a harness that passed them would hide the bug locally.
  */
 describe.skipIf(!reachable)('connectionHandler integration (real event shapes)', () => {
   beforeAll(async () => {

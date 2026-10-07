@@ -416,8 +416,7 @@ describe('advanceRoute — router order', () => {
   });
 });
 
-// The end-to-end pins ported from battleMachine.test.ts's ADVANCE describes:
-// the route + the stamped dispatch reproduce the cycle the reducer used to own.
+// End to end: the route + the stamped dispatch reproduce the battle cycle.
 describe('advanceRoute — battle cycle (stop-current / start-next, ADR 0037 §2)', () => {
   it('stops the running lane: stop broadcast + pause anchor', () => {
     const r = advance('battle', battleRunning(), 20_000);

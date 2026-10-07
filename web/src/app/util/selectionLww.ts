@@ -11,7 +11,7 @@ import type { LiveSelection } from 'app/hooks/useWebSocket';
 export interface SelectionStamp {
   seq: number;
   /** The envelope `senderId` of the frame the stamp came off — the last-resort
-   * tiebreak, now that authority outranks it. */
+   * tiebreak, below authority. */
   by: string;
   /** Whether that frame was a re-statement rather than a claim (see the wire
    * `echo` flag). A stored echo yields to the authoritative frame it restates. */
@@ -52,9 +52,9 @@ export const acceptSelectionStamp = (
 /**
  * JSON with the two distinctions the wire doesn't have removed: keys are
  * visited in sorted order and `undefined`-valued ones are skipped (absent and
- * explicitly-undefined are the same field once stringified). Shape-agnostic on
- * purpose — arrays included — so it keeps digesting a `LiveSelection` field
- * nobody has added yet.
+ * explicitly-undefined are the same field once stringified). Shape-agnostic —
+ * arrays included — so it keeps digesting a `LiveSelection` field nobody has
+ * added yet.
  */
 const digest = (value: unknown): string => {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -68,9 +68,8 @@ const digest = (value: unknown): string => {
 };
 
 /**
- * The re-push key of `useControlSession`'s `updateSelection` effect, replacing
- * the dep array that listed every selection field by hand — and had to be
- * extended by hand for each new one, silently not following the ones it missed.
+ * The re-push key of `useControlSession`'s `updateSelection` effect, in place
+ * of a hand-listed dep array that silently misses new fields.
  *
  * Two properties carry it: the walk is STRUCTURAL, so a field added to
  * `LiveSelection` (a nested tally member included) moves the key without the

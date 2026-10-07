@@ -33,9 +33,8 @@ import { apiErrorMessage } from 'app/util/apiError';
 export const CompetitionManagersPage = () => {
   const { compId = '' } = useParams();
   const user = useCurrentUser();
-  // Don't even fetch the (superadmin-only) manager list for a non-superadmin —
-  // the server would 403 it anyway, and this avoids a wasted, doomed request
-  // before the redirect below takes effect.
+  // No fetch for a non-superadmin: the server would 403 it before the redirect
+  // below takes effect.
   const managers = useManagers(user.isSuperadmin ? compId : undefined);
   const grant = useGrantManager(compId);
   const revoke = useRevokeManager(compId);

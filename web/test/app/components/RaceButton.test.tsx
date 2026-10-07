@@ -9,7 +9,7 @@ import { telemetryTheme } from 'app/theme/theme';
 import { colors, controlTargets } from 'app/theme/tokens';
 
 /**
- * The live-column control contract (FREESTYLE_BOARD_UX §4.4): a mouse press on
+ * The live-column control contract (freestyle-board-ux §4.4): a mouse press on
  * a race control must never leave the focus behind, because a focused button
  * owns the next Space — and Space is the buzzer (§4.3). The wrapper answers
  * that twice over: `preventDefault` on mousedown so the press never takes

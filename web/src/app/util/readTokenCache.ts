@@ -3,12 +3,11 @@ import type { ReadTokenResponse } from 'app/api/readTokens';
 /**
  * Per-competition localStorage cache for the `/admin/overlays` read token.
  *
- * Minting is not free: every regenerate is a fresh credential, and an overlay
- * URL already pasted into OBS keeps working only until the operator mints a
- * *new* token for the same competition. So the admin page reuses the last token
- * across visits instead of minting one each time — but only through the FIRST
- * HALF of the token's lifetime, so whatever overlay picks the cached token up
- * still has at least half the validity window left before it must be refreshed.
+ * Every mint is a fresh live credential (older ones stay valid until they expire
+ * or are revoked) and a new set of URLs to paste into OBS. So the admin page
+ * reuses the last token across visits instead of minting one each time — but
+ * only through the FIRST HALF of the token's lifetime, so whatever overlay picks
+ * the cached token up still has at least half the validity window left.
  * Past the halfway mark the cache reads as absent and a fresh token is minted.
  *
  * Only the token response is persisted; the overlay URLs are pure functions of

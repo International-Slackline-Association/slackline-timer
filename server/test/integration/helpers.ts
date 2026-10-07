@@ -43,24 +43,16 @@ const control = new DynamoDBClient({
 /**
  * Is the local DynamoDB answering?
  *
- * Resolved **synchronously** (a short-lived child does the request) so the
- * suites can `describe.skipIf(!isDynamoReachable())` at collection time without
- * a top-level await — important because CI runs the server tests with no Docker
- * (`npm run test:coverage`), and those suites must self-skip, not fail. The
- * result is cached on the env for the worker's remaining files.
+ * Synchronous (a short-lived child does the request) so suites can
+ * `describe.skipIf(!isDynamoReachable())` at collection time: CI runs the server
+ * tests without Docker, and they must self-skip, not fail. Cached on the env for
+ * the worker's remaining files.
  *
- * The probe issues a real **ListTables** rather than a bare TCP connect, because
- * LocalStack loads DynamoDB *lazily*: a freshly recreated container answers the
- * edge port (and reports the service `available`) while the first actual request
- * blocks ~1.8 s spinning the service up. A TCP connect passed instantly, so that
- * cold start was charged to whichever integration test ran first, and it blew
- * vitest's default 5 s timeout — a red suite on a fresh container, and only
- * there. Warming it here puts the cost at collection time, where no timeout
- * applies. `npm run db:init` warms it incidentally, which is why local runs that
- * follow the documented flow never saw this.
- *
- * Still fails fast when the container is genuinely down: a closed port refuses
- * the connection immediately, exactly as the TCP probe did.
+ * A real ListTables, not a TCP connect: LocalStack starts DynamoDB lazily, so a
+ * fresh container accepts the port while its first request blocks ~1.8 s. This
+ * pays that cold start at collection time instead of inside the first test's 5 s
+ * timeout (`npm run db:init` warms it the same way). A down container still
+ * fails fast: the closed port refuses at once.
  */
 export const isDynamoReachable = (): boolean => {
   if (process.env.__DYNAMO_REACHABLE !== undefined) {

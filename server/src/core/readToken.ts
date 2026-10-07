@@ -7,12 +7,14 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  * an operator — an admin or a manager granted the competition (ADR 0045) — and
  * verified by both the HTTP API authorizer and the WS `$connect` authorizer.
  * Hand-rolled on node:crypto: the claim set is fixed and tiny, and a
- * general-purpose JOSE dependency would ride in every authorizer bundle. See doc/dev/architecture.md → "Read-auth".
+ * general-purpose JOSE dependency would ride in every authorizer bundle.
+ * See doc/dev/architecture.md → "Read-auth".
  *
  * Claims: { compId, role: 'reader', tokenVersion, iat, exp } — `exp` is capped
  * at mint time to ~10 days; `tokenVersion` is compared against the competition
- * item so bumping the version revokes every outstanding token instantly (the
- * revoke route additionally force-closes open overlay sockets, ADR 0026).
+ * item, so bumping it revokes every outstanding token at the next `$connect` /
+ * HTTP authorizer run (the HTTP result cache lags ≤ 60 s; the revoke route also
+ * force-closes open overlay sockets, ADR 0026).
  */
 
 /** Hard cap on read-token lifetime (seconds). */

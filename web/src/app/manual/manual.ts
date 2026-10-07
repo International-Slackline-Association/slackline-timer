@@ -1,15 +1,11 @@
 /**
- * The user-facing manual, bundled from `doc/user/*.md`.
+ * The user-facing manual, bundled from `doc/user/*.md` — `/help` renders these
+ * very files, so a doc edit ships with the next deploy. `doc/dev/` stays out of
+ * the build.
  *
- * The manual is authored as markdown in the repo (one source of truth, reviewed
- * like any other file) and published *by the app* — `/help` renders these very
- * files, so a doc edit ships with the next deploy and there is no second copy to
- * drift. Nothing else in the repo is bundled this way: `doc/dev/` is
- * engineering-facing and deliberately stays out of the build.
- *
- * The one rule the tree carries (enforced by `test/app/manual.test.ts`): a user
- * doc may only link to a sibling user doc. A link into `doc/dev/` would render
- * as a dead link in the app, since nothing outside this glob is published.
+ * The tree's one rule (enforced by `web/test/app/manual.test.ts`): a user doc
+ * may only link to a sibling user doc; anything outside this glob is a dead link
+ * in the app.
  */
 
 /** Raw file contents, keyed by the source path. Inlined at build time. */
@@ -37,8 +33,8 @@ const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
 /**
  * Minimal YAML-frontmatter reader: flat `key: value` pairs only, which is all
- * the manual's header uses. Deliberately not a YAML dependency — the shape is
- * fixed and asserted by the manual test.
+ * the manual's header uses. No YAML dependency: the shape is fixed and asserted
+ * by the manual test.
  */
 const parseFrontmatter = (raw: string): { meta: Record<string, string>; body: string } => {
   const match = FRONTMATTER.exec(raw);

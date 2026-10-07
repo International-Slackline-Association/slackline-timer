@@ -27,27 +27,12 @@ import { PauseClock } from './PauseClock';
 import { TallyPlate } from './TallyPlate';
 import { WarmupCard } from './WarmupCard';
 /**
- * The board layout (FREESTYLE_BOARD_UX §2): three fixed columns at ≥1280×900 so
- * the clocks, the plate and both Save buttons share one 1440×900 screen —
- * setup and warm-up left, the live column centre, the score rail right. Outside
- * that box the live flow collapses to tabs so only one step has to fit at a
- * time; Setup becomes a secondary surface there, holding the warm-up, setup
- * details and handset help while the active step stays in view.
- *
- * The gate is width AND height (fsux-desk-fold-budget): a 1280×720 screen is
- * wide enough for the three columns and too short to hold them, so it took the
- * desk and put the lane transport under the fold. Height is the scarce axis on
- * a laptop, and the tab layout is the answer to a short screen exactly as it is
- * to a narrow one.
- *
- * The height half is **900**, not the 800 it shipped at: measured with the
- * fold budget spent down (`freestyle-board-fold-budget`), the battle desk's
- * last control lands at 879 and quali's at 862, so 800 was a promise the
- * layout could not keep — at 1280×800 it took the desk and put End turn,
- * Reset and Athlete 2's Save under the fold in both modes. 900 is the laptop of
- * design-system §9 "Responsive contract" and the nearest honest threshold
- * above what the desk measures; everything shorter gets the tab layout, which
- * holds every lane and Save control above a 720 px fold.
+ * The board layout (doc/dev/design-system/freestyle-board-ux §2 — bare `§N`
+ * in this directory cites that brief): three fixed columns inside the
+ * `deskMedia.freestyle` gate so the clocks, the plate and both Saves share one
+ * 1440×900 screen — setup and warm-up left, the live column centre, the score
+ * rail right. Outside it the live flow collapses to tabs (`CompactBoardLayout`).
+ * The gate is width AND height; its measurements are §2 and Iteration 4 F1.
  *
  * The columns stretch to the desk row rather than to their own content: the
  * plate is `position: sticky` inside the live column, and a sticky box may not
@@ -66,28 +51,21 @@ const DESK_SX = {
   },
 } as const;
 /** The live column's width ceiling: two lane cards plus the changeover gutter
- * read as one board up to 800 px, and stop growing into a scan across the desk.
- *
- * The sticky plate takes this ceiling too. Spanning the whole live column
- * (`VW - 672`) hung its right-hand verb 448 px clear of the lane it names at
- * 1920. */
+ * read as one board, and stop growing into a scan across the desk. The sticky
+ * plate takes it too, so its verb sits over the lane it names. */
 const RUN_MAX_WIDTH = boardGeometry.deckMax.freestyle;
 /**
- * Quali runs one athlete, so its deck is the single centred card (§2) — and it
- * is the one deck the plate does NOT follow. Measured in a browser (jsdom lays
- * nothing out): at 500 px the `TAKE BREAK` verb wraps its reserved slot at the
- * 1920 type scale, which grows the sticky plate 137 px and steps the deck under
- * the operator's hand the moment a run starts. A wrapped verb breaks §4.12; a
- * plate that overhangs its 500 px deck is a cosmetic mismatch. So quali keeps
- * the full column (owner's pre-decided branch, `fsux-tally-plate-width`).
+ * Quali's single centred card (§2) — the one deck the plate does NOT follow:
+ * at this width the `TAKE BREAK` verb wraps its reserved slot at the 1920 type
+ * scale and the growing sticky plate steps the deck under the operator's hand
+ * (§4.12). Measured in a browser; jsdom lays nothing out.
  */
 const QUALI_RUN_MAX_WIDTH = boardGeometry.deckMax.freestyleQuali;
 /**
  * The Freestyle control board — layout only. Every machine, relay send, beep
  * and expiry timeout lives in `useFreestyleBoard`; this file decides what the
- * operator sees and where (the desk of FREESTYLE_BOARD_UX §2, laying out the
- * numbered chronology of ADR 0036), and hands each panel the slice of the board
- * it renders.
+ * operator sees and where (the §2 desk, laying out the numbered chronology of
+ * ADR 0036), and hands each panel the slice of the board it renders.
  *
  * The desk is read by landmark, not by outline: every panel names itself as a
  * section (`DeskSection`, the handset card, each lane card, both score panels)
@@ -105,11 +83,8 @@ export const FreestyleControlPage = () => {
   /** The deck's ceiling, and the sticky plate's above it — except in quali,
    * where the plate keeps the column (see `QUALI_RUN_MAX_WIDTH`). */
   const deckMaxWidth = format.mode === 'quali' ? QUALI_RUN_MAX_WIDTH : RUN_MAX_WIDTH;
-  /** The selection row is NOT on the deck's ceiling. `QUALI_RUN_MAX_WIDTH` is a
-   * clock-deck measurement (the TAKE BREAK verb's wrap), and quali's flattened
-   * four-field row does not fit in it: at 500 px the four selects land at ~115 px
-   * each and clip their own option text. It takes the same ceiling battle's row
-   * does, which is where quali's sticky plate already sits. */
+  /** NOT the deck's ceiling: `QUALI_RUN_MAX_WIDTH` is a clock-deck measurement,
+   * and quali's four-select row clips its option text inside it. */
   const selectionMaxWidth = RUN_MAX_WIDTH;
   const plateMaxWidth = format.mode === 'quali' ? 'none' : RUN_MAX_WIDTH;
   const hasAthlete = Boolean(recorder.athletes[1] || recorder.athletes[2]);
@@ -136,7 +111,7 @@ export const FreestyleControlPage = () => {
       // The held-run reserve costs a row of the lane card, and only a quali
       // lane can open a break (ADR 0036). §4.12's no-shift promise is the
       // DESK's — the tab layout shows one step at a time and mounts the break
-      // rows when a break opens (`freestyle-compact-run-tab-fold`).
+      // rows when a break opens.
       reserveBreakRows={format.mode === 'quali' && wideDesk}
       runningLane={lanes.running}
       bestTrickArmed={bestTrick.series !== null}

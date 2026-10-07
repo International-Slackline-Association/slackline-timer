@@ -2,7 +2,7 @@ import { useState, type Dispatch, type SetStateAction } from 'react';
 
 /**
  * State for a confirm whose risk the operator does not own alone
- * (FREESTYLE_BOARD_UX §4.8). Every question on the board stands over something
+ * (freestyle-board-ux §4.8). Every question on the board stands over something
  * a peer panel can take away — a peer Reset re-arms the lane the question
  * names, a peer Leave drops the tally, a peer Start locks the press behind it —
  * and a question whose risk is gone has to go with it.

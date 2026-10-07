@@ -9,9 +9,8 @@ import { Stopwatch } from './Stopwatch';
 interface Props {
   id: number;
   /**
-   * The control page owns lane timer state and drives this column through it
-   * (ADR 0027): the numeral renders from `laneState` and the Stop button is
-   * enabled only while the lane is running — no dependency on the relay echo.
+   * The page-owned lane state (ADR 0027): the numeral renders from it and Stop
+   * is enabled only while the lane runs.
    */
   laneState: SpeedlineLaneState;
   stop(): void;
@@ -50,14 +49,11 @@ export const StopwatchControl = (props: Props) => {
         laneState={props.laneState}
         size="control"
       />
-      {/* The live-path control contract (FREESTYLE_BOARD_UX §6): the contained
-          stop tier lights only while this lane runs, the disabled tier holds it
-          otherwise, and the why-line under it says which (§4.7). The per-lane
-          accessible name disambiguates the board's two identical columns — for
-          a screen reader, and for a test that would otherwise address a lane by
-          DOM position. The lock's words ride the wrapper as the button's
-          accessible DESCRIPTION, so a reader is given the same sentence the
-          why-line prints under it. */}
+      {/* The live-path control contract (freestyle-board-ux §6/§4.7): the
+          stop tier lights only while this lane runs, the why-line says why not
+          otherwise. The per-lane accessible name disambiguates the board's two
+          identical columns (screen readers, tests); the lock's words ride the
+          wrapper as the button's accessible description. */}
       <LockedControl reason={props.lock}>
         <RaceButton
           tone="stop"

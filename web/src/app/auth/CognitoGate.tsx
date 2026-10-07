@@ -15,11 +15,10 @@ type AuthStatus = 'checking' | 'signedIn' | 'signedOut';
  * Read-only OBS/H2R overlays live under `/stream/*` and carry an event read
  * token in the URL — they can't do an interactive Cognito sign-in, so the gate
  * is bypassed for them. The real security boundary stays server-side: the HTTP
- * API and WS `$connect` authorizers verify the read token on every request.
+ * API and WS `$connect` authorizers verify the read token.
  *
- * (This is a route-based runtime decision, not an environment one — it stays a
- * normal conditional. The local-dev bypass is handled one level up by the
- * `app/auth` seam swapping this whole component for `PassthroughGate`.)
+ * A route-based runtime check, not an environment branch: the local-dev bypass
+ * is `./gate.tsx` swapping this whole component for `PassthroughGate`.
  */
 const isStreamOverlay = (pathname: string, search: string): boolean =>
   pathname.startsWith('/stream/') && new URLSearchParams(search).has('token');

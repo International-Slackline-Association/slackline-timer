@@ -795,10 +795,9 @@ describe('bestTrickSeries — peerTryAction (the wire → PEER_TRY_* table)', ()
 });
 
 // The ADR 0017 §3 reset rule as a transition: the phase belongs to the match
-// (and, per ADR 0036, the mode) that was live when it was armed. It used to be
-// a page effect plus a `skipPeerDisarmRef` — a peer-mirrored change must NOT
-// disarm, because the peer's own `bestTrick` field decides and a local DISARM
-// would broadcast a reset over the peer's live try clock.
+// (and, per ADR 0036, the mode) that was live when it was armed. A peer-mirrored
+// change must NOT disarm: the peer's own `bestTrick` field decides, and a local
+// DISARM would broadcast a reset over the peer's live try clock.
 describe('bestTrickSeries — board context (the disarm-on-change rule)', () => {
   const quarterM1 = { matchId: 'm1', mode: 'battle' } as const;
   const quarterM2 = { matchId: 'm2', mode: 'battle' } as const;

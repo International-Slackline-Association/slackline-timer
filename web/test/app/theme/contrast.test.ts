@@ -13,10 +13,8 @@ import { colors } from 'app/theme/tokens';
  * The Freestyle board brief (`doc/dev/design-system/freestyle-board-ux.md` §6)
  * names every fill/foreground pair the live path paints and the floor it owes:
  * **4.5:1** for text under 24 px, **3:1** for numerals/words at ≥24 px and for
- * non-text strokes (WCAG 2.x 1.4.3 / 1.4.11). The pairs land here *before* the
- * slices that paint them, so a later round cannot introduce a failing
- * combination unnoticed — the audit finding S04 was four such pairs shipping
- * unmeasured.
+ * non-text strokes (WCAG 2.x 1.4.3 / 1.4.11). A new pair lands here before the
+ * code that paints it.
  *
  * Ratios are computed from the tokens themselves, so retuning a token either
  * keeps the contract or fails here. Fix the token, never the floor.
@@ -126,7 +124,7 @@ describe('live-path contrast (FREESTYLE_BOARD_UX §6)', () => {
   );
 
   it('the locked outlined stroke separates from the live stroke it replaces', () => {
-    // The locked pair is a well, so its own stroke is deliberately quiet:
+    // The locked pair is a well, so its own stroke is quiet:
     // `line` on `muted` is 1.11:1, and WCAG 1.4.11 exempts inactive components
     // from the 3:1 non-text floor. What has to hold is the *step* between the
     // two strokes — a live outlined neutral draws `ink.mid` — because that is
@@ -216,10 +214,8 @@ function openingTags(src: string): string[] {
   return tags;
 }
 
-// The shared chrome both consoles mount. Scanning the page dirs alone let a
-// live confirm and the status header keep `error.main`, because they live in
-// `components/` — the guards are about what the operator sees on the board, not
-// about which folder it is written in.
+// The shared chrome both consoles mount, outside the page dirs: the guards cover
+// what the operator sees on the board, whatever folder it lives in.
 const CONTROL_CHROME_FILES = [
   'src/app/components/SelectionChangeConfirmDialog.tsx',
   'src/app/components/ControlStatusHeader.tsx',
@@ -246,17 +242,7 @@ describe('no live control paints a contained `error.main`', () => {
 });
 
 /**
- * The same rule's other half: on a *control*, the `stopDim` fill has exactly one
- * owner — `RaceButton`'s `stop` tone. Hand-painting it gets the pair right and
- * the keyboard wrong: the tone is what carries the ≥44 px target and the blur
- * rule (§4.4/§6), and a stop control that keeps focus swallows the next buzzer
- * press. Both spellings render the same colour, so only the source tells them
- * apart. Non-controls (the plate, a status chip) paint `error.dark` freely —
- * they own no press. `destructiveFillSx` was the theme helper this rule retired.
- */
-/**
- * The rule's third half, from the board's eyes-on pass: an alarm that paints as
- * INK is a word, not a mark. `color="error"` on a `Typography` resolves to
+ * An alarm that paints as INK is a word, not a mark. `color="error"` on a `Typography` resolves to
  * `error.main` — 3.34:1 on the canvas — and no theme rule can lift it, because
  * the tone is the whole style. The advisory strip's own words take `error.dark`
  * (`stopDim`, 5.01:1); chips and buttons get theirs from the theme's alarm
@@ -272,14 +258,11 @@ describe('no live-path text writes in `error.main`', () => {
 });
 
 /**
- * And the rule's last half, on the wrapper that exists to end it: a
- * `RaceButton` states its state as a **tone**, never a `color=`. The palette
- * entry a hand-painted `color` resolves to is the theme's, not §6's — the
- * Speedline false-start pair read `error` and got `error.main`'s outline where
- * the `dnf` tone names the `stopDim` pair the board measures at 5.01:1 — and a
- * call site that paints its own state is a second control vocabulary whatever
- * it resolves to. `variant` is deliberately not covered: emphasis is the call
- * site's (`fsux-setup-emphasis-tier` still owes one of those).
+ * A `RaceButton` states its state as a **tone**, never a `color=`. A
+ * hand-painted `color` resolves to the theme's palette entry, not §6's pair
+ * (`color="error"` → `error.main`'s outline, where the `dnf` tone names the
+ * 5.01:1 `stopDim` pair), and a call site that paints its own state is a second
+ * control vocabulary. `variant` is not covered: emphasis is the call site's.
  */
 describe('a live control names its state in a tone, not a `color`', () => {
   it.each(CONTROL_PAGE_FILES)('%s', (file) => {
@@ -294,9 +277,8 @@ describe('a live control names its state in a tone, not a `color`', () => {
  * The brand fill's own owner: the theme's contained-primary variant, which
  * paints `tealDark` + `ink.onBrand` for every Save-shaped button on the board
  * (pinned in `test/app/theme/brandFill.test.tsx`). Hand-painting `primary.dark`
- * on one page is how the pair got fixed on Save while `Set both lanes` kept
- * white on `primary.main` at 2.9:1 — the failing default is invisible at the
- * call site, so the guard is against writing the fix there.
+ * fixes one button and leaves its siblings on `primary.main` at 2.9:1 — the
+ * failing default is invisible at the call site, so the fix belongs in the theme.
  */
 describe('the brand fill reaches a control only through the theme', () => {
   it.each(CONTROL_PAGE_FILES)('%s', (file) => {
@@ -305,17 +287,13 @@ describe('the brand fill reaches a control only through the theme', () => {
 });
 
 /**
- * The rule the guards around it serve: on the live path a press that carries a
- * STATE takes it from a `RaceButton` tone, never from a raw `Button`'s `color`.
- * Colour alone would not be worth a guard — the theme's variants resolve
- * `primary`/`error` to the §6 pairs either way, which is exactly why the
- * hand-painted `Lane n DNF` looked right while sitting at `size="small"` under
- * the 44 px floor. The tone is what carries the target and the blur rule, and a
- * console control that keeps focus swallows the next handset press (§4.4).
- * Colourless chrome (Swap, Reset series, a field adornment) names no state, so
- * it carries no tone — it still takes the wrapper for the target and the blur
- * rule, which is the half a colourless press was missing when this rule was
- * written about colour alone.
+ * On the live path a press that carries a STATE takes it from a `RaceButton`
+ * tone, never from a raw `Button`'s `color`. The colour would come out right
+ * either way (the theme resolves `primary`/`error` to the §6 pairs); the tone is
+ * what carries the 44 px target and the blur rule, and a console control that
+ * keeps focus swallows the next handset press (§4.4). Colourless chrome (Swap,
+ * Reset series, a field adornment) names no state and carries no tone, but still
+ * takes the wrapper for the target and the blur rule.
  */
 describe('a state-coloured press on the live path is a `RaceButton` tone', () => {
   it.each(CONTROL_PAGE_FILES)('%s', (file) => {
@@ -326,6 +304,15 @@ describe('a state-coloured press on the live path is a `RaceButton` tone', () =>
   });
 });
 
+/**
+ * On a *control*, the `stopDim` fill has exactly one owner — `RaceButton`'s
+ * `stop` tone. Hand-painting it gets the pair right and the keyboard wrong: the
+ * tone carries the ≥44 px target and the blur rule (§4.4/§6), and a stop control
+ * that keeps focus swallows the next buzzer press. Both spellings render the
+ * same colour, so only the source tells them apart. Non-controls (the plate, a
+ * status chip) paint `error.dark` freely — they own no press.
+ * `destructiveFillSx` is the retired theme helper.
+ */
 describe('the stop fill reaches a control only through `RaceButton`', () => {
   it.each(CONTROL_PAGE_FILES)('%s', (file) => {
     const src = sourceOf(file);

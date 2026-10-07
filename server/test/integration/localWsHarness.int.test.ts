@@ -9,17 +9,16 @@ import { ensureTables, isDynamoReachable } from './helpers';
 /**
  * Guards the WS harness's own surface (scripts/localWsHarness.mjs): the
  * management-API HTTP face and the $connect gate in front of the real handlers.
- * The literal /health body is the wire contract verify-g3's readiness probe
- * asserts (driver.mjs backendReady) so a foreign process squatting :3001 can't
- * be misread as the relay being up — keep the string in sync with
- * scripts/lib/harnessHealth.mjs. Boots the harness as a subprocess on a
+ * The literal /health body is the readiness-probe wire contract, so a foreign
+ * process squatting :3001 can't be misread as the relay being up — keep it in
+ * sync with scripts/lib/harnessHealth.mjs. Boots the harness as a subprocess on a
  * throwaway port; self-skips when the local DynamoDB container is down, like
  * the other *.int.test.ts suites — see helpers.ts.
  */
 
 const reachable = isDynamoReachable();
-// Off the default 3001 (a running `npm run dev`) and the driver's private
-// relay 3101 / the sibling HTTP suite's 3102.
+// Off the default 3001 (a running `npm run dev`), the local app driver's private
+// relay 3101 and the sibling HTTP suite's 3102.
 const PORT = 3103;
 const BASE = `http://127.0.0.1:${PORT}`;
 // A second harness whose connections table does not exist, so connectionHandler

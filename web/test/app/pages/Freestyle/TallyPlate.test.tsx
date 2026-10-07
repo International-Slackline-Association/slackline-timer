@@ -177,8 +177,8 @@ describe('TallyPlate', () => {
   // §4.12 (nothing moves): a no-op verb is a sentence, so it drops to the
   // target's scale rather than wrapping — but the slot has to keep the live
   // verb's line box. The plate is sticky at the top of the live column, so a
-  // shorter verb shrank the whole board's box the moment the last run resolved
-  // and stepped the run deck up under the operator's hand.
+  // shorter verb would shrink the whole board's box the moment the last run
+  // resolved and step the run deck up under the operator's hand.
   it('reserves the live verb line box under a no-op sentence', () => {
     const { unmount } = render(
       <TallyPlate board={board()} onAdvance={vi.fn()} noopPress={NO_PRESS} />,
@@ -273,9 +273,8 @@ describe('TallyPlate', () => {
     }
   });
 
-  // A `<button>` may hold phrasing content only, and the plate's report was four
-  // `div`s deep inside one. Every box in there is a `span` now — the target, the
-  // fills and the reserved slots are untouched, the markup is valid.
+  // A `<button>` may hold phrasing content only, so every box inside the
+  // plate's press — the target, the fills, the reserved slots — is a `span`.
   it('nests no div inside the press', () => {
     render(<TallyPlate board={board()} onAdvance={vi.fn()} noopPress={NO_PRESS} />);
 

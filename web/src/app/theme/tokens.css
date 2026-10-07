@@ -48,7 +48,7 @@
   --tl-stop-bright: #ff9b82;
   --tl-idle: #8a939d;
 
-  /* Streaming overlays — two-tier colour language (DESIGN_SYSTEM §3 overlay plates & chroma key):
+  /* Streaming overlays — two-tier colour language (design-system §3 "Overlay plates & chroma key"):
      STRUCTURAL marks (section labels, connectors, empty slots) are white;
      FILLED name plates flip to solid white with near-black name text. */
   --tl-overlay-plate: rgba(
@@ -87,8 +87,8 @@
     0.6
   ); /* full-bleed frame dim behind an overlay composition (LAAX 60%-black layer) */
 
-  /* LAAX overlay art metrics — measured on the art's 1920×1080 frame; scale off
-     a 1080p baseline, don't hard-pin. */
+  /* LAAX overlay art metrics — measured on the art's 1920×1080 frame (see
+     `overlayArt` in tokens.ts). */
   --tl-overlay-stroke-width: 6px; /* VS-box / plate border + bracket connectors */
   --tl-overlay-heading-tracking: -0.02em; /* tight display-caps tracking (art: −.01…−.03em) */
   --tl-overlay-banner-tracking: 0.08em; /* open banner caps (WINNER, best-of-3 caption) */
@@ -132,18 +132,14 @@
 }
 
 /* Colour-adaptation mode (`?bg=h2r`, class set by `app/pages/Stream/overlayBg.ts`):
-   the transparent overlay is flattened onto a chroma ground UPSTREAM of the
-   keyer (an H2R Graphics chain keyed at pink #ec008c) and the chain shifts
-   colours on the way. Measured (2026-07-24 rig): intended #13a89e aired as
-   #48bbb2 — per channel a uniform ~21.6% white lift (hue intact), i.e. white
-   contamination in the chain, not a keyer hue shift. Each override is the
-   lift's inverse, (orig − 0.216·255)/0.784 per channel, with channels below
-   the ~55 white floor clamping at 0 (those targets are only approachable):
+   each override inverts the keyed chain's measured ~21.6% white lift,
+   (orig − 0.216·255)/0.784 per channel, clamping at 0 below the ~55 white
+   floor. Rig + measurements: doc/dev/broadcast-overlays.md "The
+   colour-adaptation mode".
    - --tl-running  #13a89e → #009083 (R clamps; airs ≈ #37a89e)
-   - --tl-stop-dim #c2391f → #b10200 (B clamps; airs ≈ #c23937; un-adapted it
-     would air ≈ #cf644f, predicted from the same measured lift)
-   If the chain is fixed (the lift disappears), DELETE these overrides — the
-   un-lifted inverses air too dark. */
+   - --tl-stop-dim #c2391f → #b10200 (B clamps; airs ≈ #c23937)
+   If the chain's lift is fixed, DELETE these overrides — without the lift the
+   inverses air too dark. */
 body.tl-key-composite {
   --tl-running: #009083;
   --tl-stop-dim: #b10200;

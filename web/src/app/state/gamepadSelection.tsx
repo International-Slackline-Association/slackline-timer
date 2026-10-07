@@ -12,15 +12,13 @@ import {
  * Which physical game controller drives the timer. The controller is a property
  * of the operator station, not of a competition, so the selection is stored
  * under one global key and shared via context across every `useGamepads`
- * consumer (the single Speedline control plus the two Freestyle
- * `CountdownControl` instances) — so the operator picks one pad and it drives
- * both Freestyle players.
+ * consumer — the operator picks one pad and it drives the whole board.
  *
  * Owns the live connected-pad list (the window `gamepadconnected` /
- * `gamepaddisconnected` events, registered ONCE here rather than per-hook) and
- * derives the current `selectedIndex` of the chosen pad. We persist the pad
- * `id` (not the numeric `index`, which the browser can reuse across re-plugs)
- * so a re-plug re-selects the same controller.
+ * `gamepaddisconnected` events, registered once here, not per hook) and
+ * derives the chosen pad's `selectedIndex`. Persists the pad `id`, not the
+ * numeric `index` (the browser can reuse it across re-plugs), so a re-plug
+ * re-selects the same controller.
  */
 
 const STORAGE_KEY = 'speedline.selectedGamepad';
@@ -83,9 +81,8 @@ export const GamepadSelectionProvider = ({ children }: { children: ReactNode }) 
     }
   }, []);
 
-  // Register the window listeners ONCE for all consumers. Re-scan on every
-  // event so the list reflects the browser's truth (and so a disconnect of the
-  // selected pad clears its index without losing the stored id).
+  // Re-scan on every event: a disconnect of the selected pad clears its index
+  // without losing the stored id.
   useEffect(() => {
     const refresh = () => setConnectedPads(scanConnectedPads());
     refresh();

@@ -14,8 +14,7 @@ vi.mock('@aws-sdk/client-ssm', () => ({
 import { getPhotoPrivateKey, getReadTokenSecret } from 'core/secrets';
 
 // The per-container cache is module state, so each test uses its own parameter
-// name — no cross-test bleed without resetting modules (blocked by the tsconfig
-// module target: no dynamic import()).
+// name — no cross-test bleed without resetting modules.
 
 const DIRECT_SECRET = 'direct-read-token-secret-0123456789';
 const SSM_SECRET = 'ssm-read-token-secret-0123456789abc';

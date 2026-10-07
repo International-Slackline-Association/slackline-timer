@@ -34,10 +34,10 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('useFitToBox', () => {
   it('measures the fractional used box, so the scaled block never paints past the slot', () => {
-    // `clientWidth`/`scrollWidth` are INTEGER-rounded: a 43.6px slot reads 44 and
-    // 69.06px of content reads 69, so the fit came out ~1% too generous and the
-    // block painted ~0.5px past the band's overflow:hidden edge — the residual
-    // both-edge shave on the small admin bracket cards.
+    // `clientWidth`/`scrollWidth` are INTEGER-rounded: a 43.6px slot reads 44
+    // and 69.06px of content reads 69, so a fit off them is ~1% too generous
+    // and paints ~0.5px past the band's overflow:hidden edge (a both-edge shave
+    // on the small admin bracket cards).
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', { value: 44, configurable: true });
     Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { value: 69, configurable: true });
     mockUsedSizes({ slot: { w: 43.6, h: 24 }, name: { w: 69.06, h: 18 } });

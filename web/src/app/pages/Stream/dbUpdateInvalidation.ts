@@ -11,14 +11,12 @@ import type { DbUpdateWSMessage } from 'app/hooks/useWebSocket';
 type DbUpdateEntity = DbUpdateWSMessage['data']['entity'];
 
 /**
- * The query-key branches a `db_update` should invalidate, given its `entity`.
- * A `db_update` only ever touches one entity, so re-fetching every active query
- * (the old keyless `invalidateQueries()`) thrashed the cache — during a live
- * run each lane stop re-pulled athletes/matches/rankings/times/scores on every
- * overlay. Rankings join the athlete list and derive from times/scores, so those
- * three entities also invalidate the rankings branch — and so do matches, whose
- * `winnerId`s drive the overall-standings placements (rule G3). Match writes are
- * rare mid-run, so the extra refetch is cheap.
+ * The query-key branches a `db_update` should invalidate, given its `entity` —
+ * never a keyless `invalidateQueries()`, which re-pulls every overlay's queries
+ * on each lane stop. Rankings join the athlete list and derive from
+ * times/scores, so those entities also invalidate the rankings branch — and so
+ * do matches, whose `winnerId`s drive the overall-standings placements (rule
+ * G3); match writes are rare mid-run.
  */
 export const dbUpdateQueryKeys = (compId: string, entity: DbUpdateEntity): QueryKey[] => {
   switch (entity) {

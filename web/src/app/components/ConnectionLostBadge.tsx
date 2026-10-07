@@ -18,8 +18,7 @@ const LOST_LABEL: Record<LinkPhase, string | null> = {
  * (`useLinkPhase`). Reconnects are unbounded (ADR 0024), so neither reading is a
  * give-up notice — they mark the on-screen data as stale until the socket
  * recovers, then flash a brief green cue on the self-heal so a
- * projector-watching operator doesn't miss the recovery moment (the badge would
- * otherwise vanish silently).
+ * projector-watching operator sees the recovery.
  *
  * The two alarms are different reports, and the operator's next move differs
  * with them: a link that never arrived (`unreachable`) has lost nothing and is
@@ -32,8 +31,8 @@ const LOST_LABEL: Record<LinkPhase, string | null> = {
  * Two guards keep it broadcast-safe:
  * - the phase's grace period (`useStaleAfterGrace` inside `useLinkPhase`), so
  *   the routine token-refresh / keepalive reconnect blip never flashes it on
- *   air (that window belongs to `ConnectingBadge`, which the /stream/* layout
- *   deliberately does not mount);
+ *   air (that window belongs to `ConnectingBadge`, which `StreamLayout` does not
+ *   mount);
  * - it never paints over a chroma-keyed ground (`?bg=key` or a chroma
  *   `defaultBg`) — the keyer would pass it through onto the venue screen /
  *   broadcast. On keyed rigs the state stays observable off-air via the

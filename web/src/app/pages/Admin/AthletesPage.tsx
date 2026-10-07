@@ -28,8 +28,8 @@ import { AthleteForm } from 'app/pages/Admin/AthleteForm';
 /**
  * `/admin/athletes` — CRUD over the selected competition's athletes. Requires a
  * competition to be selected (on `/admin/competitions`). Deletes are blocked
- * server-side while Times or Matches still reference the athlete; that 409 is
- * surfaced in the confirm dialog.
+ * server-side while Times, Matches or Scores still reference the athlete; that
+ * 409 is surfaced in the confirm dialog.
  */
 export const AthletesPage = () => (
   <SelectCompetitionGate title="Athletes">

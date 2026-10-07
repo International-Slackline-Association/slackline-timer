@@ -8,23 +8,14 @@ import { Construct } from 'constructs';
 
 import { defineWafToggle, makeRateBasedWebAcl } from './waf';
 
-// The account cost backstop (ADR 0031 §1): a monthly AWS Budget + a CloudWatch
-// EstimatedCharges alarm, both notifying one SNS email. Built first so any
-// missing app-level control (throttling, concurrency caps) is non-catastrophic.
-//
-// Why its OWN stack in us-east-1: CloudWatch only publishes the billing metric
-// AWS/Billing EstimatedCharges in us-east-1, so the alarm (and the topic it
-// targets) MUST live there — the backend runs in eu-central-2. AWS Budgets is a
-// global service reachable from any region; co-locating the CfnBudget here keeps
-// every billing resource in one reproducible, infra-test-pinned place.
+// The account cost backstop (ADR 0031 §1): a monthly AWS Budget + an
+// EstimatedCharges alarm. Its own stack because EstimatedCharges publishes only
+// in us-east-1; the (global) Budget rides along.
 
-// Monthly ceiling, denominated in USD. AWS Budgets only accepts USD in this
-// account (it rejects EUR: "not in the supported unit set: [USD]"), and the
-// CloudWatch EstimatedCharges metric is USD-only too — so USD is the single
-// currency of truth for both backstops. $55 ≈ €50 with round headroom.
+// USD: Budgets rejects EUR on this account ("not in the supported unit set:
+// [USD]") and EstimatedCharges is USD-only. $55 ≈ the €50 ceiling.
 const BUDGET_LIMIT_USD = 55;
-// Below the Budget so the alarm warns before the ceiling rather than with it
-// (the Budget's own 100% notification already covers $55).
+// Below the Budget so the alarm warns early; the Budget's 100% covers $55.
 const ALARM_THRESHOLD_USD = 25;
 
 export interface BillingStackProps extends StackProps {
@@ -36,13 +27,8 @@ export class BillingStack extends Stack {
     super(scope, id, props);
     const { stage } = props;
 
-    // The cost-alert subscriber is DEPLOYMENT CONFIG, not source: this repo is
-    // public, so it carries no mailbox, and the right subscriber differs per
-    // operator (an ISA distribution list beats any individual). Required, not
-    // defaulted — a silent fallback would subscribe a dead address and turn the
-    // account cost backstop into a no-op:
-    // Set BILLING_ALERT_EMAIL in the ignored repo-root `.env.deploy`, or pass
-    //   cdk deploy slackline-timer-v1-billing -c billingAlertEmail=ops@example.org
+    // Deployment config (ADR 0048), never defaulted: a fallback address would
+    // turn the cost backstop into a silent no-op.
     const notifyEmail =
       (this.node.tryGetContext('billingAlertEmail') as string | undefined) ??
       process.env.BILLING_ALERT_EMAIL;
@@ -59,10 +45,8 @@ export class BillingStack extends Stack {
     });
     topic.addSubscription(new EmailSubscription(notifyEmail));
 
-    // Monthly cost Budget with 50/80/100% notifications on BOTH actual and
-    // forecasted spend → the same email. Budgets delivers to email subscribers
-    // directly (declared inline here), independent of the SNS topic — the topic
-    // is the CloudWatch alarm's channel, not the Budget's.
+    // Budgets emails its subscribers directly; the SNS topic is the alarm's
+    // channel only.
     const percentThresholds = [50, 80, 100];
     const notificationsWithSubscribers = percentThresholds.flatMap((threshold) =>
       (['ACTUAL', 'FORECASTED'] as const).map((notificationType) => ({
@@ -86,8 +70,7 @@ export class BillingStack extends Stack {
       notificationsWithSubscribers,
     });
 
-    // CloudWatch billing alarm: AWS/Billing EstimatedCharges is a us-east-1-only
-    // metric, published ~6h, currency USD. period 6h matches its cadence.
+    // EstimatedCharges publishes every ~6h; the period matches.
     const estimatedCharges = new Metric({
       namespace: 'AWS/Billing',
       metricName: 'EstimatedCharges',
@@ -109,12 +92,8 @@ export class BillingStack extends Stack {
     alarm.addAlarmAction(new SnsAction(topic));
 
     // ── AWS WAF for CloudFront (ADR 0031 §5), authored default-OFF ──────────────
-    // CloudFront-scoped WAF must be provisioned in us-east-1, so the WebACL for the
-    // web CloudFront distribution rides in this us-east-1 stack. The APIs have no
-    // WAF: a regional ACL cannot attach to HTTP/WebSocket APIs (infra/waf.ts).
-    // Gated on WafEnabled so a normal deploy provisions no WAF resource / no standing
-    // cost. Enable: `cdk deploy slackline-timer-v1-billing --parameters WafEnabled=true`,
-    // then attach the exported WebAclArn to the web stack (doc/dev/deploy.md §6.3).
+    // CloudFront-scoped WAF must be provisioned in us-east-1, hence this stack.
+    // Enable/disable runbook: doc/dev/deploy.md §6.3.
     const wafEnabled = defineWafToggle(this);
     const webAcl = makeRateBasedWebAcl(this, 'CloudFrontWebAcl', {
       scope: 'CLOUDFRONT',

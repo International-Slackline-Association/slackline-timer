@@ -52,7 +52,7 @@ describe('seed writers reuse the shared preflight', () => {
     expect(src).toMatch(/from '\.\/lib\/seedPreflight\.mjs'/);
     expect(src).toContain('seedTableHint');
     // No hand-rolled local-detection regex assigned to isLocal — the shared
-    // isLocalApi is the one check (a bespoke regex is exactly what drifted).
+    // isLocalApi is the one check.
     expect(src).not.toMatch(/isLocal\s*=\s*\//);
   });
 

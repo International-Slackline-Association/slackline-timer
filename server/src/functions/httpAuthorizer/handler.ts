@@ -54,10 +54,8 @@ export const main: APIGatewayRequestSimpleAuthorizerHandlerV2WithContext<AuthCon
     if (groups.includes(process.env.COGNITO_TIMER_GROUP)) {
       return { isAuthorized: true, context: { role: 'admin', compId: '*', sub, email } };
     }
-    // A valid ISA login without the timer group is a scoped `manager` — NOT a
-    // deny and NOT a read-token candidate. Which competitions they may touch is
-    // resolved per request from the grant table; with no grants they are
-    // authenticated but see/do nothing.
+    // Any other valid ISA login is a scoped `manager`, never a deny or a
+    // read-token candidate; with no grants it is authenticated but sees nothing.
     return { isAuthorized: true, context: { role: 'manager', compId: '', sub, email } };
   } catch {
     // Not a Cognito token — try the read token next.

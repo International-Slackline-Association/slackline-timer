@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { DeskSection } from 'app/pages/Freestyle/DeskSection';
 import { telemetryTheme } from 'app/theme/theme';
 
-// The desk never folds (C14), so the current step is marked, not revealed. The
-// grey-on-grey ink swap this started as measured ~2:1 and was gone at 25 %
-// scale, so the mark is three channels now — weight, ink and a rule — and the
-// rule's gutter is reserved on every section, so the caption cannot shift as
-// the mark moves down the desk.
+// The desk never folds (C14), so the current step is marked, not revealed. A
+// grey-on-grey ink swap alone measures ~2:1 and vanishes at 25 % scale, so the
+// mark is three channels — weight, ink and a rule — and the rule's gutter is
+// reserved on every section, so the caption cannot shift as the mark moves down
+// the desk.
 const renderDesk = (current: 'setup' | 'run') =>
   render(
     <ThemeProvider theme={telemetryTheme}>
@@ -50,10 +50,9 @@ describe('DeskSection', () => {
     expect(window.getComputedStyle(section('Run').getByTestId('step-rule')).width).toBe('4px');
   });
 
-  // freestyle-compact-run-tab-fold: the tab layout shows ONE section and names
-  // it on the tab that opened it, so the printed caption is the same word twice
-  // for ~26 px of a 720 px fold budget. The landmark and the step mark are not
-  // the caption's to give up.
+  // The tab layout shows ONE section and names it on the tab that opened it, so
+  // the printed caption is the same word twice for ~26 px of a 720 px fold
+  // budget. The landmark and the step mark are not the caption's to give up.
   it('drops the printed caption without dropping the landmark', () => {
     render(
       <ThemeProvider theme={telemetryTheme}>

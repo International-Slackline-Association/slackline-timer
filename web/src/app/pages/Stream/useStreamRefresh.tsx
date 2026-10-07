@@ -16,34 +16,25 @@ import {
   type SelectionStamp,
 } from 'app/util/selectionLww';
 
-// The overlay's single relay connection sees two kinds of message: the write
-// Lambdas' `db_update` (drives cache invalidation) and the control board's
-// `updateSelection` (drives the live VS match + SVO card). Both arrive on the
-// same socket; the type union below is what `useWS` returns for this room.
+// The write Lambdas' `db_update` and the board's `updateSelection` in; the
+// `request_state` catch-up out.
 type StreamMessage =
   DbUpdateWSMessage | Extract<StopwatchWSMessage, { type: 'updateSelection' | 'request_state' }>;
 
 /**
  * Keeps a `/stream/*` overlay live over one relay connection: invalidates the
- * React Query cache on every `db_update` (so the overlay re-fetches without
- * polling) and on every socket (re)open (so a `db_update` missed during a drop
- * can't leave it stale), AND tracks the latest `updateSelection` from the
- * control board.
- * Returns the current live selection (or null until the board pushes one), so an
- * overlay can follow the operator's choice without opening a second socket —
- * plus the socket's `readyState` so the caller can flag stale data during an
- * outage (`ConnectionLostBadge`).
- * Also reused by the `/admin/*` shell (`AdminLiveRefresh`) purely for the
- * invalidation half — the returned selection is ignored there.
+ * React Query cache on every `db_update` and on every socket (re)open, and
+ * tracks the board's latest `updateSelection`. Returns that selection (null
+ * until the board pushes one) and the socket's `readyState`
+ * (`ConnectionLostBadge`). `AdminLiveRefresh` reuses it for the invalidation
+ * half only.
  *
  * `discipline` scopes the tracked selection: both disciplines share one relay
  * room (compId = sessionId), so a discipline-pinned overlay must ignore the
- * OTHER board's selection — otherwise a speed pick would knock a freestyle VS
- * card back to its positional fallback (and an SVO-live card would show the
- * speed athlete outright). Foreign selections are dropped before the LWW stamp,
- * so the operator's last same-discipline pick persists across the other board's
- * pushes. Omitted (the H2R bridge — one tab, no discipline in its URL) tracks
- * whichever board is live.
+ * OTHER board's selection — a speed pick would knock a freestyle VS card back
+ * to its positional fallback. Foreign selections are dropped before the LWW
+ * stamp, so the last same-discipline pick survives the other board's pushes.
+ * Omitted (the H2R bridge) tracks whichever board is live.
  */
 export const useStreamRefresh = (
   compId: string,
@@ -64,8 +55,7 @@ export const useStreamRefresh = (
         void queryClient.invalidateQueries({ queryKey });
       }
     } else if (message.type === 'updateSelection') {
-      // Discipline crosstalk guard (see the hook doc): drop the other board's
-      // selection before the stamp so this overlay's own pick isn't disturbed.
+      // Discipline crosstalk guard (see the docblock).
       if (discipline && message.data.discipline !== discipline) return;
       const stamp = acceptSelectionStamp(selectionStampRef.current, message);
       if (stamp) {
@@ -80,17 +70,12 @@ export const useStreamRefresh = (
     onMessage: handleFrame,
   });
 
-  // On every OPEN transition, catch up on both channels an overlay can miss
-  // while it was disconnected (or before it ever connected):
-  //   1. the HTTP data plane — re-invalidate so a `db_update` missed during a
-  //      drop can't leave the overlay stale (why in `allDbUpdateQueryKeys`);
-  //   2. the control board's live selection — ask the panels to re-broadcast it
-  //      via `request_state`, mirroring the control panels' own on-OPEN request.
-  //      The board otherwise re-pushes `updateSelection` only on a change or its
-  //      own OPEN, so an overlay joining mid-event would sit on its positional
-  //      fallback (the live VS match / SVO card) until the operator next touched
-  //      the board. Read-only overlays are allowed to send exactly this one
-  //      message — the relay refuses everything else from them (messageHandler).
+  // On every OPEN, catch up on both channels missed while disconnected:
+  //   1. the data plane — re-invalidate (why in `allDbUpdateQueryKeys`);
+  //   2. the board's selection — `request_state`, since the board re-pushes
+  //      `updateSelection` only on a change or its own OPEN; a mid-event joiner
+  //      would otherwise sit on its positional fallback. It is the one frame a
+  //      read-only socket may send (ADR 0050).
   useEffect(() => {
     if (readyState === ReadyState.OPEN) {
       for (const queryKey of allDbUpdateQueryKeys(compId)) {

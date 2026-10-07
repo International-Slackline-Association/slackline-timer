@@ -1,44 +1,29 @@
-// Shared foundation for the Cognito helper scripts (group management +
-// app-client hardening). These shell out to an already-authenticated AWS CLI v2
-// session rather than pulling in the Cognito SDK the server package doesn't
-// otherwise carry — see README.md for the auth prerequisite.
+// Shared foundation for the Cognito helper scripts. They shell out to an
+// authenticated AWS CLI v2 session (README.md); the server package carries no
+// Cognito SDK.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// Deployment config (AWS_PROFILE) from the ignored repo-root `.env.deploy` —
-// template: `.env.deploy.example`. Loaded in this shared module rather than
-// per-script: every script in the tree imports it, so the profile resolves
-// without the operator exporting it by hand. An already-exported AWS_PROFILE
-// still wins (loadEnvFile does not overwrite); an absent file is fine.
+// The ignored repo-root `.env.deploy` (template: `.env.deploy.example`); every
+// script here imports this module. An exported var still wins (loadEnvFile does
+// not overwrite); an absent file is fine.
 const DEPLOY_ENV = fileURLToPath(new URL('../../../.env.deploy', import.meta.url));
 if (existsSync(DEPLOY_ENV)) process.loadEnvFile(DEPLOY_ENV);
 
-// The Cognito pool these scripts operate on, all of it from `.env.deploy`
-// (template: .env.deploy.example) — the same deploy input the CDK entrypoint
-// and the web build read, because the pool is hand-provisioned outside this
-// repo and no stack can publish it (ADR 0048). Each value is overridable per
-// run by its flag (see parseArgs); none has a fallback, so a script pointed at
-// no pool says so instead of touching someone else's users.
-//
-// `profile` comes from $AWS_PROFILE — the shell's, else the `.env.deploy` one
-// loaded above — or `--profile` per run. When neither is set, runAws omits
-// --profile so the AWS CLI uses its own default credential resolution — no
-// profile name is hardcoded here.
+// The pool is hand-provisioned outside this repo, so it is deploy config
+// (ADR 0048). Each value is overridable by its flag (parseArgs); none has a
+// fallback, so a script pointed at no pool says so instead of touching someone
+// else's users. With no profile, runAws omits --profile and the CLI resolves
+// its default credentials.
 export const POOL = {
   poolId: process.env.COGNITO_USER_POOL_ID,
   region: process.env.COGNITO_REGION,
-  // The account that owns the pool (arn:aws:cognito-idp:<region>:…), from
-  // AWS_ACCOUNT_ID in the `.env.deploy` loaded above. Pool ids are
-  // account-scoped, so credentials resolving to any other account get a
-  // misleading "User pool … does not exist" — runAws turns that into a
-  // wrong-account diagnosis instead. Undefined without `.env.deploy`: the
-  // diagnosis then just names the credentials in use, which is still the
-  // actionable half.
+  // Only feeds the wrong-account diagnosis in runAws; optional.
   account: process.env.AWS_ACCOUNT_ID,
   profile: process.env.AWS_PROFILE,
-  // The group the WS/HTTP authorizers require of an operator.
+  // The superadmin group; any other ISA login is a comp-scoped manager (ADR 0045).
   group: process.env.COGNITO_TIMER_GROUP,
 };
 
@@ -127,9 +112,7 @@ export function runAws(args, { profile, region } = {}) {
 
 /**
  * "User pool … does not exist" almost always means the credentials resolved to
- * the wrong ACCOUNT (pool ids are account-scoped), not that the pool is gone —
- * on this box the `default` profile is the unrelated dev-account. Name the
- * account actually in use and the fix.
+ * the wrong ACCOUNT (pool ids are account-scoped), not that the pool is gone.
  */
 function wrongAccountDiagnosis(stderr, { profile } = {}) {
   const credsInUse = profile

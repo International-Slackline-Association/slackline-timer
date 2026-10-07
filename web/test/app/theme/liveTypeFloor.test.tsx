@@ -18,7 +18,7 @@ import type { TallyInput } from 'app/util/tallyModel';
 vi.mock('app/hooks/useGamepads', () => import('../../util/gamepadMock'));
 
 /**
- * The daylight type floor (FREESTYLE_BOARD_UX §8 C12, anti-pattern "text
+ * The daylight type floor (freestyle-board-ux §8 C12, anti-pattern "text
  * <14 px on the live path"): every string the operator reads mid-match renders
  * at least 14 px, in venue sunlight, from a step back.
  *
@@ -115,10 +115,9 @@ describe('live-path type floor', () => {
       </GamepadSelectionProvider>,
     );
 
-    // The colour note and the full button map now live behind the "Open
-    // handset map" dialog trigger (progressive disclosure, fsux round 10) —
-    // reference material read at leisure, not the always-on live surface this
-    // suite pins.
+    // The colour note and the full button map live behind the "Open handset
+    // map" dialog trigger — reference material read at leisure, not the
+    // always-on live surface this suite pins.
     expectAtFloor(screen.getByTestId('handset-readout'));
   });
 

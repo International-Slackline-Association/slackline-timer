@@ -16,7 +16,7 @@ interface Props {
 //   0  idle — both dark/unlit (race.idle); no run is armed, so the housing sits
 //      dark between zeroed clocks. It must NOT be red: red-red on air reads as an
 //      error/recording indicator and collides with the abort colour language
-//      (ADR 0041; "armed standby" is retired).
+//      (ADR 0041).
 //   PRE_BEEP_PHASE  armed — both red (race.stop); the T-5s pre-beep cue arms the
 //                   light (no numbered lights lit yet) ahead of the 2-1-GO run.
 //   1  first SET tone — left amber (race.set), right dark/off

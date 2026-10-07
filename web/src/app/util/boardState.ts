@@ -1,13 +1,9 @@
 /**
- * The Freestyle board's two named predicates (FREESTYLE_BOARD_UX §4.5), and the
- * one thing they are both derived from: **what the board is holding**.
- *
- * The page used to answer "is this safe?" three different ways — `isTimerRunning`
- * for the budget button, `running || breakOpen` for the mode toggle, `running ||
- * pause` for the leave guard — so the same board was live for one control and
- * idle for the next, and the disagreement was invisible (audit S06). Here one
- * pure `boardHold` walks the whole board in precedence order and returns the
- * first thing that would be destroyed, or null. Both predicates read that:
+ * The Freestyle board's hold predicates (freestyle-board-ux §4.5), all derived
+ * from one answer: **what the board is holding**. `boardHold` walks the whole
+ * board in precedence order and returns the first thing that would be
+ * destroyed, or null, so no two controls can read the same board as live and
+ * idle (S06). The predicates:
  *
  *  - `boardLive` — something is ticking (a run, a break, the changeover, the
  *    warm-up, an open try). Drives `useRunGuard`, the tab-close guard.
@@ -17,14 +13,14 @@
  *  - `athleteHold` — the same walk with the warm-up taken out, for the one
  *    control a board-wide channel must not lock: `Swap athletes`.
  *
- * Because every live hold outranks every merely-destroyable one, `boardLive`
- * ⇒ `boardHoldsState` by construction: the two can never invert.
+ * Every live hold outranks every merely-destroyable one, so `boardLive` ⇒
+ * `boardHoldsState` by construction.
  *
  * `holdReason` renders that same hold as the operator's blocker line, so a
  * locked control and its Tooltip cannot disagree (the `advanceRoute` /
  * `advanceLabel` split).
  *
- * What is deliberately NOT an input: the Run (s) field. It is a draft until
+ * The Run (s) field is not an input: it is a draft until
  * `Set both lanes` applies it (§4.5/§4.6) — a lane's `armedMs` is what says
  * whether it holds anything, so typing a new budget cannot lock the very button
  * that applies it.

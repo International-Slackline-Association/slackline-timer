@@ -23,42 +23,35 @@ export default [
   eslint.configs.recommended,
   eslintPluginPrettierRecommended,
   ...tseslint.configs.recommended,
-  // React linting is @eslint-react (`eslint-plugin-react` stalled at a peer
-  // ceiling of eslint ^9.7 and blocked the eslint 10 move). Scoped to web/ —
-  // the only package with React in it — so the CDK infra and the node scripts
-  // don't pay for rules that cannot apply to them.
+  // @eslint-react, not `eslint-plugin-react` (its peer range stops at eslint 9).
+  // Scoped to web/, the only package with React in it.
   {
     ...eslintReact.configs['recommended-typescript'],
     files: ['web/**/*.{ts,tsx}'],
     settings: {
-      // Explicit version (not the config default "detect"): eslint runs from the
-      // repo root where the react package isn't resolvable — react lives in
-      // web/. Kept in step with web/.
+      // Not "detect": eslint runs from the repo root, where react (in web/) is
+      // not resolvable. Keep in step with web/package.json.
       'react-x': { version: '19.2' },
     },
     rules: {
       ...eslintReact.configs['recommended-typescript'].rules,
-      // Same call as `react-hooks/exhaustive-deps` below: this repo drives
-      // effects deliberately and does not want the dependency-array rule.
+      // Off, like `react-hooks/exhaustive-deps` below: effect dependencies are
+      // hand-picked.
       '@eslint-react/exhaustive-deps': 'off',
       // Off in every shipped config, but the repo has real `target="_blank"`
       // anchors and nothing else catches a missing rel=noreferrer.
       '@eslint-react/dom-no-unsafe-target-blank': 'error',
 
-      // --- Rules switched off deliberately, not to silence a backlog. ---
       // The relay architecture IS state-derived-from-effects: control panels are
       // mirroring peers that apply inbound peer messages into local state
-      // (ADR 0038), and the timers seed off a broadcast anchor. The hits are the
-      // design, not a defect list.
+      // (ADR 0038), and the timers seed off a broadcast anchor.
       '@eslint-react/set-state-in-effect': 'off',
       // Naming style only (refs must end in `Ref`, setters must be `setFoo`) —
       // no correctness content, and not worth renaming through realtime code.
       '@eslint-react/naming-convention-ref-name': 'off',
       '@eslint-react/use-state': 'off',
-      // React 19 style preferences: `use(Context)` over `useContext`, and
-      // `<Context>` over `<Context.Provider>`. Both are real modernizations but
-      // they rewrite the state-provider plumbing, which belongs in its own
-      // change rather than riding along with a dependency upgrade.
+      // React 19 style preferences (`use(Context)`, `<Context>` as provider):
+      // adopting them rewrites the state-provider plumbing, a change of its own.
       '@eslint-react/no-use-context': 'off',
       '@eslint-react/no-context-provider': 'off',
     },

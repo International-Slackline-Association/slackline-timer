@@ -62,7 +62,7 @@ describe('CountryFlag', () => {
   it('renders the code once beside the flag with showCode', () => {
     const { container } = render(<CountryFlag code="GER" showCode />);
     expect(container.querySelector('span.fi')).toHaveClass('fi-de');
-    // The code text appears exactly once (the old call sites printed it twice).
+    // The code text appears exactly once.
     expect(container.textContent).toBe('GER');
   });
 

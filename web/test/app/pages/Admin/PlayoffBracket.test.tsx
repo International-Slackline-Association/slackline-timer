@@ -122,7 +122,7 @@ describe('PlayoffBracket champion green ring', () => {
 
   it('keeps per-match advancing-slot greens (final winner’s own box) untouched', () => {
     // The advancing finalist box (box_final_l) still lights green off
-    // resolveBracketSlots even though the champion box is now gated.
+    // resolveBracketSlots even though the champion box is gated.
     render(
       <PlayoffBracket
         variant="name"
@@ -149,9 +149,8 @@ describe('NameBracket plate type scale', () => {
     const css = injectedCss();
     // Each plate is its OWN size container, so 55cqh is 55% of the bar height —
     // the ranking plates' cap ratio, and resolution-independent (a 4K capture
-    // scales, where the old clamp() kept a 24px cap).
-    // The canvas has always been a size container; each PLATE becoming one is
-    // the change, so a single declaration is not enough to pin it.
+    // scales, where a px clamp() would hold a 24px cap). The canvas is a size
+    // container too, so a single declaration is not enough to pin the plates'.
     expect(css.match(/container-type:size/g)?.length ?? 0).toBeGreaterThan(1);
     expect(css).toContain('font-size:55cqh');
     expect(css).not.toContain('clamp(10px');
@@ -175,8 +174,8 @@ describe('NameBracket plate type scale', () => {
   });
 
   it('leaves no device-px clamp in the bracket source', () => {
-    // The whole point of the item: NameBracket was the last plate family sized
-    // in px clamps, so it alone stopped scaling with the capture frame.
+    // A px clamp would stop NameBracket's plates scaling with the capture
+    // frame.
     const src = readFileSync(
       resolve(process.cwd(), 'src/app/pages/Admin/PlayoffBracket.tsx'),
       'utf8',
@@ -225,7 +224,7 @@ describe('PlayoffBracket line systems (frame-relative strokes)', () => {
   });
 
   it('crops the name-tree TBD mark to its ink, leaving the photo cards portrait', () => {
-    // The portrait viewBox carries card margin that shrank the "?" to ~73% of
+    // The portrait viewBox carries card margin that shrinks the "?" to ~73% of
     // the bar; the tight fit lets the glyph fill the bar's inner height.
     render(<PlayoffBracket variant="name" matches={[]} athleteById={() => undefined} />);
     expect(screen.getByTestId('slot-unknown-box_q_1_3').getAttribute('viewBox')).toBe(
@@ -312,8 +311,8 @@ describe('PlayoffBracket type floor (keyed to the canvas, not the viewport)', ()
 
   it('scales the floor down with the smaller /admin/matches preview canvas', () => {
     // `Container maxWidth="lg"` caps that canvas at ~1152px at EVERY window
-    // width, so a viewport-keyed floor handed a 1080p-tall admin window the full
-    // 20px and the ~2:1 quarter-card size spread the broadcast never shows.
+    // width, so a viewport-keyed floor would hand a 1080p-tall admin window the
+    // full 20px and a ~2:1 quarter-card size spread the broadcast never shows.
     const admin = floorAt(1152);
     expect(admin).toBeLessThan(OVERLAY_TYPE_FLOOR_PX);
     expect(admin).toBeCloseTo((OVERLAY_TYPE_FLOOR_PX * 1152) / CAPTURE_CANVAS_W, 1);

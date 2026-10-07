@@ -15,7 +15,7 @@ import { fieldWidths, liveCaption } from 'app/theme/tokens';
  * ("press any button to reveal it"), not in a second line under it.
  *
  * It picks through the house **native** `SelectField` and drops focus on the
- * change: Space is the buzzer on the desk this sits in (FREESTYLE_BOARD_UX
+ * change: Space is the buzzer on the desk this sits in (freestyle-board-ux.md
  * §4.3), so a MUI popup would make the whole board inert as a `[role=listbox]`
  * overlay, and the combobox it hands focus back to would own every press after.
  */

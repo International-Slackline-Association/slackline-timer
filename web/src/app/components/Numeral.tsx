@@ -5,10 +5,9 @@ import { fonts } from 'app/theme/tokens';
 
 /**
  * The one place a number is set in the monospace numeral face with
- * `tabular-nums` — the non-negotiable fixed-width-digit rule (DESIGN_SYSTEM §4)
- * that keeps a ticking clock / rank / score from jittering as its digits change.
- * Collapses the ~8 inline copies of that `fontFamily` + `fontVariantNumeric`
- * pair (ADR 0034 §6); no lint enforces its use — the pair being here is what does.
+ * `tabular-nums` — the non-negotiable fixed-width-digit rule (design-system §4)
+ * that keeps a ticking clock / rank / score from jittering as its digits change
+ * (ADR 0034 §6). No lint enforces its use.
  *
  * Braid-strict leaf — no `sx`/`style`/`className`. The locked-down half (the
  * numeral face + tabular-nums) can never be opted out of; only the bounded set

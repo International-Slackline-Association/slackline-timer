@@ -16,9 +16,8 @@ const DbUpdateSubscription = ({ compId }: { compId: string }) => {
  * Pathless layout route over `/admin/*`: joins the selected competition's relay
  * room and invalidates the matching React Query branches on every `db_update`,
  * so an operator watching (say) standings sees writes made from *another*
- * session without a remount — the same live refresh the `/stream/*` overlays
- * get from `useStreamRefresh` (whose reconnect catch-up invalidation rides
- * along; its `updateSelection` tracking is simply unused here).
+ * session without a remount — the `/stream/*` overlays' `useStreamRefresh`,
+ * reconnect catch-up included (its `updateSelection` tracking is unused here).
  */
 export const AdminLiveRefresh = () => {
   const { compId } = useSelectedCompetition();

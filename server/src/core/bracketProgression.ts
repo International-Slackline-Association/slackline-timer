@@ -19,9 +19,7 @@ import type { Discipline, Gender, Match, MatchRound } from './types';
  * top half (quarter pos1/pos2) and seed 2 in the bottom half (quarter pos3/pos4).
  *
  * Every position emitted here is 1-based, matching BRACKET_SLOTS' `order`.
- *
- * Pure module: no DynamoDB imports. Mirrors the style of rankings/keys/mappers
- * — all topology is plain const data so the unit test can pin it.
+ * Pure: topology is plain const data the unit test pins.
  */
 
 /**
@@ -43,8 +41,7 @@ export const QUARTER_SEED_PAIRS: readonly (readonly [number, number])[] = [
  * (1..2), each `[seedA, seedB]` a 1-based qualification rank. half pos1 feeds
  * the final's athlete1 and pos2 feeds athlete2 (see `advanceTargets` half→final),
  * so seed 1 must sit in pos1 and seed 2 in pos2 to meet only in the final: 1v4,
- * 2v3. The two half winners play the final, the two losers the small final —
- * the existing half→final+small_final advancement needs no change.
+ * 2v3. Advancement from here is the regular half→final+small_final.
  */
 export const HALF_SEED_PAIRS: readonly (readonly [number, number])[] = [
   [1, 4],
@@ -56,8 +53,8 @@ export type SeedStage = Extract<MatchRound, 'quarter' | 'half'>;
 
 /**
  * A bracket row to upsert: identity is `(round, position)`, plus the two slots.
- * `roundName` is intentionally absent — seeded/advanced matches carry no display
- * override, so the client renders the standard round label (see `displayRoundName`).
+ * No `roundName`: seeded/advanced matches carry no display override, so the
+ * client renders the standard round label (see `displayRoundName`).
  */
 export interface BracketRow {
   round: MatchRound;

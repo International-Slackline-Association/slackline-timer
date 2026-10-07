@@ -58,7 +58,7 @@ describe('GamepadPicker', () => {
 
   /**
    * The picker sits in the desk's left rail, where Space is the buzzer
-   * (FREESTYLE_BOARD_UX §4.3): a native list never becomes a `[role=listbox]`
+   * (freestyle-board-ux §4.3): a native list never becomes a `[role=listbox]`
    * overlay that makes the whole board inert, and the picker drops the focus
    * it would otherwise keep — a focused `select` owns every Space after it.
    */

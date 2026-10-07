@@ -108,9 +108,10 @@ export const loadCompetitionOrThrow = async (compId: string): Promise<Competitio
 /**
  * Defense-in-depth (ADR 0022): a read token travels in an OBS overlay URL, an
  * accepted leak risk (ADR 0003). Overlays render only the broadcast fields, so a
- * reader never sees the operational PII — `birthDate` and `notes`. Admins (the
- * web UI) get the full record. Stripping is keyed off the authorizer role, not
- * the route, so every athlete-bearing read (list, single, rankings) applies it.
+ * reader never sees the operational PII — `birthDate` and `notes`. Operators
+ * (admins, managers) get the full record. Stripping is keyed off the authorizer
+ * role, not the route, so every athlete-bearing read (list, single, rankings)
+ * applies it.
  */
 export const forAudience = <T extends { birthDate?: string; notes?: string }>(
   athlete: T,
@@ -140,12 +141,9 @@ export const parseJsonBody = (event: { body?: string; isBase64Encoded?: boolean 
 };
 
 /**
- * Parse + validate a JSON request body in one call: the validate triad
- * (parseJsonBody → validator → 400-on-!ok) that every CRUD write repeated,
- * collapsed so the handlers stay thin. Framework-free — the validator is any
- * `unknown → Validated<T>` function, so a validator needing extra state (e.g.
- * `validateTimeInput(body, now)`) is passed as a closure at the call site.
- * `invalidMessage` is the 400 summary; the validator's errors become `details`.
+ * parseJsonBody → validator → 400. A validator needing extra state
+ * (`validateTimeInput(body, now)`) is passed as a closure. `invalidMessage` is
+ * the 400 summary; the validator's errors become `details`.
  */
 export const parseBody = <T>(
   event: { body?: string; isBase64Encoded?: boolean },
@@ -164,12 +162,9 @@ export const json = (status: number, body: unknown): APIGatewayProxyResultV2 => 
 });
 
 /**
- * Structural identity for ConditionFailed. We can't use `instanceof` here:
- * the esbuild bundler elides the class binding when it's imported
- * across the module boundary purely for an `instanceof`, compiling the check to
- * `e instanceof void 0` — which throws at runtime and made errorResponse return
- * a malformed 200 (the body being the thrown TypeError). Matching on the class's
- * own `name`/`kind` discriminant is bundler-proof.
+ * Structural match, not `instanceof`: esbuild elides a class binding imported
+ * only for an `instanceof`, compiling it to `e instanceof void 0`, which throws
+ * inside errorResponse.
  */
 const isConditionFailed = (e: unknown): e is ConditionFailed =>
   e instanceof Error && e.name === 'ConditionFailed' && 'kind' in e;

@@ -1,38 +1,23 @@
-// Shared policy + AWS-CLI glue for the app-client hardening scripts
-// (hardenAppClient.mjs / verifyAppClient.mjs). ONE source of truth for the
-// desired least-privilege config so "harden" and "verify" can never drift.
-//
-// Like the rest of scripts/cognito/, these shell out to an already-authenticated
-// AWS CLI v2 session rather than pulling an SDK dependency the server package
-// doesn't otherwise carry.
+// Shared least-privilege policy for hardenAppClient.mjs / verifyAppClient.mjs,
+// so "harden" and "verify" cannot drift.
 //
 // WHAT ACTUALLY PREVENTS ATTRIBUTE WRITES
 // ---------------------------------------
-// NOT an empty WriteAttributes. Per the UpdateUserPoolClient API docs, "When you
-// don't specify the WriteAttributes for your app client, your app can write the
-// values of the Standard attributes" — i.e. empty/omitted == ALL standard
-// attributes writable. There is no way to express "zero writable attributes"
-// through that parameter (an earlier `WriteAttributes: []` here was a no-op).
-//
-// The real gate is the OAuth scope: `aws.cognito.signin.user.admin` is what
-// authorizes self-service UpdateUserAttributes / DeleteUser / GetUser. Without it
-// in AllowedOAuthScopes, the client's access tokens simply cannot call those
-// APIs, so WriteAttributes (and ReadAttributes) are moot. So the authoritative
-// write-lock is REMOVING that scope, which DESIRED does. WriteAttributes only
-// matters as blast-radius reduction IF the scope is ever re-added — and narrowing
-// it can break IdP attribute-mapping updates on a shared pool, so we leave it
-// alone by default and only set an explicit list on opt-in (--write-attributes).
+// NOT an empty WriteAttributes: per the UpdateUserPoolClient docs, empty/omitted
+// == ALL standard attributes writable; "zero writable" is inexpressible there.
+// The gate is the `aws.cognito.signin.user.admin` scope, which authorizes the
+// self-service UpdateUserAttributes / DeleteUser / GetUser; without it in
+// AllowedOAuthScopes, Write/ReadAttributes are moot. WriteAttributes is only
+// blast-radius reduction if the scope is re-added, and narrowing it can break
+// IdP attribute mappings on the shared pool, so it is set only on opt-in
+// (--write-attributes).
 
 import { POOL, requireConfig, runAws, runMain } from './cognitoCommon.mjs';
 
-// Re-export the shared CLI helpers so the app-client scripts import everything
-// from one module.
 export { requireConfig, runAws, runMain };
 
 // --- defaults: the timer's public SPA app client ------------------------------
-// Pool/region/profile come from cognitoCommon (shared with the group scripts);
-// clientId is COGNITO_CLIENT_ID from the same `.env.deploy` the web build and
-// the CDK stack read. No fallbacks — see cognitoCommon's POOL.
+// No fallbacks — see cognitoCommon's POOL.
 export const DEFAULTS = {
   poolId: POOL.poolId,
   clientId: process.env.COGNITO_CLIENT_ID,
@@ -41,16 +26,12 @@ export const DEFAULTS = {
 };
 
 // --- the desired least-privilege config --------------------------------------
-// Derived from what the app actually consumes (web/src/main.tsx + the authorizers):
+// Derived from what the app consumes (web/src/main.tsx + the authorizers):
 //  - scopes openid+email and the auth-code flow (the Amplify oauth block)
-//  - reads only the `email` claim + the auto-injected `cognito:groups` (not an
-//    "attribute" — it isn't governed by these lists), so `email`/`email_verified`
-//    is all it ever needs to READ (moot without the admin scope anyway; kept
-//    minimal as defense-in-depth)
-//  - writes NOTHING — enforced by the ABSENT `aws.cognito.signin.user.admin`
-//    scope, NOT by WriteAttributes (see the header note above)
-// WriteAttributes is deliberately NOT in DESIRED: an empty list is a no-op and
-// narrowing it can break IdP mappings — see buildDesiredInput / --write-attributes.
+//  - reads only `email` + the auto-injected `cognito:groups` (not governed by
+//    these lists); moot without the admin scope, kept minimal as defense-in-depth
+//  - writes NOTHING, via the absent admin scope (header note); WriteAttributes
+//    is therefore not in DESIRED
 export const DESIRED = {
   ReadAttributes: ['email', 'email_verified'],
   AllowedOAuthScopes: ['openid', 'email'],
@@ -77,10 +58,9 @@ export function parseArgs(argv) {
     else if (key === 'json') opts.json = true;
     else if (key === 'help' || key === 'h') opts.help = true;
     else if (key === 'write-attributes') {
-      // Opt-in explicit writable set (comma-separated). Empty string clears to
-      // "no override" — but note AWS treats an empty LIST as all-writable, so to
-      // truly restrict you must pass a NON-empty set (e.g. only your IdP-mapped
-      // attributes). Whatever you list becomes the ONLY writable attributes.
+      // Comma-separated; becomes the ONLY writable set. Empty = no override (AWS
+      // reads an empty LIST as all-writable), so restricting needs a NON-empty
+      // set, e.g. only the IdP-mapped attributes.
       const value = argv[(i += 1)] ?? '';
       opts.writeAttributes = value
         .split(',')
@@ -108,9 +88,7 @@ export function describeClient({ poolId, clientId, profile, region }) {
  * update-user-pool-client REPLACES everything omitted (defaults it), so we start
  * from the live config and override only the security-relevant fields.
  *
- * WriteAttributes is set only on a NON-empty `opts.writeAttributes` opt-in — an
- * empty override is indistinguishable from the all-writable default (see the
- * header note).
+ * WriteAttributes is set only on a NON-empty `opts.writeAttributes` (header note).
  */
 export function buildDesiredInput(current, opts = {}) {
   const input = { ...current };

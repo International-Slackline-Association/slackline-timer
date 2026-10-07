@@ -1,11 +1,6 @@
-// Offline backend: ensure local infra (DynamoDB tables + S3 photo bucket in the
-// LocalStack container), then run the HTTP data API on :3002 and the WebSocket
-// relay on :3001 — both the real, esbuild-bundled Lambda handlers running
-// in-process (scripts/localHttpHarness.mjs + localWsHarness.mjs), so there is no
-// drift from the deployed CDK stack. WebSocket + Lambda-asset emulation inside
-// LocalStack needs the Pro license (ADR 0023, phase 2); until then the harnesses
-// are the local runtime. Needs the LocalStack container (`npm run db:up`).
-// See doc/dev/local-dev.md.
+// Offline backend: ensure the LocalStack tables + photo bucket, then run the
+// HTTP harness (:3002) and the WS harness (:3001). Needs the LocalStack
+// container (`npm run db:up`). See doc/dev/local-dev.md.
 
 import { spawn } from 'node:child_process';
 

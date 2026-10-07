@@ -6,9 +6,8 @@
  *
  * The tie rule keys off the DISPLAYED result string — whatever a row shows is
  * what decides whether it ties — so it is fail-safe against how the value was
- * derived. Extracted from `Stream/RankingsOverlay.tsx` so the `RankBadge`
- * micro-template (and any other ranked surface) can share the tie logic
- * (ADR 0034 §6, formatter-first).
+ * derived. One tie rule for every client-ranked surface; `RankBadge` renders
+ * the label (ADR 0034 §6, formatter-first).
  */
 export const rankLabels = (values: string[]): string[] => {
   const labels: string[] = [];

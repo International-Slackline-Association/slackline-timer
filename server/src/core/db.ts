@@ -31,7 +31,7 @@ const ttlFromNow = () => Math.floor(Date.now() / 1000) + CONNECTION_TTL_SECONDS;
  * `$disconnect` event carries nothing but the connectionId — while the forward
  * row is keyed `PK=sessionId`. With no GSI on connectionId this item is the only
  * thing that makes that delete addressable; without it a disconnect cannot be
- * honoured at all and a room drains by TTL alone (the HWC 2026 fan-out timeout).
+ * honoured at all and a room drains by TTL alone, timing the fan-out out.
  *
  * `CONN#…` cannot collide with a session partition: a sessionId is a compId, the
  * `$connect` authorizer admits only sessions that exist as competitions, and a

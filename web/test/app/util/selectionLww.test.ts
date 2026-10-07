@@ -59,10 +59,10 @@ describe('acceptSelectionStamp', () => {
 
 /**
  * The authority rank (ADR 0038 §4 addendum). A mirror's re-push forwards the
- * stamp it adopted, so it can only TIE the panel that authored the value — and
- * a tie used to fall to `senderId`, a per-mount UUID: whether a re-statement
- * outranked its own author was a coin flip fixed for the life of the room. The
- * wire now says which one a frame is, and a re-statement loses every tie.
+ * stamp it adopted, so it can only TIE the panel that authored the value. A tie
+ * decided by `senderId` (a per-mount UUID) would make whether a re-statement
+ * outranks its own author a coin flip fixed for the life of the room, so the
+ * wire says which one a frame is, and a re-statement loses every tie.
  */
 describe('acceptSelectionStamp authority rank', () => {
   const stored = {
@@ -140,14 +140,12 @@ describe('acceptSelectionStamp authority rank', () => {
 });
 
 /**
- * Each arm of `LiveSelection` with EVERY field populated. Typed `Required<…>`
- * on purpose: a field added to either arm — optional ones included — stops that
- * literal compiling until it is added here, and the leaf walk below then covers
- * it automatically. That is the guard the hand-listed dep array lacked, and the
- * union split (`SpeedSelection | FreestyleSelection`) is why there are two: a
- * single literal carrying both boards' session state no longer typechecks, and
- * a `Required<LiveSelection>` would have silently satisfied itself with whichever
- * arm happened to match.
+ * Each arm of `LiveSelection` with EVERY field populated. Typed `Required<…>`:
+ * a field added to either arm — optional ones included — stops that literal
+ * compiling until it is added here, and the leaf walk below then covers it.
+ * Two literals because of the union split (`SpeedSelection |
+ * FreestyleSelection`): a `Required<LiveSelection>` would silently satisfy
+ * itself with whichever arm happened to match.
  */
 const fullFreestyleSelection: Required<FreestyleSelection> = {
   discipline: 'freestyle',
@@ -228,8 +226,7 @@ describe('selectionSignature', () => {
   );
 
   // The walk must reach INTO the tallies — a per-try best-trick count and a
-  // per-lane run-wins digit are the deps the hand-listed array was most likely
-  // to miss.
+  // per-lane run-wins digit are the deps easiest to miss.
   it('walks into the nested tallies of both arms', () => {
     expect(leafPaths(fullFreestyleSelection)).toContainEqual(['bestTrick', 'tries', '1']);
     expect(leafPaths(fullSpeedSelection)).toContainEqual(['runWins', '2']);

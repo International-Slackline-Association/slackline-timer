@@ -1,5 +1,5 @@
 // List the members of a Cognito group (default: $COGNITO_TIMER_GROUP) — the
-// current timer operators.
+// current superadmins.
 //
 // Auth is your AWS CLI v2 session — see README.md.
 //

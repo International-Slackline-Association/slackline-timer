@@ -43,8 +43,8 @@ export const useSessionId = (): string => {
  * The live timer truth-markers, shared with the preview's recovery rule: once
  * one of these has flowed (peer-received or locally sent) since the socket
  * (re)opened, any later `state_snapshot` is stale and must be dropped.
- * `updateSignalPhase` is deliberately absent (preview parity — phase changes
- * accompany these, and phase alone must not close the recovery window).
+ * `updateSignalPhase` is absent (preview parity — phase changes accompany
+ * these, and phase alone must not close the recovery window).
  */
 const LIVE_TIMER_TYPES: ReadonlySet<WSMessage['type']> = new Set([
   'start',
@@ -66,14 +66,14 @@ const LIVE_TIMER_TYPES: ReadonlySet<WSMessage['type']> = new Set([
  * a peer has spoken, `alone` when the grace passes in silence. The header
  * renders it because OPEN-with-no-peer and OPEN-with-a-mirrored-board are
  * different boards, and the operator cannot otherwise tell them apart
- * (FREESTYLE_BOARD_UX §3, rubric C09).
+ * (freestyle-board-ux §3, rubric C09).
  */
 export type PeerState = 'awaiting' | 'answered' | 'alone';
 
 /** How long a joiner waits for a peer answer before calling itself alone. Long
  * enough for a relay round trip, short enough that a solo operator's board
- * stops hedging before the first press (brief §3 — nothing is disabled while
- * awaiting, so this bounds a caption, never a control). */
+ * stops hedging before the first press (freestyle-board-ux §3 — nothing is
+ * disabled while awaiting, so this bounds a caption, never a control). */
 export const PEER_ANSWER_MS = 2_000;
 
 /** How long the browser-local self-snapshot write is coalesced for (ADR 0047).
@@ -91,8 +91,9 @@ export const REQUEST_STATE_ANSWER_MS = 500;
 
 /**
  * The last board change another panel made here — the token a surface flashes
- * its "by other panel" cue off (brief §3/§4.10). `seq` is monotonic so a repeat
- * of the same peer action re-fires a cue that an equal value would not;
+ * its "by other panel" cue off (freestyle-board-ux §3/§4.10). `seq` is
+ * monotonic so a repeat of the same peer action re-fires a cue that an equal
+ * value would not;
  * `timerId` is the lane/channel a mirrored countdown message addressed, so a
  * lane card can claim only its own peer events.
  */
@@ -158,13 +159,12 @@ export interface UseControlSessionParams<T extends WSMessage> {
  * applies incoming snapshots/selections via the page-supplied callbacks — with
  * a browser-local copy of the panel's own state behind it (ADR 0047) for the
  * solo board that has no peer to ask. The pages keep only their mode-specific
- * timer orchestration; everything a realtime feature would otherwise have to
- * add twice lives here once.
+ * timer orchestration.
  *
  * The two modes' protocol unions differ (`CountdownWSMessage` carries a `timerId`
  * on its lane variants, `StopwatchWSMessage` never does; the session variants are
- * timerId-less in both — ws-session-message-family), so the caller supplies
- * message *factories* that stamp the correct envelope onto each payload.
+ * timerId-less in both), so the caller supplies message *factories* that stamp
+ * the correct envelope onto each payload.
  */
 export const useControlSession = <T extends WSMessage>(params: UseControlSessionParams<T>) => {
   const {
@@ -247,79 +247,44 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
   // longer a candidate for recovery.
   const pristineRef = useRef<string | null>(null);
 
-  // Last-writer-wins stamp for `updateSelection` (ADR 0038 §4). The value guard
-  // alone does NOT bound concurrent edits: two selections crossing in flight
-  // make each panel adopt (and re-push) the value it doesn't hold, every round
-  // trip, forever — symmetric peers can't converge without a tiebreak. Every
-  // outgoing selection carries a `seq` minted past everything seen (wall-clock
-  // anchored, Lamport-bumped), and an incoming one at or below the last seen
-  // stamp is dropped instead of applied (`acceptSelectionStamp`), so exactly
-  // one side of a crossed pair yields and the survivor's value quiets the room
-  // within two round trips (pinned by the concurrent-edit convergence test).
+  // Last-writer-wins stamp for `updateSelection` (ADR 0038 §4, 2026-07-20
+  // addendum). The value guard alone does NOT bound concurrent edits: two
+  // selections crossing in flight make each panel adopt (and re-push) the value
+  // it doesn't hold, every round trip, forever. Outgoing selections carry a
+  // `seq` minted past everything seen (wall-clock anchored, Lamport-bumped);
+  // an incoming one at or below the last seen stamp is dropped
+  // (`acceptSelectionStamp`), so exactly one side of a crossed pair yields.
   const selectionStampRef = useRef<SelectionStamp>(INITIAL_SELECTION_STAMP);
 
-  // Wall-clock anchoring gate for outgoing stamps (the joiner-defaults wipe,
-  // caught by the peer-mirroring smoke): the one-shot mount-announce skip below
-  // does not cover a push fired by a DERIVED dep flip during the join handshake
-  // — e.g. a peer snapshot hydrating a running battle lane flips `nextUp`
-  // 1→null before the peer's `updateSelection` answer is processed — and a
-  // wall-clock stamp lets that default-selection push outstamp the live room's
-  // answers (minted milliseconds earlier), converging every panel to the
-  // joiner's defaults. Until this panel has SEEN the room's selection (accepted
-  // an incoming stamp), its own selection is presumption, not information:
-  // mints are Lamport-only (prev+1 from 0), which any live peer drops on sight
-  // while a genuinely fresh room still converges on the seq+senderId tiebreak.
-  // Now LOAD-BEARING for PEER_HINT (brief §4.11): the battle boards rebuild
-  // `lastRan` from each other's relayed `nextUp`, so a joiner whose default
-  // selection outstamped the room would not just show the wrong next lane — it
-  // would teach the live panels the wrong alternation.
+  // Lamport-only mints until the room's selection has been seen, so a joiner's
+  // defaults never outstamp it (ADR 0038 §4, joiner-defaults guard; load-bearing
+  // for PEER_HINT, freestyle-board-ux §4.11).
   const stampAnchoredRef = useRef<boolean>(false);
 
-  // A mirrored re-push FORWARDS the stamp it adopted rather than minting a fresh
-  // one (ADR 0038 §4): the value came from the acting panel, and a wall-clock
-  // re-anchor here outstamps that panel's very NEXT edit — minted in the same
-  // millisecond — so the whole room drops it. That is how a peer match change
-  // left the mirror armed on the series it had just left: the retracting
-  // `bestTrick: undefined` lost to the mirror's echo of the value before it.
-  // A forward can only tie — and the frame says so on the wire (`echo`), so the
-  // tie resolves against the re-statement instead of falling to whichever mount
-  // UUID happens to sort higher.
-  //
-  // Every mirrored frame arms it, not only `updateSelection`: a board sends TWO
-  // frames for one operator event — the selection and the drained countdown —
-  // and a peer's countdown moves this panel's DERIVED selection too (a try clock
-  // starting or resting flips `bestTrick.clockRunning`/`turn`). Minting fresh
-  // authority for that reaction outstamped the acting panel's selection for the
-  // SAME event, so the room dropped the real edit and a mid-try `Reset series`
-  // left the mirror on the tally it had just cleared.
-  //
-  // `heldSignature` is what makes the forward CAUSAL rather than a commit
-  // window. A peer frame reaches this panel's selection only through a state
-  // write — `applySelection` here, the page's own peer-countdown dispatch one
-  // hook down — so the adoption it causes can land no earlier than the NEXT
-  // commit. A selection that had already moved when the frame arrived is
-  // therefore the operator's, not the room's, and lending it the forward sent a
-  // local edit out as a re-statement, which every peer then drops by design
-  // (`fs best-trick: B's tally consumes the try`). The push compares the value
-  // it is about to send against this baseline and mints its own authority when
-  // they match.
+  // The pending mirror forward (ADR 0038 §4, the 2026-09-10/-22/-23 addenda): a
+  // re-push this panel's ADOPTION causes re-states the adopted stamp, marked
+  // `echo`, instead of minting fresh authority that would outstamp the acting
+  // panel's next edit. Armed by every mirrored frame, not only `updateSelection`
+  // — a peer's countdown moves this panel's DERIVED selection too
+  // (`bestTrick.clockRunning`/`turn`). `heldSignature` makes it causal: a peer
+  // frame reaches the selection only through a state write, so its adoption
+  // lands no earlier than the NEXT commit; a push whose value still equals the
+  // signature held when the frame landed is the operator's own edit and mints
+  // its own authority.
   const mirroredStampRef = useRef<{ stamp: SelectionStamp; heldSignature: string } | null>(null);
 
-  // Mount-time announce skip (ADR 0038, the phase-0 announce precedent): a
-  // panel opening into a live session must not blast its DEFAULT names and
-  // selection over the peers' converged board — the blast races the
-  // request_state answers, and since a value-CHANGING peer application re-pushes
-  // (the overlay-follow contract), the room can oscillate and converge to the
-  // joiner's defaults, wiping the live selection. Mount state is default unless
-  // a self-restore landed before the first OPEN (`restoreSelfSnapshot` lifts
-  // the skip), so the first socket-OPEN fire of each push effect carries no
-  // information and is consumed silently; every later change and every re-open
-  // (reconnect) pushes as before.
+  // Mount-time announce skip (ADR 0038): a panel opening into a live session
+  // must not blast its DEFAULT names and selection over the peers' converged
+  // board — the blast races the request_state answers, and since a
+  // value-CHANGING peer application re-pushes (the overlay-follow contract), the
+  // room can oscillate and converge to the joiner's defaults, wiping the live
+  // selection. Mount state is default unless a self-restore landed before the
+  // first OPEN (`restoreSelfSnapshot` lifts the skip), so the first socket-OPEN
+  // fire of each push effect carries no information and is consumed silently;
+  // every later change and every re-open (reconnect) pushes.
   const namesAnnouncedRef = useRef<boolean>(false);
   const selectionAnnouncedRef = useRef<boolean>(false);
 
-  // Arms the browser's native "leave site?" prompt while a run is live — the
-  // only exit left, now that the control boards have no in-app back button.
   useRunGuard(runLive);
 
   /**
@@ -545,11 +510,10 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
   // pushed on selection-change or socket OPEN.
   // Every control panel answers — converged panels agree, last writer wins at
   // the consumer.
-  // Selection is answered BEFORE the snapshot on purpose (defense-in-depth): the
-  // snapshot hydrates the joiner's derived-selection deps and can flip a default
-  // push in the gap before the room's selection re-applies; leading with the
-  // selection closes that window at the source (the stampAnchoredRef Lamport
-  // stamp already makes any such push harmless, so this is belt-and-braces).
+  // Selection goes BEFORE the snapshot (belt-and-braces over the
+  // stampAnchoredRef rule): the snapshot hydrates the joiner's derived-selection
+  // deps and can flip a default push in the gap before the room's selection
+  // re-applies; leading with the selection closes that window at the source.
   // Peer `updateSelection` mirrors into the recorder; `updateLaneNames` does NOT
   // (names re-derive locally from the mirrored athlete ids — mirroring the
   // derived copy would fight the local derivation).
@@ -563,8 +527,8 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
       queueSelfSave();
     }
     // Presence and the cue token come off the same test: the frames only a
-    // panel sends are exactly the frames worth flashing. `request_state` is
-    // deliberately not one — a preview asks it too, so it cannot prove a peer
+    // panel sends are exactly the frames worth flashing. `request_state` is not
+    // one — a preview asks it too, so it cannot prove a peer
     // *panel*; the cost is that a silent late joiner stays invisible until it
     // acts, which is when its cue would fire anyway.
     const kind = peerEventKind(message);
@@ -600,9 +564,8 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
         break;
       }
       case 'updatePreview':
-        // Mirror a peer panel's live show/hide-preview toggle (ADR 0038 didn't
-        // enumerate it — a `state_snapshot` only converges the flag on join, so
-        // a later peer toggle otherwise drifts until the next request_state).
+        // Mirror a peer panel's live preview toggle (ADR 0038, 2026-07-19
+        // addendum) — a `state_snapshot` only converges the flag on join.
         // Write-free like the snapshot path: setting the ref+state never
         // re-broadcasts, so there is no cross-panel echo to terminate.
         applyPreviewEnabled(message.data.enabled);
@@ -635,9 +598,9 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
   // Distribute the board's current selection so overlays can follow it live (the
   // live VS match + the live SVO card). Same re-push pattern as the names: on
   // every selection change and on socket OPEN. The structural signature carries
-  // both halves of the contract: it follows a field nobody thought to enumerate
-  // (the dep array it replaced did not), and a mirrored — value-equal — peer
-  // application leaves it unchanged, so the cross-panel echo dies out.
+  // both halves of the contract: it follows every field, including one nobody
+  // enumerated, and a mirrored — value-equal — peer application leaves it
+  // unchanged, so the cross-panel echo dies out.
   useEffect(() => {
     if (readyState !== ReadyState.OPEN) return;
     if (!selectionAnnouncedRef.current) {

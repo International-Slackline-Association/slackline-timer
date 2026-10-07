@@ -9,23 +9,13 @@ import { wideFlagArt } from 'app/pages/Stream/flags/wide';
 
 /**
  * The WIDE flag treatment for the `AthleteCard` foot strip — the one site whose
- * ~10:1 band matches the art's native rectangle. `flags/wide` answers with the
- * best art it has for the nation (the designer's delivered art first, an LLM
- * reconstruction second — it owns that precedence, not us), rendered edge-to-edge
- * and stretched to fill the band (`preserveAspectRatio="none"` — the art is drawn
- * FOR that wide rectangle, so bands and emblems fill without crop).
- * Nations in neither tier fall back to the real
- * flag-icons flag rendered `contain` (whole, undistorted, centred) over a band
- * painted the flag's edge colour (`flagEdgeColors.ts`), so a letterboxed flag
- * still reads full-bleed rather than sitting in an empty gap.
- *
- * Only the card foot uses it; every other surface (RankingsOverlay, bracket
- * inline, `AthleteNameStrip`) stays on plain
- * flag-icons — in particular the name strip's ~1.6:1 block would squash the
- * stretched art, so it renders the inline treatment instead (pinned by its
- * "not the wide card-foot art" regression test). `country2` dual-nationality
- * abuts two blocks. An entirely unknown code renders nothing so the surface
- * stays clean rather than printing the raw code.
+ * ~10:1 band matches the art's native rectangle, so only the card foot uses it
+ * (every other surface stays on plain flag-icons via `FlagRow`). `flags/wide`
+ * picks the art (and owns the tier precedence), stretched edge-to-edge
+ * (`preserveAspectRatio="none"` — the art is drawn FOR that rectangle). Nations
+ * in neither tier fall back to the flag-icons flag rendered `contain` over its
+ * edge colour (`flagEdgeColors.ts`), so a letterboxed flag still reads
+ * full-bleed. `country2` abuts a second block; an unknown code renders nothing.
  */
 export const WideFlag = ({
   athlete,
@@ -73,8 +63,7 @@ const WideFlagItem = ({ alpha2, testId }: { alpha2: string; testId?: string }) =
       />
     );
   }
-  // Fallback: undistorted flag centred on its edge colour (plate white if
-  // unmapped, so the contained flag reads cleanly on the white foot).
+  // Unmapped nations fall back to the plate white of the foot.
   return (
     <Box
       data-testid={testId}

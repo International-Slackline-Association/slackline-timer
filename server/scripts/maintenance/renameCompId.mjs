@@ -1,19 +1,15 @@
 // Rename a competition's compId across the prod data plane.
 //
-// There is NO API for this: compId is the DynamoDB partition key (`COMP#<id>`)
-// for EVERY item in the competition (META / athletes / times / matches / scores)
-// AND is stored as a plain `compId` attribute on each of them, AND is baked into
-// each athlete's S3 photo key (`photos/<compId>/<hash>.ext`). DynamoDB can't
-// mutate a primary key in place, so a rename is a copy-the-whole-partition-to-a-
-// new-key migration plus a matching S3 object copy — not an edit. This script is
-// that migration, run directly against DynamoDB + S3 (bypassing the HTTP API,
-// which has no rename route and couldn't express a PK change anyway).
+// No API route can: compId is the partition key (`COMP#<id>`) of every item in
+// the competition, a plain `compId` attribute on each, and part of each photo key
+// (`photos/<compId>/<hash>.ext`). A key can't be mutated in place, so this is a
+// copy-the-partition migration plus an S3 object copy, run directly against
+// DynamoDB + S3.
 //
 // What it does NOT touch, and why:
-//   - Relay table (`…-relay-prod`): only ephemeral connection rows keyed by the
-//     old sessionId, TTL'd out in minutes (CONNECTION_TTL_SECONDS in
-//     src/core/db.ts). Live tabs must reconnect on the new compId anyway
-//     (reload with ?compId=<new>), so migrating dead connection rows is pointless.
+//   - Relay table (`…-relay-prod`): ephemeral connection rows that expire after
+//     CONNECTION_TTL_SECONDS (src/core/db.ts); live tabs must reconnect on the
+//     new compId anyway.
 //   - Read tokens: HMAC JWTs are scoped to the compId claim, so every existing
 //     OBS overlay link breaks on rename. Re-mint them on /admin/overlays after.
 //   - Web localStorage (selected competition): operators re-select the new id.
@@ -26,11 +22,6 @@
 //     first, then re-run with --delete-source to remove the old partition.
 //   - Idempotent: copy uses Put/CopyObject (overwrite), so a re-run after a
 //     partial failure is safe.
-//
-// Usage:
-//   node scripts/maintenance/renameCompId.mjs --from <oldId> --to <newId>
-//   node scripts/maintenance/renameCompId.mjs --from old --to new --yes
-//   node scripts/maintenance/renameCompId.mjs --from old --to new --yes --delete-source
 //
 // Flags:
 //   --from <id>        source compId (required)
@@ -46,12 +37,9 @@
 //   --bucket <name>    photos bucket    (default slackline-timer-v1-photos-prod)
 //   --profile <p>      AWS profile (else $AWS_PROFILE, else default chain)
 //
-// Auth: pass --profile and the script materializes that profile's (SSO) creds
-// into the env itself — no `eval "$(aws configure export-credentials …)"` dance
-// needed (the SDK can't resolve the SSO cache directly on this box; see
-// loadProfileCreds in lib/awsCli.mjs). With no --profile it uses the ambient
-// env / default chain.
-// Expired SSO? `aws sso login --profile <p>` first.
+// Auth: --profile materializes that profile's SSO creds into the env
+// (loadProfileCreds in lib/awsCli.mjs); without it, the ambient env / default
+// chain. Expired SSO? `aws sso login --profile <p>` first.
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { BatchWriteCommand, DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
@@ -136,9 +124,6 @@ runMain(async () => {
   const skipPhotos = Boolean(opts.skipPhotos);
   const { region, table, bucket } = opts;
   const profile = resolveProfile(opts);
-  // Materialize SSO creds into the env when a profile is set (the SDK can't
-  // resolve the SSO cache directly on this box — see loadProfileCreds). With no
-  // profile we fall through to whatever the ambient env / default chain provides.
   if (profile) loadProfileCreds(profile);
 
   const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {

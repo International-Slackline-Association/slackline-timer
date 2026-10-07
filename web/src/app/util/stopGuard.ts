@@ -1,15 +1,12 @@
-// Guard for the Speedline per-lane Stop action. The UI stop button is disabled
-// outside a running lane, but the gamepad handler (buttons 10/15) fires
-// unconditionally — after a lane finishes, the race start stays set until
-// Reset, so a repeat press would re-send a later stopTime (POSTing a second,
-// longer Time for the same run), overwrite the lane result (it can flip the
-// derived match winner while the other lane still runs), and drive
-// `runningTimerCount` negative.
+// Guard for the Speedline per-lane Stop. The UI button is disabled outside a
+// running lane, but the gamepad path (buttons 10/15) fires unconditionally, and
+// a lane's start stays set until Reset — a repeat press would re-freeze the lane
+// at a later stopTime and relay it to every peer and overlay (`recordFinish`
+// keeps its own once-per-run lock on the Time and the lane result).
 //
-// `canStopLane` is the single decision for both paths: a per-lane stop is
-// valid only mid-race — the race has started and that lane has not stopped
-// yet. The all-lanes false start (`stop(-1)`) is intentionally NOT routed
-// through this guard: it legitimately fires before the race starts.
+// `canStopLane` is the single decision for both paths: valid only once the race
+// has started and before that lane has stopped. A false start never routes here
+// — it never stops the lanes (rule S4).
 
 export interface LaneStopGuardState {
   /** Race start epoch, or null when no race is live (never started / reset). */

@@ -7,9 +7,9 @@ import type { TimerEffect } from 'app/util/timerChannel';
 import type { RaceSound } from 'app/util/raceSound';
 
 /**
- * The four-tone map (FREESTYLE_BOARD_UX §4.2, audit S14). The per-machine table
- * tests pin each tone in its own effect table; this one pins the property that
- * finding actually asked for — that the four expiries an operator hears with
+ * The four-tone map (freestyle-board-ux §4.2, audit S14). The per-machine table
+ * tests pin each tone in its own effect table; this one pins the property the
+ * finding asked for — that the four expiries an operator hears with
  * their eyes on the athlete are four DIFFERENT tones. Adding a fifth expiry
  * that reuses one of them fails here, in the one place that reads across the
  * three machines.

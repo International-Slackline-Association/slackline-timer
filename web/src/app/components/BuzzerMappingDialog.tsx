@@ -42,12 +42,11 @@ interface Props {
  * + colour of each row are derived from the button index
  * (`doc/dev/buzzer-hardware.md`).
  *
- * It opens only when asked (owner call, 2026-09-19). It used to pop itself the
- * moment a Buzz! appeared — and a sheet owns the board while it stands, so the
- * one gesture that proves the handsets are alive was also the one that made
- * them inert. The card behind it now carries that proof inline instead.
+ * It opens only when asked: a sheet owns the board while it stands, so popping
+ * it when a Buzz! appears would make the handsets inert by the very press that
+ * proves them alive. The handset card carries that proof inline.
  *
- * The trigger carries the blur rule (FREESTYLE_BOARD_UX §4.4): Space is the
+ * The trigger carries the blur rule (freestyle-board-ux §4.4): Space is the
  * buzzer, and MUI restores focus on close to whatever was focused when the
  * sheet opened — so a trigger that took the opening mouse press would own every
  * press after it.

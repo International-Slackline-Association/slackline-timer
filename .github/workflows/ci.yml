@@ -1,9 +1,6 @@
 name: CI
 
-# Every change reaches `main` through a pull request (see CONTRIBUTING.md);
-# commit messages are enforced by the local commit-msg hook. CI validates every
-# PR targeting `main` and every push to it — the push trigger is mainline-only,
-# so an open PR's branch runs once, not twice.
+# Push trigger is mainline-only, so an open PR's branch runs once, not twice.
 on:
   push:
     branches: [main]
@@ -15,8 +12,7 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Least privilege: nothing here writes to the repository. A fork PR's token is
-# read-only regardless, but the explicit grant also caps the token on pushes.
+# Nothing here writes to the repo; the explicit grant also caps the token on pushes.
 permissions:
   contents: read
 
@@ -59,10 +55,8 @@ jobs:
         run: npm run checkTs
       - name: Test (coverage)
         run: npm run test:coverage
-      # The build refuses to emit a bundle with any endpoint or CSP origin
-      # unset. Unreachable placeholders: this artifact is a compile check, never
-      # a deployable — `npm run deploy` resolves the real values
-      # (doc/dev/deploy.md).
+      # The build refuses any unset endpoint or CSP origin. Unreachable
+      # placeholders: this artifact is a compile check, never a deployable.
       - name: Build
         run: npm run build
         env:
@@ -89,21 +83,14 @@ jobs:
       run:
         working-directory: server
     # The *.int.test.ts suites self-skip when :4566 is closed (helpers.ts
-    # `isDynamoReachable`), which silently hid ~90 tests — every bracket
-    # seed/advance, DNF-ordering, referential-409 and harness-parity assertion —
-    # behind a green run. Standing the container up here is what makes the skip
-    # mechanism a Docker convenience rather than a coverage hole.
-    #
-    # Deliberately no `db:init`: the suites provision their own tables (helpers.ts
-    # creates them idempotently) in the region env.setup.ts pins, `AWS_REGION=local`.
-    # `db:init` defaults to eu-central-1 and LocalStack partitions data by region,
-    # so running it here would fill a partition the tests never read.
+    # `isDynamoReachable`); without this container they pass green untested.
+    # No `db:init`: the suites create their own tables in AWS_REGION=local
+    # (env.setup.ts), and LocalStack partitions by region (db:init uses
+    # eu-central-1).
     services:
       localstack:
-        # Same image reference + services as docker/docker-compose.yml — see the
-        # pin rationale there (the :3 line boots tokenless; 2026.x demands a
-        # licence). Dependabot bumps neither: manual bump of both together
-        # (digest of 3.8.1).
+        # Same pin as docker/docker-compose.yml (rationale there); bump both
+        # together — server/test/repo/localstack-pin.test.ts fails on drift.
         image: localstack/localstack:3.8.1@sha256:b279c01f4cfb8f985a482e4014cabc1e2697b9d7a6c8c8db2e40f4d9f93687c7
         ports:
           - 4566:4566
@@ -126,24 +113,15 @@ jobs:
       - run: npm ci
       - name: Type-check
         run: npm run checkTs
-      # Assert the endpoint answers BEFORE the suites collect. `skipIf` means an
-      # unreachable container degrades to a silent green rather than a failure,
-      # so without this step a broken service container would quietly restore the
-      # coverage hole it was added to close.
+      # Before the suites collect: a broken container would otherwise skip them
+      # to a silent green.
       - name: Assert LocalStack is reachable
         run: curl -sf --retry 12 --retry-delay 5 --retry-connrefused http://localhost:4566/_localstack/health
       - name: Test (coverage)
         run: npm run test:coverage
-      # cdk synth is the deploy-path gate: it runs the real infra/app.ts
-      # entrypoint through the CDK CLI (feature flags from cdk.json, all three
-      # stacks), catching a stack error here instead of at `cdk deploy`. The CLI
-      # is the aws-cdk devDependency installed by `npm ci` above. (server `build`
-      # is an alias for `cdk synth`; this step names the gate for what it is.)
-      # billingAlertEmail and the cognito* keys are deploy config the repo
-      # doesn't carry (BillingStack / the backend stack's Cognito wiring throw
-      # without them); placeholders are enough to build the template, matching
-      # the ones the infra tests already use (slackline-stack.test.ts,
-      # stack-ledger.test.ts).
+      # The deploy-path gate: the real infra/app.ts through the CDK CLI (cdk.json
+      # feature flags, all three stacks). Deploy config has no defaults
+      # (ADR 0048); placeholders match the infra tests'.
       - name: Synth (cdk)
         run: |
           npm run synth -- \

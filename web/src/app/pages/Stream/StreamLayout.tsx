@@ -15,14 +15,11 @@ import { applyOverlayBodyStyle, SURFACE_GROUND } from 'app/pages/Stream/overlayB
 import { type StreamStatus } from 'app/pages/Stream/streamStatus';
 
 /**
- * Title-safe inset: 5% of the 1920×1080 capture frame on every edge
- * (`doc/dev/design-system/design-system.md` §7 rule 5 — nothing critical in the
- * outer 5%). Frame-relative,
- * not px, so a 720p or 4K capture keeps the same proportional margin. The
- * vertical half is exported for the one body that must size against the CONTENT
- * box rather than fill it — the 16:9 bracket canvas; the horizontal reference px
- * for the one body that must land on a corner this layout does NOT own — the SVO
- * cards, composited over the /stream/timer lower-thirds (see `SVO_SIDE_MARGIN`).
+ * Title-safe inset: 5% of the capture frame on every edge (design-system §7
+ * rule 5), frame-relative. The vertical half is exported for the 16:9 bracket
+ * canvas, which sizes against the CONTENT box; the horizontal reference px for
+ * the SVO cards, which land on a corner this layout does NOT own
+ * (`SVO_SIDE_MARGIN`).
  */
 export const STREAM_INSET_X_PX = 96;
 const STREAM_INSET_X = refVw(STREAM_INSET_X_PX);
@@ -56,20 +53,16 @@ export const useReportStreamStatus = (status: StreamStatus): void => {
 };
 
 /**
- * Shared shell for the HTTP-driven `/stream/*` overlays. Reads `compId` + the
- * read token from the URL, wires live `db_update` refresh, and renders on the
- * `?bg=`-resolved background (transparent by default; `?bg=key` for chroma-keyed
- * rigs — see doc/dev/broadcast-overlays.md) with white text under the
- * `overlayTextShadow` protection halo; filled plates cancel it with
- * `textShadow: 'none'`.
+ * Shared shell for the HTTP-driven `/stream/*` overlays: `compId` + read token
+ * from the URL, live `db_update` refresh, the `?bg=` ground (see
+ * doc/dev/broadcast-overlays.md), and white text under the `overlayTextShadow`
+ * halo (filled plates cancel it with `textShadow: 'none'`).
  *
- * On-air it is **fail-safe**: there is no on-camera spinner and no "broken"
- * affordance. A loading, empty, errored, or misconfigured overlay paints
- * nothing — the producer keys a transparent layer out, so an empty lower-third
- * is simply invisible rather than a glitch on the broadcast. The current state
- * is exposed off-air only: `data-stream-status` on the root plus a
- * visually-hidden status line, both for operators inspecting the source and for
- * the live status panel on `/admin/overlays`.
+ * On-air it is **fail-safe**: a loading, empty, errored or misconfigured
+ * overlay paints nothing — no spinner, no broken affordance. The state is
+ * exposed off-air only: `data-stream-status` on the root plus a visually-hidden
+ * status line, for operators inspecting the source and the `/admin/overlays`
+ * status panel.
  */
 export const StreamLayout = ({
   align = 'flex-end',
@@ -144,11 +137,7 @@ const STATUS_TEXT: Record<StreamStatus, string> = {
   ready: 'On air.',
 };
 
-/**
- * A visually-hidden, screen-reader-only status line. It never paints on the
- * broadcast (clipped to a 1px box) but keeps the on-air state inspectable
- * off-air. Tagged `data-testid` so the status panel and tests can read it.
- */
+/** The visually-hidden status line (clipped to a 1px box). */
 const StreamStatusMarker = ({
   status,
   compId,

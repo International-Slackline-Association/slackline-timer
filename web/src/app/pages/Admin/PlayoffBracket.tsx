@@ -220,8 +220,8 @@ const ProfileBracket = ({
               narrow={!box.isFinal}
               edgeWidth={refVh(PROFILE_STROKE_PX)}
               // Flat green edge (same width as the white edges), not the VS/winner
-              // cards' outset rim — a doubled-width ring read far too heavy on the
-              // small quarter/semi boxes and outweighed their white neighbours.
+              // cards' outset rim: a doubled-width ring outweighs the small
+              // quarter/semi boxes' white neighbours.
               winnerRing="flat"
             />
           </Box>
@@ -340,8 +340,7 @@ const NameBracket = ({
               alignItems: 'stretch',
               overflow: 'hidden',
               // Each plate is its OWN size container, so its flag and caps size
-              // off the BAR (the ranking plates' rule) rather than off the canvas
-              // or a device-px clamp that froze the cap at 24px on any capture.
+              // off the BAR (the ranking plates' rule), not off the canvas.
               containerType: 'size',
             }}
           >
@@ -352,8 +351,7 @@ const NameBracket = ({
               // bar — the same "to be decided" placeholder the profile cards
               // carry, so both bracket variants speak one unknown-athlete
               // language. White (overlay.stroke — the structural-mark colour, as
-              // the plate stroke/connectors and the former TBD text), at the
-              // bar's full inner height — the border already insets it, so the
+              // the plate stroke/connectors), at the bar's full inner height — the border already insets it, so the
               // glyph drops its portrait margin (`fit="tight"`).
               <UnknownAthlete
                 testId={`slot-unknown-${plate.boxId}`}

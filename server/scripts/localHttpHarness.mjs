@@ -1,16 +1,11 @@
-// Local HTTP data plane — an in-process stand-in for the deployed API Gateway
-// HTTP API (CDK has no local Lambda/HTTP emulator; running the stack inside
-// LocalStack needs the Pro license, ADR 0023, phase 2). It runs the REAL
-// data-plane handlers (and the real httpAuthorizer) in-process on :3002 against
-// LocalStack DynamoDB + S3, so there is no drift from prod beyond the
-// event-construction here (the sibling of localWsHarness.mjs, which does the
-// same for the WebSocket relay).
+// Local HTTP data plane — an in-process stand-in for the API Gateway HTTP API
+// (running the stack in LocalStack needs the Pro license, ADR 0023 phase 2).
+// Runs the REAL data-plane handlers on :3002 against LocalStack DynamoDB + S3.
 //
-// The only prod behaviour it synthesizes is the APIGatewayProxyEventV2 shape;
-// the authorizer context comes from running the REAL httpAuthorizer, so the
-// reader plane is exercisable locally — read tokens stay read-only, revocation is
-// honored, requireAdmin 403s, forAudience strips PII. As in prod, a request
-// without an Authorization header is a 401; tooling sends the `local-dev` dummy.
+// Only the APIGatewayProxyEventV2 shape is synthesized; the authorizer context
+// comes from the REAL httpAuthorizer, so read tokens stay read-only, revocation
+// is honored, requireAdmin 403s, forAudience strips PII. A request without an
+// Authorization header is a 401, as in prod; tooling sends the `local-dev` dummy.
 // Bind address, Host and Origin checks: lib/harnessGuard.mjs.
 //
 // Handlers are TypeScript with path-alias imports, so each is bundled once with

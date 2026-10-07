@@ -203,12 +203,12 @@ const resetSends = () => sentOfType('reset_countdown');
 // --- the two layout branches -----------------------------------------------
 
 /**
- * jsdom ships no `matchMedia` and lays nothing out, so *every* page test used to
- * fall through `useMediaQuery` to `CompactBoardLayout` — the three-column desk
- * had no page-level coverage at all. Each suite below therefore states the
- * branch it pins and runs on both: `pinLayoutWidth` decides which one renders,
- * and `reach` is the difference in getting to a section — the desk shows all of
- * them at once, the compact layout one tab at a time.
+ * jsdom ships no `matchMedia` and lays nothing out, so an unpinned page test
+ * falls through `useMediaQuery` to `CompactBoardLayout` and never reaches the
+ * three-column desk. Each suite below therefore states the branch it pins and
+ * runs on both: `pinLayoutWidth` decides which one renders, and `reach` is the
+ * difference in getting to a section — the desk shows all of them at once, the
+ * compact layout one tab at a time.
  */
 const LAYOUTS = [
   { branch: 'desk ≥1280×800', width: DESK_MIN_PX, desk: true },
@@ -447,11 +447,11 @@ describe.each(LAYOUTS)(
 );
 
 // Format IS mode (ADR 0036): one Quali/Battle toggle picks the board shape, its
-// championship timings (rules F4/F5) and its recording round — and the choice is
-// remembered per competition (localStorage keyed off compId = sessionId), so
+// championship timings (rules F4/F5) and its recording round — and the choice
+// is remembered per competition (localStorage keyed off compId = sessionId), so
 // reopening the same comp's board restores all three. Nothing is confirmed: the
-// toggle is inert while the board holds anything (5d4d523 replaced both native
-// confirms with that lock), so by the time it can be pressed it destroys nothing.
+// toggle is inert while the board holds anything (ADR 0046 §2: locks replace
+// the format confirms), so by the time it can be pressed it destroys nothing.
 describe.each(LAYOUTS)(
   'FreestyleControlPage mode memory and mode switch — $branch',
   ({ width, desk }) => {
@@ -597,7 +597,7 @@ describe.each(LAYOUTS)(
   },
 );
 
-// A blank panel posted a judged 0.00, and in a battle that second Score was
+// A blank panel would post a judged 0.00, and in a battle that second Score is
 // enough to derive a winner and PUT the Match. Save waits for a draft, so a
 // stray Enter in the blank panel leaves the data plane alone.
 describe.each(LAYOUTS)(
@@ -767,11 +767,11 @@ describe('FreestyleControlPage desk geometry (pins the ≥1280 branch)', () => {
     expect(Math.floor(laneColumn)).toBe(LANE_COLUMN_PX);
   });
 
-  // The sticky plate used to span the live column while the deck under it
-  // stopped at its own ceiling, so the verb hung 448 px clear of the lane it
-  // names at 1920. It takes the deck's ceiling now — except in quali, where the
-  // 500 px deck wraps the TAKE BREAK verb and steps the whole board (measured
-  // in a browser; see `QUALI_RUN_MAX_WIDTH`), so the plate keeps the column.
+  // A sticky plate spanning the live column while the deck under it stops at
+  // its own ceiling hangs the verb 448 px clear of the lane it names at 1920,
+  // so it takes the deck's ceiling — except in quali, where the 500 px deck
+  // wraps the TAKE BREAK verb and steps the whole board (measured in a browser;
+  // see `QUALI_RUN_MAX_WIDTH`), so the plate keeps the column.
   it('caps the sticky plate at the battle deck ceiling', () => {
     window.localStorage.setItem('speedline.freestyleMode.c1', 'battle');
     renderPage();
@@ -790,13 +790,13 @@ describe('FreestyleControlPage desk geometry (pins the ≥1280 branch)', () => {
   });
 });
 
-// fsux-desk-fold-budget (c): the wide desk is gated on HEIGHT as well as width.
-// A 1280x720 screen is wide enough for the three columns and too short to hold
-// them, so it took the desk and put the lane transport under the fold; the tab
-// layout is the answer to a short screen exactly as it is to a narrow one.
-// The threshold is 900 (`freestyle-board-fold-budget`): measured with the fold
-// budget spent down, the battle desk's last control lands at 879 and quali's at
-// 862, so at 1280x800 the desk took a screen it could not keep its promise on.
+// fsux-desk-fold-budget: the wide desk is gated on HEIGHT as well as width. A
+// 1280x720 screen is wide enough for the three columns and too short to hold
+// them (the lane transport would land under the fold); the tab layout answers a
+// short screen exactly as it does a narrow one. The threshold is 900
+// (`freestyle-board-fold-budget`): with the fold budget spent down, the battle
+// desk's last control lands at 879 and quali's at 862, so 1280x800 cannot keep
+// the desk's promise.
 describe('FreestyleControlPage desk height gate', () => {
   it.each([
     { viewport: '1280x720 (wide but short)', width: DESK_MIN_PX, height: SHORT_DESK_HEIGHT_PX },

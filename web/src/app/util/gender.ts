@@ -1,8 +1,7 @@
 import { type Gender } from 'app/types';
 
 /**
- * Two divergent meanings share the `Gender` enum, so the label is deliberately
- * variant-keyed rather than collapsed:
+ * Two meanings share the `Gender` enum, so the label is variant-keyed:
  *
  * - `'subject'` describes a single athlete ("Male"/"Female") — used on the
  *   athlete admin where the label is a person's attribute.
@@ -10,9 +9,8 @@ import { type Gender } from 'app/types';
  *   matches, rankings, overlays, and the timer consoles, where the label is the
  *   field a bracket runs over.
  *
- * Defaults to `'category'`, the dominant usage. The single source for both
- * forms — route every gender label through here so the raw lowercase enum never
- * reaches an operator-facing surface.
+ * Defaults to `'category'`, the dominant usage. Route every gender label through
+ * here so the raw lowercase enum never reaches an operator-facing surface.
  */
 export const genderLabel = (
   gender: Gender,

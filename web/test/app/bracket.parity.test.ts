@@ -13,15 +13,14 @@ import { BRACKET_SLOTS, resolveBracketSlots } from 'app/util/bracket';
  * final).
  *
  * `server/test/core/bracketProgression.test.ts` pins the server half against a
- * HAND-COPIED feed table (`HALF1_FEED`/`HALF2_FEED`) — the one duplication that
- * nothing guards, because that copy silently rots if `BRACKET_SLOTS` is
- * reordered. This test closes that gap: it imports the ACTUAL `BRACKET_SLOTS`
- * plus the server's seed/advance functions and asserts they agree, so a drift on
- * EITHER side fails a test. Fix the drift, never the test.
+ * HAND-COPIED feed table (`HALF1_FEED`/`HALF2_FEED`), which rots silently if
+ * `BRACKET_SLOTS` is reordered. This test imports the ACTUAL `BRACKET_SLOTS` plus
+ * the server's seed/advance functions and asserts they agree, so a drift on
+ * EITHER side fails. Fix the drift, never the test.
  *
  * The import reaches outside web/'s tsconfig (the server is a composite
  * project, so `tsc` cannot follow the source file), hence the ts-ignore; vitest
- * compiles the file just fine and that is what the check needs.
+ * compiles it, which is all the check needs.
  */
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore -- cross-package source import, type-checked on the server side

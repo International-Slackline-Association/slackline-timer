@@ -1,14 +1,7 @@
-// Hoist/fly edge colour per nation, keyed by ISO alpha-2. Used only by the
-// `WideFlag` FALLBACK path (nations without bespoke card art): the real flag is
-// rendered `contain` — whole, undistorted — and the side gaps are painted this
-// colour so the letterboxed flag reads full-bleed across the wide band instead
-// of sitting in an empty gap. These are flag DATA colours (the sampled edge of
-// each national flag), not TELEMETRY design tokens — the same reason the bespoke
-// flag SVGs carry their own palette hex.
-//
-// An unmapped nation defaults to the plate white the band sits on (see WideFlag),
-// so a contained flag on the white foot simply reads as a centred flag — never a
-// broken gap. Extend as needed.
+// Hoist/fly edge colour per nation (ISO alpha-2) for the `WideFlag` fallback
+// path, which paints the letterbox gaps around a `contain`ed flag. Flag DATA
+// colours (sampled national edges), not TELEMETRY tokens. An unmapped nation
+// gets the plate white (see WideFlag).
 export const FLAG_EDGE_COLORS: Record<string, string> = {
   mx: '#006847', // Mexico — green hoist
   kr: '#ffffff', // South Korea — white field

@@ -42,7 +42,7 @@ describe('useWarmupExpiry', () => {
     expect(result.current.display.kind).toBe('expired');
     expect(result.current.card.word).toBe('WARM-UP OVER');
     // The horn is queued as data for the page's drain, the way every other
-    // transition's is (rule 4) — it is not played from inside the reducer.
+    // transition's is — it is not played from inside the reducer.
     expect(result.current.effects).toContainEqual({ kind: 'audio', sound: 'alert' });
   });
 

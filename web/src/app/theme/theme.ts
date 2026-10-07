@@ -20,8 +20,8 @@ export const telemetryTheme = createTheme({
       contrastText: colors.ink.onBrand,
     },
     // success/warning carry INK on their fill: white on `go` is 2.3:1 and on
-    // `set` 2.0:1, so the Recording / Saved / Reconnecting chips were
-    // unreadable (FREESTYLE_BOARD_UX §6). Slate clears 4.5:1 on both.
+    // `set` 2.0:1; slate clears 4.5:1 on both. The bare `§n` refs in this file
+    // are doc/dev/design-system/freestyle-board-ux.md.
     success: { main: colors.race.go, dark: colors.race.goDim, contrastText: colors.ink.hi },
     warning: { main: colors.race.set, dark: colors.race.setDim, contrastText: colors.ink.hi },
     error: { main: colors.race.stop, dark: colors.race.stopDim, contrastText: colors.ink.onBrand },
@@ -100,7 +100,7 @@ export const telemetryTheme = createTheme({
           textTransform: 'none',
           fontWeight: 600,
           borderRadius: radii.md,
-          // §6 "Disabled race control" — one look for locked, whatever tone the
+          // §6 "Locked is a muted well" — one look for locked, whatever tone the
           // control paints live. MUI's own disabled pair is rgba(0,0,0,0.26) on
           // the button's own ground: unreadable at 2.8:1, and an outlined
           // neutral Reset read as live while `laneLocks` held it.
@@ -115,11 +115,9 @@ export const telemetryTheme = createTheme({
       },
       variants: [
         // The brand fill is the DARK teal (§6 "Save contained", 4.61:1):
-        // `primary.main` under `contrastText` is 2.9:1, which is what
-        // `Set both lanes` and every admin/nav primary shipped while the score
-        // rail hand-painted the fix on Save alone. Owned here so a call site
-        // never has to remember it. The pair holds through hover — MUI's hover
-        // shade IS `primary.dark` — so the press reads as a brightness dip.
+        // `primary.main` under `contrastText` is 2.9:1. The pair holds through
+        // hover — MUI's hover shade IS `primary.dark` — so the press reads as a
+        // brightness dip.
         {
           props: { variant: 'contained', color: 'primary' },
           style: {
@@ -153,18 +151,15 @@ export const telemetryTheme = createTheme({
     },
 
     // The same rule for the alarm chips (§6): a filled one takes the `stopDim`
-    // ground its contained siblings do — `error.main` under white is 3.59:1,
-    // which left `Not recording` washed out beside the darkened `Recording`
-    // chip it shares the header row with — and an outlined one takes its state's
-    // text tier rather than the fill hue (`warning.main` as ink is 1.94:1).
+    // ground its contained siblings do (`error.main` under white is 3.59:1), an
+    // outlined one its state's text tier (`warning.main` as ink is 1.94:1).
     MuiChip: {
       variants: [
         // The brand chip takes the contained button's tier for the contained
         // button's reason: the header's mode mark is `primary.main` under white,
-        // 2.95:1. Only the FILL moves — there is deliberately no outlined-primary
-        // row, since teal as ink tops out under the floor on the canvas (see the
-        // text variant above), which is why the board-format chip left the
-        // family for `chosenKey` rather than darkening inside it.
+        // 2.95:1. Only the FILL moves: no outlined-primary row, since teal as
+        // ink tops out under the floor on the canvas (see the text variant
+        // above) — the board-format chip uses `chosenKey` instead.
         {
           props: { color: 'primary', variant: 'filled' },
           style: { backgroundColor: colors.brand.tealDark },
@@ -229,7 +224,7 @@ export const telemetryTheme = createTheme({
     // its own disabled defaults — `action.disabled` is 1.8:1 on a panel and
     // `text.disabled` 1.6:1 on the muted well. Both spend most of a heat locked
     // (the mode toggle while the board holds state, the budget fields while a
-    // lane runs), which is the state §2 wants read: "lock grey in place".
+    // lane runs), which is the state §1 wants read: "lock grey in place".
     MuiToggleButton: {
       styleOverrides: {
         root: {

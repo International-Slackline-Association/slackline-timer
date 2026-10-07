@@ -15,7 +15,8 @@ import { matchLabel } from 'app/util/matchLabel';
 import { roundLabel, roundsForMode } from 'app/util/rounds';
 
 /** One field of the row: it may grow into the live column's width, but never
- * below the width its longest option needs (§2 — the row must not reflow). The
+ * below the width its longest option needs (freestyle-board-ux §2 — the row
+ * must not reflow). The
  * flex basis IS that width, so the row wraps at the field boundary instead of
  * squeezing four selects into their own option text. */
 const FIELD_SX = { width: '100%', minWidth: 0 } as const;
@@ -25,14 +26,11 @@ const field = (key: keyof typeof boardGeometry.freestyle.selectionBasis) => ({
   minWidth: 0,
 });
 /**
- * ONE wrapping row for the whole selection (`freestyle-board-fold-budget`).
- * Battle used to stack a "Recording context" grid over a bordered "Athlete
- * assignment" box: two captions, a border and a nested inset spent ~60 px of
- * the live column above the run deck, and that column is what holds the lane
- * transport over the fold. The three assignment controls stay ONE wrap unit
- * (`ASSIGNMENT_SX`), so the manual's promise — Athlete 1 / Swap / Athlete 2
- * stay together, in that order, at every width — is now a property of the row
- * rather than of a box drawn around it.
+ * ONE wrapping row for the whole selection: a nested, captioned assignment box
+ * costs the live column the height that holds the lane transport above the
+ * fold. The three assignment controls stay ONE wrap unit (`ASSIGNMENT_SX`), so
+ * the manual's promise — Athlete 1 / Swap / Athlete 2 together, in that order,
+ * at every width — is a property of the row.
  */
 const SELECTION_ROW_SX = {
   display: 'flex',
@@ -63,7 +61,7 @@ const ASSIGNMENT_GRID_SX = {
  *
  * The match link is a battle-only surface (quali is one athlete at a time), so
  * in quali the match select and the Athlete 2 picker unmount. Every picker is
- * the house NATIVE `SelectField` (brief §4.3): a native list belongs to the
+ * the house NATIVE `SelectField` (§4.3): a native list belongs to the
  * platform, so an open one can never own the board's Space. The selection-change
  * confirm (ADR 0033 + the gender guard) lives here with the Round and Gender
  * selects it guards; the athlete pickers narrow per the cascade (gender, then
@@ -126,8 +124,8 @@ export const FreestyleSelectionPanel = ({
   const athleteName = (id?: string): string =>
     (id && athletes.find((a) => a.athleteId === id)?.name) || 'TBD';
 
-  // The cascading option pool (ADR 0042): the
-  // selected match narrows the athlete slots to its two athletes, else gender narrows.
+  // The cascading option pool (ADR 0042): the selected match narrows the
+  // athlete slots to its two athletes, else gender narrows.
   const selectedMatch = matches.data?.find((m) => m.matchId === selectedMatchId);
   const swapReason =
     swapLock ?? (selection.canSwapAthletes ? null : 'pick both athletes to swap sides');
@@ -155,8 +153,8 @@ export const FreestyleSelectionPanel = ({
         <Stack spacing={0.75}>
           {/* The peer cue shares the caption's row rather than reserving one of
               its own: the slot is still reserved (§4.12 — nothing below moves
-              when a peer changes a field), it just no longer costs the desk a
-              whole empty row above the fold (fsux-desk-fold-budget). */}
+              when a peer changes a field) without costing the desk an empty
+              row above the fold. */}
           <Stack
             direction="row"
             spacing={0.75}
@@ -196,9 +194,9 @@ export const FreestyleSelectionPanel = ({
 
             {mode === 'battle' ? (
               /* No helper line under it: what the match fills is the manual's
-                 §2 sentence and the two pickers beside it show the answer, and
-                 a permanent 20 px hint under a once-per-match control is setup
-                 chrome the live path pays for (the collapse order of
+                 §3 "Selection" sentence and the two pickers beside it show the
+                 answer, and a permanent 20 px hint under a once-per-match
+                 control is setup chrome the live path pays for (the collapse order of
                  design-system §9 "Responsive contract"). */
               <Box sx={field('match')}>
                 <SelectField

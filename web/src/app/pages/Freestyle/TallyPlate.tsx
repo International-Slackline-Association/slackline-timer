@@ -13,7 +13,7 @@ import {
   type TallyTone,
 } from 'app/util/tallyModel';
 
-/** The §6 plate pairs, as palette entries so the theme stays the one place a
+/** The freestyle-board-ux §6 plate pairs, as palette entries so the theme stays the one place a
  * tier is retuned (each ratio is pinned in `test/app/theme/contrast.test.ts`). */
 const FILL: Record<TallyTone, { bgcolor: string; color: string }> = {
   go: { bgcolor: 'success.main', color: 'success.contrastText' },
@@ -27,7 +27,7 @@ const FILL: Record<TallyTone, { bgcolor: string; color: string }> = {
  * so the plate and the card under it say "running" in one language.
  *
  * Running steps to `runningText`, the on-light tier, rather than the base teal
- * the card's frame takes: that stroke is §6's one deliberate sub-3:1 mark,
+ * the card's frame takes: that stroke is the one sub-3:1 mark §6 allows,
  * carried there by the RUNNING word inside it, and a 12 px stripe read at 25 %
  * scale has no word inside it to lean on.
  */
@@ -67,8 +67,7 @@ const stateReport = (word: string, fact: string, subline: string): string =>
 
 /** Hidden from the eye, not from the reader (the plate itself is the sighted
  * half). MUI's own `visuallyHidden` lives in `@mui/utils`, a transitive
- * dependency this package does not declare — six properties are cheaper than
- * adopting one for a single call site. */
+ * dependency this package does not declare. */
 const REPORT_SX = {
   position: 'absolute',
   width: '1px',
@@ -90,8 +89,7 @@ const wordSx = {
   letterSpacing: '0.06em',
 } as const;
 
-/** §6: the verb is the plate's scale — 36–40 px on the ≥1280 px desk. The
- * no-op verb is a sentence, not a word, so it takes the target's scale and a
+/** §6: the verb is the plate's scale. The no-op verb is a sentence, not a word, so it takes the target's scale and a
  * dead end never wraps the plate off its min-height. */
 const VERB_SIZE = 'clamp(1.25rem, 1.8vw, 1.75rem)';
 const NOOP_VERB_SIZE = 'clamp(0.95rem, 1.4vw, 1.25rem)';
@@ -132,7 +130,7 @@ interface Props {
 }
 
 /**
- * The TALLY plate (FREESTYLE_BOARD_UX §2/§4.1) — the loudest object on the
+ * The TALLY plate (§2/§4.1) — the loudest object on the
  * Freestyle board and the screen twin of the buzzer.
  *
  * Left: where the board is (a state word plus one live fact). Right: what the

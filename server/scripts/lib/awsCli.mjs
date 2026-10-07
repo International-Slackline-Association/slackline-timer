@@ -1,19 +1,14 @@
-// Shared CLI glue for the stack commission/decommission/maintenance scripts.
-// Lifted from cognito/cognitoCommon.mjs's runAws/runMain + a generic parseArgs —
-// the CLI-only helpers, without cognitoCommon's hardcoded Cognito POOL defaults.
-// Every script here shells out to an already-authenticated AWS CLI v2 / CDK CLI
-// session rather than pulling in the SDK (see each script's README for the auth
-// prerequisite).
+// Shared CLI glue for the commission/decommission/maintenance scripts: AWS CLI v2
+// / CDK CLI shell-outs (auth prerequisite: each script's README), plus
+// loadProfileCreds for the scripts that use the SDK.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// Deployment config (AWS_PROFILE) from the ignored repo-root `.env.deploy` —
-// template: `.env.deploy.example`. Loaded in this shared module rather than
-// per-script: every script in the tree imports it, so the profile resolves
-// without the operator exporting it by hand. An already-exported AWS_PROFILE
-// still wins (loadEnvFile does not overwrite); an absent file is fine.
+// The ignored repo-root `.env.deploy` (template: `.env.deploy.example`); every
+// script here imports this module. An exported var still wins (loadEnvFile does
+// not overwrite); an absent file is fine.
 const DEPLOY_ENV = fileURLToPath(new URL('../../../.env.deploy', import.meta.url));
 if (existsSync(DEPLOY_ENV)) process.loadEnvFile(DEPLOY_ENV);
 
@@ -121,11 +116,10 @@ export function resolveProfile(opts = {}) {
 
 /**
  * Resolve the AWS account the stacks live in: explicit `--account` → the
- * `.env.deploy` (or exported) $AWS_ACCOUNT_ID. Deliberately not read from the
- * committed stack ledger and not probed from STS: callers use it to *name* an
- * environment (`aws://<account>/<region>`), where silently adopting whatever
- * account the ambient credentials resolve to would point the operation at the
- * wrong one. Throws when unset rather than guessing.
+ * `.env.deploy` (or exported) $AWS_ACCOUNT_ID, else throw. Never probed from STS:
+ * callers use it to *name* an environment (`aws://<account>/<region>`), and
+ * adopting whatever the ambient credentials resolve to would target the wrong
+ * account.
  */
 export function resolveAccount(opts = {}) {
   const account = opts.account || process.env.AWS_ACCOUNT_ID;
@@ -141,14 +135,11 @@ export function resolveAccount(opts = {}) {
 /**
  * Materialize concrete temporary credentials for `profile` into the env.
  *
- * The AWS SDK's default chain does NOT reliably resolve the SSO token cache on
- * this box: `--profile` alone fails "security token included in the request is
- * invalid" even right after `aws sso login` (the plain CLI refreshes SSO fine,
- * which is why `aws sts get-caller-identity` can succeed while an SDK script
- * can't). The CLI's `export-credentials` DOES refresh SSO, so we shell out to it
- * and load the resulting keys into `process.env`, where the SDK's fromEnv
- * provider — first in the chain — picks them up. Same workaround the CDK deploys
- * use; see doc/dev/deploy.md §8.
+ * The SDK's default chain does not reliably refresh the SSO role creds:
+ * `--profile` alone fails "security token included in the request is invalid"
+ * right after `aws sso login`, while the CLI succeeds. `export-credentials` does
+ * refresh, and its keys land in `process.env` for the SDK's fromEnv provider
+ * (first in the chain). Same workaround as the CDK deploys: doc/dev/deploy.md §8.
  *
  * `env-no-export` emits bare `AWS_*=value` lines (no `export`, no quotes); values
  * can contain `=` and `/` (the session token), so split on the FIRST `=` only.

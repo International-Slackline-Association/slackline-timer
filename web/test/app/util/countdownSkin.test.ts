@@ -36,7 +36,7 @@ describe('countdownSkin ground', () => {
   });
 });
 
-// FREESTYLE_BOARD_UX §6 "On-light digit tiers" + the DESIGN_SYSTEM §2 hues,
+// freestyle-board-ux §6 "On-light digit tiers" + the design-system §2 hues,
 // one row per (surface × state). On dark the numeral NEVER carries the state
 // hue — it stays white at 11:1 and the state rides the frame below.
 describe('countdownSkin numerals', () => {

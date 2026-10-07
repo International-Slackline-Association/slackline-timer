@@ -40,7 +40,7 @@ const ctx = (over: Partial<Parameters<typeof handsetOutcome>[1]> = {}) => ({
 const press = (button: number, over?: Partial<Parameters<typeof handsetOutcome>[1]>): string =>
   handsetReadout(button, handsetOutcome(button, ctx(over)));
 
-// FREESTYLE_BOARD_UX §4.14: every one of the eleven bindings answers in one
+// freestyle-board-ux §4.14: every one of the eleven bindings answers in one
 // press, and an inert press answers too — a silent handset and a locked one
 // must never look the same (audit S18).
 describe('handsetOutcome', () => {

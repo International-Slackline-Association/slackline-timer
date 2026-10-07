@@ -1,28 +1,10 @@
-// Lock the timer's Cognito app client down to read-only, least privilege:
-//   - AllowedOAuthScopes = openid, email  (NO aws.cognito.signin.user.admin —
-//                                          THIS is what blocks attribute writes)
-//   - AllowedOAuthFlows = code            (auth-code only, no implicit grant)
-//   - ReadAttributes = email, email_verified
+// Lock the timer's Cognito app client to the least-privilege DESIRED config
+// (appClientPolicy.mjs, whose header explains why the removed admin scope, not
+// WriteAttributes, is the write-lock). Dry-run unless --apply.
 //
-// Note: attribute writes are blocked by REMOVING the self-service scope, not by
-// clearing WriteAttributes — an empty WriteAttributes is a no-op that AWS treats
-// as "all standard attributes writable" (see appClientPolicy.mjs header). Pass
-// --write-attributes a,b to ALSO narrow it (e.g. to your IdP-mapped attributes);
-// otherwise it is left unchanged.
-//
-// update-user-pool-client REPLACES the whole config, so we describe first and
-// override only these fields — every other setting (callback URLs, token
-// validity, providers) is carried over verbatim. The pre-change config is
-// written to a timestamped backup file as a rollback record.
-//
-// Dry-run by default (prints the plan + diff, changes nothing); pass --apply to
-// write. Auth is your AWS CLI v2 session — see README.md.
-//
-// Usage:
-//   node scripts/cognito/hardenAppClient.mjs                 # dry-run
-//   node scripts/cognito/hardenAppClient.mjs --apply
-//   node scripts/cognito/hardenAppClient.mjs --write-attributes email --apply
-//   node scripts/cognito/hardenAppClient.mjs --client-id <id> --profile <profile> --apply
+// update-user-pool-client REPLACES the whole config, so this describes first
+// and overrides only DESIRED; callback URLs, token validity and providers carry
+// over verbatim. The pre-change config is written to a timestamped backup file.
 
 import { unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -52,9 +52,8 @@ export const main: APIGatewayRequestAuthorizerHandler = async (event) => {
       const groups = (payload['cognito:groups'] as string[] | undefined) ?? [];
       const sub = String(payload.sub);
 
-      // An operator may only join a real competition, making this path symmetric
-      // with the already comp-scoped read-token branch below (it closes the
-      // open-room gap). Shape check in core/operatorSession.ts, existence here.
+      // An operator may only join a real competition, like the comp-scoped
+      // read-token branch below. Shape check in core/operatorSession.ts, existence here.
       const sessionId = event.queryStringParameters?.['sessionId'] ?? 'default';
       if (!isValidOperatorSessionId(sessionId)) {
         throw new Error(`operator session "${sessionId}" is not a real competition`);

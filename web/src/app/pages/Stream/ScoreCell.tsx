@@ -6,22 +6,19 @@ import { Plate } from 'app/pages/Stream/Plate';
 import { resultInk } from 'app/util/resultLabel';
 
 /**
- * One result value box of the LAAX tables — the VS stat rows
- * (`VsStatsTable`) and the freestyle score card (`ScoreCardOverlay`). The two
- * surfaces draw the same cells from the same arts, so the chrome lives here or
- * they drift (the card carried a 28%-alpha CONTROL PENALTY wash while the VS
- * table drew it solid).
+ * One result value box of the LAAX tables — the VS stat rows (`VsStatsTable`)
+ * and the freestyle score card (`ScoreCardOverlay`) — so the two surfaces can't
+ * drift.
  *
- * `kind` picks the art's cell language, and a `component` cell follows the
- * two-tier rule (design-system §3) on its OWN fill state: a cell holding a value
- * is a filled plate — opaque white with near-black numerals and no footage
- * shadow — while an empty slot keeps the art's translucent white-stroked box.
- * White digits on 35% white read pale over bright footage, exactly the wash-out
- * the ranking/bracket name plates were already fixed for.
+ * A `component` cell follows the two-tier rule (design-system §3) on its OWN
+ * fill state: holding a value it is a filled plate (opaque white, near-black
+ * numerals, no footage shadow); empty, it keeps the art's translucent
+ * white-stroked box. White digits on 35% white read pale over bright footage.
  *
- * `penalty` and `total` are unconditional: the art gives them a saturated
- * ground (stop red / near-black) that already carries white numerals, so they
- * do not switch tiers. Layout — width, height, gaps — stays with the caller.
+ * `penalty` and `total` sit on a saturated ground (stop red / near-black) that
+ * carries white numerals, so they never switch tiers. The penalty box is solid
+ * where the art washes it at ~28% (design-system §7 "Deliberate deviations").
+ * Layout — width, height, gaps — stays with the caller.
  */
 export type ScoreCellKind = 'component' | 'penalty' | 'total';
 

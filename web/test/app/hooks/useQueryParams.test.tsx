@@ -57,8 +57,7 @@ describe('useQueryParams', () => {
     expect(result.current.params.sessionId).toBe('comp-1');
     expect(result.current.params.sideMargin).toBe(32);
 
-    // Navigate to a URL without sideMargin: the old effect-based hook left the
-    // stale value stuck; the derived hook must clear it.
+    // Navigate to a URL without sideMargin: the stale value must clear.
     act(() => result.current.navigate('/preview?sessionId=comp-2'));
 
     expect(result.current.params.sessionId).toBe('comp-2');
@@ -69,8 +68,8 @@ describe('useQueryParams', () => {
 describe('useRelaySessionId', () => {
   // The regression: a /stream/timer overlay is addressed by ?compId= and its read
   // token is scoped to that compId, so the relay session must resolve to compId —
-  // not the "default" sessionId fallback that made the $connect authorizer reject
-  // the handshake and blank the overlay.
+  // the "default" sessionId fallback gets the handshake rejected by the $connect
+  // authorizer and blanks the overlay.
   it('prefers ?compId= (the broadcast overlay convention)', () => {
     expect(relaySessionAt('?compId=worlds-2026&token=abc').current).toBe('worlds-2026');
   });

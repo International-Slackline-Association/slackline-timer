@@ -78,9 +78,9 @@ describe('remainingFrom', () => {
   });
 
   it('is anchor-invariant — same (duration, anchor) yields the same value at a given now', () => {
-    // The convergence property the whole fix rests on: two receivers that share
-    // the wire (duration, anchor) derive the identical remaining at any instant,
-    // regardless of when each processed the message.
+    // The convergence property: two receivers that share the wire (duration,
+    // anchor) derive the identical remaining at any instant, regardless of when
+    // each processed the message.
     const now = 12_345;
     expect(remainingFrom(90_000, 1_000, now)).toBe(remainingFrom(90_000, 1_000, now));
   });

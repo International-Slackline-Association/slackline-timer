@@ -5,7 +5,7 @@
 //
 // Output carries keys, lengths and reasons only, never the offending names,
 // birthDates or notes. Country codes and foreign photo prefixes are reported
-// verbatim: they decide whether the planned regex is safe to ship.
+// verbatim: they decide whether a COUNTRY_RE / PHOTO_KEY_RE change is safe.
 
 // Plain ESM so the script runs under bare node, hence a copy of FIELD_LIMITS /
 // MAX_ATHLETES_PER_COMP and the validators' regexes; test/scripts/fieldBounds.test.ts

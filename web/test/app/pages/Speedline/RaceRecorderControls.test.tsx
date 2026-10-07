@@ -42,9 +42,9 @@ describe('RaceRecorderControls', () => {
     expect(screen.getByTestId('why-line')).toHaveTextContent('why: locked while a lane runs');
   });
 
-  // `ftt-followup-speedline-rail-match-picker-playoff-only-1`: the rail's locks
-  // flip on Start and on the last Stop, with the hand on a lane or a handset,
-  // so the line costs its height only while it has something to say.
+  // The rail's locks flip on Start and on the last Stop, with the hand on a
+  // lane or a handset, so the line costs its height only while it has something
+  // to say.
   it('reserves no why-line under the swap while it is live', () => {
     render(
       <RaceRecorderControls
@@ -149,9 +149,8 @@ describe('RaceRecorderControls', () => {
     expect(cancelRoundChange).toHaveBeenCalled();
   });
 
-  // `speedline-rail-match-picker-match-rounds-only`: a qualification or training
-  // run is one athlete against the clock, so the picker there offered only
-  // "— no match —" and its best-of-3 helper — a dead row stacking the rail under
+  // A qualification or training run is one athlete against the clock, where the
+  // picker could offer only "— no match —" — a dead row pushing the rail under
   // the tablet fold. It mounts in the rounds a match is raced in.
   describe('the Match pick is a playoff-round control', () => {
     const HELPER = 'Fills both lanes; the winner is set when a lane wins 2 runs';
@@ -246,10 +245,9 @@ describe('RaceRecorderControls', () => {
     expect(screen.getByText(/time not updated.*timing is unaffected/i)).toBeInTheDocument();
   });
 
-  // `speedline-match-helper-series-wording`: the helper promised a winner "once
-  // both finish", so after run 1 of a best-of-3 the empty winner line read as a
-  // failed save. The winner is first to 2 run-wins; until then the line says
-  // where the series stands and which run it waits on.
+  // The winner is first to 2 run-wins; until then the line says where the
+  // series stands and which run it waits on, so an empty winner line after run
+  // 1 never reads as a failed save.
   it('says the match winner is first to 2 runs, not "once both finish"', () => {
     render(
       <RaceRecorderControls recorder={makeRecorder({ round: 'quarter' })} athletes={ATHLETES} />,
@@ -358,9 +356,9 @@ describe('RaceRecorderControls', () => {
   });
 
   /**
-   * `speedline-void-run-locked-while-run-live`: a void under a live run left
-   * the still-running lane's Stop to record a Time for a run already voided.
-   * The rail locks it with the board's sentence, like the swap above it.
+   * A void under a live run would leave the still-running lane's Stop to record
+   * a Time for a run already voided. The rail locks it with the board's
+   * sentence, like the swap above it.
    */
   describe('Void under a live run', () => {
     const saved = { 1: savedFeedback('t1', 83450), 2: null };
@@ -476,7 +474,7 @@ describe('RaceRecorderControls', () => {
 
   // Void run is the rail's stop-tier press, so it comes from `RaceButton`
   // rather than a hand-painted fill: one dialect across both boards
-  // (FREESTYLE_BOARD_UX §6), the ≥44 px target, and the blur rule that keeps a
+  // (freestyle-board-ux §6), the ≥44 px target, and the blur rule that keeps a
   // clicked control from owning the next handset press (§4.4).
   it('paints Void run as a race control, blur rule and target size included', () => {
     render(
@@ -509,10 +507,9 @@ describe('RaceRecorderControls', () => {
     expectRaceControl(screen.getByRole('button', { name: /award round to/i }));
   });
 
-  // The rail's two colourless presses (FREESTYLE_BOARD_UX §7's P3 sibling): no
-  // state to paint, so nothing about them looked wrong — and both shipped under
-  // the aux floor, holding focus, while the Freestyle desk's own `Swap athletes`
-  // already took the wrapper.
+  // The rail's two colourless presses (freestyle-board-ux §7's P3 sibling) take
+  // the wrapper too, like the Freestyle desk's `Swap athletes`: the aux floor
+  // and the blur rule, though there is no state to paint.
   it('paints the lane swap as a race control', () => {
     render(
       <RaceRecorderControls
@@ -525,11 +522,10 @@ describe('RaceRecorderControls', () => {
   });
 
   /**
-   * `speedline-void-run-reset-series-confirm`: both presses spend something
-   * with no undo — persisted Times, the on-air tally — and both fired on one
-   * press while the harmless Reset asked. The shell is the board's
-   * (`BoardConfirmDialog`), so a handset press behind the question answers it
-   * safely and the Handsets card names what it answered.
+   * Both presses spend something with no undo — persisted Times, the on-air
+   * tally. The shell is the board's (`BoardConfirmDialog`), so a handset press
+   * behind the question answers it safely and the Handsets card names what it
+   * answered.
    */
   describe('the rail’s two irreversible presses ask first', () => {
     const question = () => screen.getByRole('dialog');
@@ -645,11 +641,10 @@ describe('RaceRecorderControls', () => {
 });
 
 /**
- * `speedline-recording-rail-heading-gap`: the `RESULT RECORDING` overline sat
- * flush on the Round/Gender row, and MUI's outlined label floats ~9 px above
- * its field box — so at every desk viewport the label overprinted the heading.
- * jsdom does no layout and cannot see the collision; what it can hold is the
- * gutter that prevents it, on the heading that owns it.
+ * MUI's outlined label floats ~9 px above its field box, so a `RESULT
+ * RECORDING` overline flush on the Round/Gender row is overprinted. jsdom does
+ * no layout and cannot see the collision; it can hold the gutter that prevents
+ * it, on the heading that owns it.
  */
 /** How far MUI lifts an outlined `TextField`'s label above its own field box. */
 const MUI_FLOATING_LABEL_RISE_PX = 9;
@@ -663,10 +658,8 @@ describe('the recording rail heading', () => {
     // The desk's caption dialect stays (not `subtitle2 gutterBottom`): the
     // overline class is what the rest of the board's section headings carry.
     expect(heading).toHaveClass('MuiTypography-overline');
-    // More than the 9 px MUI floats the outlined label above its field box —
-    // measured in the browser at all four viewports of
-    // design-system §9 "Responsive contract", where an 8 px gutter still
-    // overlapped by 1 px.
+    // Measured in the browser at all four design-system §9 "Responsive
+    // contract" viewports: an 8 px gutter still overlapped by 1 px.
     expect(px(style.marginBottom)).toBeGreaterThan(MUI_FLOATING_LABEL_RISE_PX);
   });
 });

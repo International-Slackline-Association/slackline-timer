@@ -297,8 +297,7 @@ describe('CountdownControl transport row geometry (FREESTYLE_BOARD_UX §6)', () 
     render(<CountdownControl {...baseProps} />);
 
     // §6 computes every lane pair — words, digits, frame strokes — on `panel`,
-    // and the card was the last desk section still drawn straight onto the
-    // canvas, so the pinned grounds were not the ones it painted.
+    // so the card paints that ground, not the canvas.
     expect(screen.getByTestId('lane-card-1')).toHaveClass('MuiPaper-outlined');
   });
 
@@ -306,10 +305,10 @@ describe('CountdownControl transport row geometry (FREESTYLE_BOARD_UX §6)', () 
     render(<CountdownControl {...baseProps} />);
 
     // The S03 finding: Reset is the one press with no undo, so the offset and
-    // the confirm are its guard (§6) — it may not share the transport row.
-    // It shares the AUX row (`freestyle-board-fold-budget`): a row of its own
-    // cost the card 52 px and put the aux control itself under a 720 px fold,
-    // so the divider turned on its side and kept the offset and the gutter.
+    // the confirm are its guard (§6) — it may not share the transport row. It
+    // shares the AUX row (`freestyle-board-fold-budget`): a row of its own
+    // would cost the card 52 px and put the aux control under a 720 px fold, so
+    // the divider stands on its side and keeps the offset and the gutter.
     const resetRow = screen.getByTestId('lane-aux-row');
     expect(resetRow).toContainElement(button('Reset Athlete 1'));
     expect(resetRow).toContainElement(button('Take break Athlete 1 (2 left)'));
@@ -404,8 +403,8 @@ describe('CountdownControl identity row (FREESTYLE_BOARD_UX §2)', () => {
     render(<CountdownControl {...baseProps} name="J. Rider" />);
 
     // §2's card header is one line — `PLAYER 1  Bianchi`. Two stacked rows at
-    // heading scale spent card height on a label that never changes and pushed
-    // Start/Stop below the desk's fold.
+    // heading scale would spend card height on a label that never changes and
+    // push Start/Stop below the desk's fold.
     const row = identity();
     expect(row).toContainElement(screen.getByText('Athlete 1'));
     expect(row).toContainElement(screen.getByText('J. Rider'));
@@ -542,7 +541,7 @@ describe('CountdownControl reset', () => {
     expect(onReset).not.toHaveBeenCalled();
   });
 
-  // FREESTYLE_BOARD_UX §4.8: the prompt names the value at risk and reads it
+  // freestyle-board-ux §4.8: the prompt names the value at risk and reads it
   // from the store at render — a peer STOP landing while the question is on
   // screen must not leave the operator answering about a stale number.
   it('names the held value live from the lane, never a value captured at open', async () => {
@@ -586,9 +585,9 @@ describe('CountdownControl reset', () => {
 
   // §4.8's per-instance naming rule (`ConfirmGuard.dialog`): the board stands
   // two of these questions and the modal covers the card that raised one, so
-  // the screen has to carry the name the readout sends the operator to
-  // (`answer the Reset Athlete 2 question first`). A board-wide `Reset this
-  // countdown?` left both dialogs — and both accessible names — identical.
+  // the screen has to carry the name the readout sends the operator to (`answer
+  // the Reset Athlete 2 question first`). A board-wide `Reset this countdown?`
+  // would leave both dialogs — and both accessible names — identical.
   it.each([1, 2] as const)('names the question and its answer for Player %i', async (id) => {
     const user = userEvent.setup();
     const onReset = vi.fn();
@@ -602,7 +601,7 @@ describe('CountdownControl reset', () => {
   });
 
   // Brief §4.8: the question is for a turn that would have to be re-timed — a
-  // fall and a break, not just `running` (the guard the audit found).
+  // fall and a break, not just `running`.
   const heldLanes: [string, LaneState][] = [
     [
       'a held lane (idle below its armed budget)',
@@ -662,8 +661,8 @@ describe('CountdownControl reset', () => {
   });
 
   // ...and it stays closed. A question the peer event closed was never
-  // answered, so a stamp kept behind it re-opened the dialog the next time the
-  // lane held a turn — mid-run, with nobody having pressed anything, and it
+  // answered, so a stamp kept behind it would re-open the dialog the next time
+  // the lane held a turn — mid-run, with nobody having pressed anything, and it
   // takes the whole handset with it while it stands (§4.8).
   it('does not re-ask itself when the lane next holds a turn', async () => {
     const onReset = vi.fn();
@@ -708,8 +707,8 @@ describe('CountdownControl reset', () => {
 
   // Brief §4.8: the question owns the board. ADVANCE answers it; every other
   // handset key is inert until it is — the screen twins already sit behind the
-  // modal backdrop, so the pad was the one path still reaching the transport
-  // from behind an open confirm.
+  // modal backdrop, so the pad is the one path that could still reach the
+  // transport from behind an open confirm.
   it('holds this lane its own pad keys while the prompt stands', async () => {
     const handlers = { onStart: vi.fn(), onStop: vi.fn(), onReset: vi.fn(), onTakeBreak: vi.fn() };
     const held = lane('running');
@@ -949,10 +948,9 @@ describe('CountdownControl peer cue (ADR 0038 / brief §4.10)', () => {
     }
   });
 
-  // fsux-desk-fold-budget's precedent, now on the card: the cue rides the
-  // identity row rather than reserving one of its own. The row is already
-  // ≥ the chip's height, so §4.12 holds — a peer's Start ellipsises the name
-  // for 2 s and moves nothing.
+  // The cue rides the identity row rather than reserving one of its own (the
+  // `fsux-desk-fold-budget` rule). The row is already ≥ the chip's height, so
+  // §4.12 holds — a peer's Start ellipsises the name for 2 s and moves nothing.
   it('rides the identity row rather than a reserved row of its own', () => {
     render(<CountdownControl {...baseProps} name="J. Rider" peerEventToken={7} />);
 

@@ -801,13 +801,7 @@ describe('useRaceRecorder', () => {
   });
 
   /**
-   * `speedline-resume-stopped-lane`: a mis-pressed Stop is undone at the clock
-   * (the page keeps the GO epoch and drops the stop) — the recorder's half is
-   * withdrawing everything that stop RECORDED, so the lane's real finish is the
-   * one that counts.
-   */
-  /**
-   * `speedline-lane-save-retry`: a failed POST keeps the body it sent, so the
+   * A failed POST keeps the body it sent, so the
    * board can re-send it. A retry re-POSTs; it never re-scores — the run was
    * tallied at the stop, whether or not its Time reached the server.
    */
@@ -927,6 +921,11 @@ describe('useRaceRecorder', () => {
     });
   });
 
+  /**
+   * A mis-pressed Stop is undone at the clock (the page keeps the GO epoch and
+   * drops the stop) — the recorder's half is withdrawing everything that stop
+   * RECORDED, so the lane's real finish is the one that counts.
+   */
   describe('resuming a mis-stopped lane (resumeLane)', () => {
     it('deletes the Time the mis-press saved and re-opens the lane', async () => {
       const { result } = startedRecorder();
@@ -1012,9 +1011,9 @@ describe('useRaceRecorder', () => {
     });
 
     /**
-     * The cross-panel orphan (`ftt-followup-speedline-lane-resume-…-1`): this
-     * panel stopped and SAVED the lane, the other one withdrew it. Only the
-     * holder knows the timeId, so only the holder can retract it.
+     * The cross-panel orphan: this panel stopped and SAVED the lane, the other
+     * one withdrew it. Only the holder knows the timeId, so only the holder can
+     * retract it.
      */
     it('deletes its OWN row when a peer withdraws the lane it recorded', async () => {
       const { result } = startedRecorder();
@@ -1262,10 +1261,9 @@ describe('useRaceRecorder', () => {
   });
 
   /**
-   * `speedline-wrong-athlete-reattribute`: a run saved against the wrong person
-   * used to be recoverable only by deleting it. The save stays bound to the
-   * athlete it was POSTed under (the chip names them) and `moveTime` is the
-   * explicit one-tap that re-attributes it.
+   * A run saved against the wrong person: the save stays bound to the athlete
+   * it was POSTed under (the chip names them) and `moveTime` is the explicit
+   * one-tap that re-attributes it.
    */
   describe('re-attributing a lane time (moveTime)', () => {
     /** Lane 1 saved for a1, then re-picked to a3. */

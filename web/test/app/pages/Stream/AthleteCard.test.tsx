@@ -49,8 +49,8 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
   });
 
   it('masks the name plate top edge into a concave-upward arc (not a straight slant)', () => {
-    // The signature LAAX cut is a shallow arc, applied as a radial-gradient mask;
-    // the former straight-diagonal clip-path must be gone.
+    // The signature LAAX cut is a shallow arc, applied as a radial-gradient
+    // mask; no straight-diagonal clip-path.
     const { container } = render(<AthleteCard athlete={athlete()} />);
     const band = container.querySelector('[data-band]') as HTMLElement;
     const style = window.getComputedStyle(band);
@@ -89,9 +89,10 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
   });
 
   it('ends the name block a clearance above the divider rule so a caption never sits on it', () => {
-    // The fit packs name + result + caption flush to the block's foot: ending at
-    // the flag strip put the last rows under the rule, ending AT the rule left
-    // the caption touching it. FLAG_STRIP_H + DIVIDER_H + the 1.5cqh clearance.
+    // The fit packs name + result + caption flush to the block's foot: ending
+    // at the flag strip would put the last rows under the rule, ending AT the
+    // rule would leave the caption touching it. FLAG_STRIP_H + DIVIDER_H + the
+    // 1.5cqh clearance.
     render(<AthleteCard athlete={athlete()} result="0:07.09" sourceTag="SMALL FINAL" />);
     expect(window.getComputedStyle(screen.getByTestId('athlete-card-name')).bottom).toMatch(
       /^calc\(6% \+ .*0\.8cqh \+ 1\.5cqh.*\)$/,
@@ -101,8 +102,8 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
   it('shows the question-mark placeholder (no TBD text, no white band) when no athlete is bound', () => {
     const { container } = render(<AthleteCard />);
     expect(screen.getByTestId('athlete-card-unknown')).toBeInTheDocument();
-    // The former "TBD" text and the white name band are both dropped, so the
-    // undecided card is just the translucent plate under the mark.
+    // No "TBD" text and no white name band: the undecided card is just the
+    // translucent plate under the mark.
     expect(screen.queryByText('TBD')).not.toBeInTheDocument();
     expect(container.querySelector('[data-band]')).toBeNull();
   });
@@ -257,9 +258,9 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
 
   it('shrinks a longish family name to fit instead of ellipsizing it (goal g3)', () => {
     // The stacked name sizes in a fixed cqh with noWrap, so a long family name
-    // used to ellipsize on the full photo card. jsdom has no layout — simulate a
-    // name whose natural width (600) overflows its slot (300); the fit box should
-    // scale to 300/600 = 0.5 rather than clip.
+    // would ellipsize on the full photo card. jsdom has no layout — simulate a
+    // name whose natural width (600) overflows its slot (300); the fit box
+    // should scale to 300/600 = 0.5 rather than clip.
     const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300);
     const scrollWidth = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(600);
     try {
@@ -276,10 +277,10 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
   });
 
   it('holds the name slot at full height when a result rides under it', () => {
-    // The slot used to be a shrinkable flex child, so the result numeral took
-    // its height and the 27.2cqh family name was cut at ~60% glyph height on
-    // every profile-rankings card. It must not yield; name + result scale
-    // together inside the one measured wrapper instead.
+    // As a shrinkable flex child the slot would let the result numeral take its
+    // height and cut the 27.2cqh family name at ~60% glyph height on every
+    // profile-rankings card. It must not yield; name + result scale together
+    // inside the one measured wrapper instead.
     render(<AthleteCard athlete={athlete()} result="31.0" sourceTag="FINAL" />);
     expect(window.getComputedStyle(screen.getByTestId('athlete-card-name-slot')).flexShrink).toBe(
       '0',
@@ -313,33 +314,34 @@ describe('AthleteCard (LAAX athlete-card art)', () => {
 
   it('floors the narrow name at the 1080p legibility px floor (goal g3)', () => {
     // 30cqh resolves against the ~26%-tall name band, so the ~171px quarter box
-    // dropped the narrow name to ~13px. max(cqh, floor) pins the px floor.
-    // (jsdom 29 drops max() from computed fontSize, so assert the injected rule.)
-    // The floor arrives through the var channel PlayoffBracket overrides per
-    // measured canvas; the token is its fallback, so a standalone card is unchanged.
+    // drops the narrow name to ~13px. max(cqh, floor) pins the px floor. (jsdom
+    // 29 drops max() from computed fontSize, so assert the injected rule.) The
+    // floor arrives through the var channel PlayoffBracket overrides per
+    // measured canvas; the token is its fallback, so a standalone card is
+    // unchanged.
     render(<AthleteCard athlete={athlete({ shortName: 'M. STEIN' })} narrow />);
     const css = [...document.querySelectorAll('style')].map((s) => s.textContent).join('');
     expect(css).toContain(`max(30cqh, var(--overlay-type-floor, ${overlayTypeFloor}))`);
   });
 
   it('floors the result numeral at the legibility px floor on small cards (goal g3)', () => {
-    // The smallest profile-ranking card dropped the 22cqh result numeral to ~13px.
+    // Without a floor the smallest profile-ranking card drops the 22cqh result
+    // numeral to ~13px.
     render(<AthleteCard athlete={athlete()} result="31.0" />);
     const css = [...document.querySelectorAll('style')].map((s) => s.textContent).join('');
     expect(css).toContain(`max(22cqh, var(--overlay-type-floor, ${overlayTypeFloor}))`);
   });
 
   it('leaves accent headroom on the narrow name (line-height ≥ 1, not the old 0.95)', () => {
-    // The tiny quarter box clipped uppercase accents under overflow:hidden with a
-    // sub-1 line-height (overlay-typography-polish).
+    // The tiny quarter box clips uppercase accents under overflow:hidden with a
+    // sub-1 line-height.
     render(<AthleteCard athlete={athlete({ shortName: 'M. STEIN' })} narrow />);
     expect(window.getComputedStyle(screen.getByText('M. STEIN')).lineHeight).toBe('1.1');
   });
 
   it('frames the flag band with a hairline keyline (low-contrast flag on the white foot)', () => {
     // A white-field flag (Japan) is otherwise indistinguishable from the white
-    // plate foot; a near-black inset keyline gives every flag a crisp edge
-    // (overlay-typography-polish).
+    // plate foot; a near-black inset keyline gives every flag a crisp edge.
     render(<AthleteCard athlete={athlete()} />);
     const keyline = window.getComputedStyle(screen.getByTestId('athlete-card-flag-keyline'));
     expect(keyline.boxShadow).toContain('inset');

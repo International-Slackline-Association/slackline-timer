@@ -5,13 +5,12 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * The page split's surviving measure — `ControlPage.tsx` is **layout only**, a
- * shape rather than the retired line count (plans.md, standing refactor
- * guardrails). Nothing else checks it: the board renders identically whether
- * the state it shows lives here or in `useFreestyleBoard`, so a slice that
- * grows one state hook back — and with it the ordering races between the
- * machines, the drains and the peer router that the split removed (ADR 0032) —
- * passes every behavioural test on the board.
+ * `ControlPage.tsx` is **layout only**: no state hook of its own. Nothing else
+ * checks it: the board renders identically whether the state it shows lives
+ * here or in `useFreestyleBoard`, so a slice that grows one state hook back —
+ * and with it the ordering races between the machines, the drains and the peer
+ * router that the split removed (ADR 0032) — passes every behavioural test on
+ * the board.
  */
 const STATEFUL = /\buse(State|Reducer|Effect|LayoutEffect|Ref|SyncExternalStore)\s*\(/g;
 

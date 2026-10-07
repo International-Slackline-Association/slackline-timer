@@ -1,19 +1,16 @@
 /**
- * How a countdown clock paints — one table, four grounds (FREESTYLE_BOARD_UX §6
- * "Tokens, type, sizes" + the DESIGN_SYSTEM §2 race-state language).
+ * How a countdown clock paints — one table, four grounds (freestyle-board-ux §6
+ * "Tokens, type, sizes" + the design-system.md §2 race-state language).
  *
  * The same `Countdown` mounts on four surfaces that owe four different colour
- * contracts, and the derivation used to be six nested ternary chains inside the
- * component, one per mark (numeral, halo, held run, caption, arrow, frame) —
- * every chain re-deciding the ground from `size`/`onDark` on its own. Here the
- * ground is decided ONCE and each surface is a literal row of the brief's table,
- * so a contrast pair can be read (and tested) where it is defined:
+ * contracts. The ground is decided ONCE and each surface is a literal row of the
+ * §6 table, so a contrast pair can be read (and tested) where it is defined:
  *
  *  - `dark` — the athlete display's slate `void`, or a composite over footage.
  *    The numeral NEVER carries the state hue: every race hue loses too much
  *    contrast on void (base ~3–4:1, the *Bright tier tops out at 5.4:1 for red)
  *    to read across a venue in daylight. Digits stay white (`ink.onBrand`,
- *    11:1 — the ceiling) and the STATE moves to the stroked frame (§7 rule 6,
+ *    11:1 — the ceiling) and the STATE moves to the stroked frame (design-system §7 rule 6,
  *    "white is the contrast workhorse, state colours are accents").
  *  - `panel` — the operator's board, a light panel read at arm's length in
  *    daylight: the §6 on-light tiers (the base hues are numeral-only at
@@ -162,7 +159,8 @@ const DARK_PX = { thin: '0.125em', wide: '0.5em', inset: '0.15em' } as const;
 
 // The on-panel frames' px geometry, per scale. `box` is the constant horizontal
 // footprint — each state's stroke plus its padding — so widening the sides on a
-// counting clock cannot move the card's transport a pixel (rubric C14). Fixed
+// counting clock cannot move the card's transport a pixel (freestyle-board-ux
+// rubric C14). Fixed
 // px, not the em of the onDark variant: these numerals clamp with the viewport
 // and a hairline frame at the small end would vanish. `secondary` scales the
 // weight with the numeral so the half-size clock keeps the same stroke:digit
@@ -196,7 +194,7 @@ const frameOf = (
   // are 0.31 vs 0.29 in luminance and read alike from far). So a COUNTING
   // clock widens its LEFT/RIGHT strokes — a shape cue that survives distance —
   // while top/bottom keep the thin stroke and nothing is painted near the name
-  // row above (a glow was tried and rejected: it bled into the name).
+  // row above (no glow: it bleeds into the name).
   const lit = kind === 'running' || kind === 'onBreak';
   switch (ground) {
     // The white plate IS the chrome, and a keyed surface carries none: on both,

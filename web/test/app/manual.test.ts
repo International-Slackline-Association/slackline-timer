@@ -10,7 +10,7 @@ import { speedlineLocks, type SpeedlineLockInput } from 'app/util/speedlineLocks
 /**
  * The published manual's contract. `doc/user/` is the only doc tree the app
  * ships, and it is written for operators, not engineers — so the separation from
- * `doc/dev/` is enforced here rather than left to editorial discipline:
+ * `doc/dev/` is enforced here:
  *
  *  - a user doc may link ONLY to a sibling user doc (a `doc/dev/` link would be
  *    dead in the app — nothing outside `doc/user/` is published), and
@@ -95,7 +95,7 @@ describe('published manual', () => {
 });
 
 /**
- * One word per action across button, handset row and manual (FREESTYLE_BOARD_UX
+ * One word per action across button, handset row and manual (freestyle-board-ux
  * rubric C15). Pinned because the failure is silent: a slice renames a control
  * and the manual goes on teaching last season's board.
  */
@@ -125,8 +125,8 @@ describe('freestyle judging page', () => {
 
   // Athlete n is the ATHLETE vocabulary — the two whole-board controls are named
   // for the pair of clocks they re-arm, on screen and here. Pinned because the
-  // batch's "never Lane" rule reads as a blanket ban, and renaming these would
-  // split the manual from the labels it teaches.
+  // "never Lane" rule reads as a blanket ban, and renaming these would split the
+  // manual from the labels it teaches.
   it.each(['Set both lanes', 'Reset lanes for the next match'])(
     'keeps the whole-board control label %s',
     (label) => expect(body).toContain(label),

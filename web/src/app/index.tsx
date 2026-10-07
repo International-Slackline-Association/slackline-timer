@@ -69,9 +69,8 @@ import { BridgePage } from './pages/Stream/BridgePage';
 import { NotFound } from './pages/NotFound';
 import { SelectedCompetitionProvider } from './state/selectedCompetition';
 
-// The manual carries the whole markdown corpus plus its renderer — dead weight
-// for the timer consoles and the overlays, which is every page that matters
-// under load. Split it out so it is fetched only when someone opens /help.
+// The manual carries the whole markdown corpus plus its renderer; split out of
+// the console/overlay bundles so it is fetched only on /help.
 const ManualIndexPage = lazy(() =>
   import('./pages/Help/ManualPage').then((m) => ({ default: m.ManualIndexPage })),
 );
@@ -80,11 +79,9 @@ const ManualArticlePage = lazy(() =>
 );
 import { GamepadSelectionProvider } from './state/gamepadSelection';
 
-// Competition-data cache. Fresh-enough defaults for admin pages and overlays;
-// live refresh comes from the server-side db_update WS message (targeted
-// invalidation), not from focus/poll heuristics — the one exception is the
-// competitions list page, which polls because db_update cannot reach it
-// (see COMPETITIONS_LIST_POLL_MS).
+// Live refresh is the server-side db_update WS message (targeted invalidation),
+// not focus/poll heuristics — except the competitions list, which polls because
+// db_update cannot reach it (see COMPETITIONS_LIST_POLL_MS).
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -137,8 +134,8 @@ export function App() {
                         path="/admin/competitions/:compId/managers"
                         element={<CompetitionManagersPage />}
                       />
-                      {/* The /admin/manage hub was removed (its nav duplicated the
-                          shell); redirect so bookmarked/launcher links survive. */}
+                      {/* Retired /admin/manage hub: redirect so bookmarked/launcher
+                          links survive. */}
                       <Route
                         path="/admin/manage"
                         element={<Navigate to="/admin/competitions" replace />}

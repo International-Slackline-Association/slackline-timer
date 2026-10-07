@@ -13,64 +13,46 @@ import { colors, fonts, overlayTextShadow } from 'app/theme/tokens';
 import { refVh } from 'app/util/overlayScale';
 import type { SpeedlineLaneState } from 'app/util/timerSnapshot';
 
-// Race-state color for the hero numeral (DESIGN_SYSTEM §2 / "Hero timer
-// numeral"): idle slate, running teal. A finished lane — a frozen time — is the
-// payload moment of the stream overlay, so it reads plain white (+ the §7
-// rules 4/6 protection halo below) to survive composited over dark/busy footage; the slate
-// ink.hi was near-invisible there, and white is chroma-safe on the magenta
-// projector ground too. Idle keeps its recessive slate+halo placeholder (accepted
-// for the pre-race state, ADR 0041 §2).
-// `onPlate` is the timertimer-style white-plate variant (size="plate"): the
-// numeral sits on the solid white plate the component draws itself, so idle and
-// finished digits take `overlay.nameInk` — the one black of every filled stream
-// plate, including the SVO cards composited over this lower third. Running teal
-// reads on white as-is.
+// Race-state color for the hero numeral (design-system §2 / §6 "Hero timer
+// numeral"): idle slate, running teal. A finished lane is the payload moment of
+// the stream overlay, so it reads plain white (+ the §7 protection halo) to
+// survive composited over dark/busy footage — slate ink.hi is near-invisible
+// there — and white is chroma-safe on the magenta ground too. Idle keeps its
+// recessive slate+halo placeholder (ADR 0041 §2).
+// `onPlate` (size="plate"): the numeral sits on the white plate the component
+// draws itself, so idle and finished digits take `overlay.nameInk` — the one
+// black of every filled stream plate, including the SVO cards composited over
+// this lower third.
 const numeralColor = (isRunning: boolean, stopped: boolean, onPlate = false): string => {
   if (isRunning) return colors.race.running;
   if (onPlate) return colors.overlay.nameInk;
   return stopped ? 'common.white' : colors.ink.hi;
 };
 
-// Size variants of the hero block. `projector` fills a projector/broadcast
-// screen via clamp/vw (DESIGN_SYSTEM §4) rather than a fixed MUI h3 — two lanes
-// sit side by side, so the vw factor leaves room for both plus the centre signal.
-// `control` is the contained variant for the operator's ControlPage, where the
-// stopwatch lives in a lane column of the live deck flanking the start strip: a
-// much smaller vw factor (capped well below the projector clamp) so a running
-// lane's numeral cannot bleed sideways onto the centre controls.
+// Size variants of the hero block (variant roles: the `size` prop doc).
+// `projector` and `control` size by clamp/vw (design-system §4); `plate` is in
+// 1080p reference px like the rest of the /stream/* set.
 const SIZES = {
   projector: {
-    // Two-lane fit: unlike the single-lane Freestyle clock, two of these sit side
-    // by side, each in a `minmax(0,1fr)` grid column. The vw factor is held well
-    // under the per-lane track budget (laneTrack / 4.2 for a 7-glyph `M:SS.CC` in
-    // JetBrains Mono ≈ 0.6em advance) so the numeral reads as a compact figure
-    // biased to its lane's outer edge rather than filling the track — the lanes
-    // sit toward the screen edges and open up the centre. Bump the vw term (and,
-    // for very wide walls, the rem cap) to grow it back toward the track budget.
+    // Two lanes side by side, each in a `minmax(0,1fr)` column. The vw factor
+    // stays well under the per-lane track budget (laneTrack / 4.2 for a 7-glyph
+    // `M:SS.CC` at JetBrains Mono's ≈ 0.6em advance), so the numeral reads as a
+    // compact figure biased to its lane's outer edge and the centre stays open.
+    // Bump the vw term (and, for very wide walls, the rem cap) to grow it.
     numeral: 'clamp(2rem, 6vw, 12rem)',
-    // UNOFFICIAL status tag (replaces the tiny "(Unofficial)" caption).
     marker: 'clamp(0.75rem, 1.6vw, 1.5rem)',
   },
   control: {
-    // Sized to fit the operator column, not clip. The stopwatch sits in one of
-    // the live deck's two lane tracks (`LIVE_DECK_SX`, ~5/13 of a ≤880px deck);
-    // a 7-glyph `M:SS.CC` numeral in JetBrains Mono runs ~4.2em wide, so the vw factor and
-    // cap are held so that width stays inside the column at every viewport
-    // (else the widest glyphs crop against the column's overflow:hidden, which
-    // itself is deliberate — it fences a running lane off the centre controls).
+    // One of the live deck's two lane tracks (`LIVE_DECK_SX`, ~5/13 of a
+    // ≤880px deck); a 7-glyph `M:SS.CC` runs ~4.2em, so the vw factor and cap
+    // keep it inside the column at every viewport — else the widest glyphs crop
+    // against the column's overflow:hidden.
     numeral: 'clamp(1.5rem, 3.2vw, 2.75rem)',
     marker: 'clamp(0.625rem, 1vw, 0.875rem)',
   },
-  // The timertimer-style white lower-third (SpeedlineTimerDisplay): a compact
-  // scoreboard numeral on the 1080p broadcast baseline, stacked over the
-  // AthleteNameStrip banner. This variant draws its OWN white plate around the
-  // time (only the time — the UNOFFICIAL marker sits below it on the bare
-  // ground), a scoreboard figure rather than a keyed-ground hero: the reference
-  // draws the time at text-6xl (60px) on the shared lane clock plate
-  // (`OVERLAY_LANE.clockPlate`) — reference px on the 1920×1080 capture frame
-  // (`refVh`), like every other metric in the /stream/* set. The two variants
-  // above answer to a projector wall and an operator column instead, so they
-  // keep their clamp/vw sizing.
+  // SpeedlineTimerDisplay's white lower-third, stacked over the
+  // AthleteNameStrip: the reference draws the time at text-6xl (60px) on the
+  // shared lane clock plate (`OVERLAY_LANE.clockPlate`).
   plate: {
     numeral: refVh(60),
     marker: refVh(14),
@@ -93,22 +75,17 @@ interface Props {
    */
   recovery?: SpeedlineLaneState;
   /**
-   * Controlled lane state for the operator's ControlPage: the page owns timer
-   * state outright and drives the display through this prop, so the component is
-   * presentational there and does NOT depend on the relay echo. When set,
-   * `laneFrame` is ignored (the loopback is not a delivery channel for the
-   * control's own clocks — ADR 0027); the preview leaves it unset and keeps
-   * consuming relay messages.
+   * Controlled lane state (ControlPage owns timer state, ADR 0027): when set,
+   * the component is presentational and `laneFrame` is ignored. The preview
+   * leaves it unset and consumes relay frames.
    */
   laneState?: SpeedlineLaneState;
   /**
    * Render scale. `projector` (default) is the full-screen clamp/vw hero for the
-   * preview/broadcast display; `control` is the contained variant for the
-   * operator's ControlPage column, sized so it cannot overflow onto the centre
-   * Start / False Start controls; `plate` is the compact timertimer-style
-   * lower-third — it draws its own solid white plate around the time (dark
-   * numeral hues, no halo on the plate) with the UNOFFICIAL marker below it on
-   * the bare ground (white + the protection halo).
+   * preview/broadcast display; `control` is the ControlPage lane column, sized
+   * so it cannot overflow onto the centre start strip; `plate` is the compact
+   * lower-third — its own white plate around the time only (dark numeral, no
+   * halo), the UNOFFICIAL marker below it on the bare ground (white + halo).
    */
   size?: 'projector' | 'control' | 'plate';
   /** `plate` only: the lane edge the time hugs inside its plate, mirroring the
@@ -139,13 +116,12 @@ export const Stopwatch: React.FC<Props> = ({
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const [showTimerText, setShowTimerText] = useState<boolean>(false);
 
-  // Stop the live tick synchronously and drop its handle. Called the instant a
-  // lane freezes (stop / reset / finished recovery) rather than deferring to the
-  // [isRunning] effect one commit later: a 50ms tick queued before the freeze
-  // must not fire afterwards and overwrite the authoritative stopTime−startTime
-  // with Date.now()−startTime — that would defeat the skew-free-by-construction
-  // guarantee a frozen lane has (ADR 0021). The null handle also gates the tick callback below,
-  // so even a tick whose task already dequeued bails instead of writing.
+  // Stop the live tick synchronously the instant a lane freezes (stop / reset /
+  // finished recovery), not one commit later in the [isRunning] effect: a 50ms
+  // tick queued before the freeze must not overwrite the authoritative
+  // stopTime−startTime with Date.now()−startTime (a frozen lane is skew-free by
+  // construction, ADR 0021). The null handle also gates the tick callback, so a
+  // tick whose task already dequeued bails instead of writing.
   const clearTick = () => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -162,9 +138,8 @@ export const Stopwatch: React.FC<Props> = ({
   };
 
   const stop = (stopTime: number) => {
-    // Only a genuinely running lane can be stopped. The old `time === 0` guard
-    // swallowed a sub-50ms stop (the tick interval has not run yet, so `time` is
-    // still 0) — gate on the actual running state / known start instead.
+    // Gate on running state, not `time === 0`: a sub-50ms stop lands before the
+    // first tick, while `time` is still 0.
     if (!isRunning || startTimeRef.current === null) return;
     clearTick();
     stopTimeRef.current = stopTime;
@@ -173,9 +148,8 @@ export const Stopwatch: React.FC<Props> = ({
     setShowTimerText(true);
   };
 
-  // Undo of a withdrawn stop (`speedline-resume-stopped-lane`). The start epoch
-  // is kept, so the clock picks up exactly where it would have been — no epoch
-  // travels on the wire and none is re-derived here.
+  // Undo of a withdrawn stop: the start epoch is kept, so the clock picks up
+  // exactly where it would have been — no epoch travels on the wire.
   const resume = () => {
     if (isRunning || startTimeRef.current === null) return;
     stopTimeRef.current = null;
@@ -192,11 +166,8 @@ export const Stopwatch: React.FC<Props> = ({
     setShowTimerText(false);
   };
 
-  // Reconstruct a normalized lane state directly (rather than replaying
-  // start/stop messages) so a finished lane shows its frozen elapsed and a
-  // running lane resumes ticking from its start. Shared by the one-shot
-  // `recovery` (preview snapshot restore) and the continuous controlled
-  // `laneState` (the control page's owned state).
+  // Reconstruct a lane state directly, not by replaying start/stop: shared by
+  // `recovery` (preview snapshot merge) and the controlled `laneState`.
   const applyLaneState = (state: SpeedlineLaneState) => {
     switch (state.kind) {
       case 'idle':
@@ -220,8 +191,6 @@ export const Stopwatch: React.FC<Props> = ({
     }
   };
 
-  // Controlled mode (control page): the page owns lane state and drives the
-  // display through `laneState`, so the relay echo never feeds these clocks.
   const controlled = laneState !== undefined;
 
   useEffect(() => {
@@ -261,11 +230,10 @@ export const Stopwatch: React.FC<Props> = ({
     }
   }, [laneFrame]);
 
-  // Snapshot recovery (preview): merge newer-wins per lane rather than blindly
-  // replacing, because a snapshot can now arrive AFTER live messages (the
-  // display forwards every snapshot since the HWC 2026 missed-stop incident).
-  // All startTimes are control-minted epochs, so comparing them never crosses
-  // machine clocks:
+  // Snapshot recovery (preview): merge newer-wins per lane, since a snapshot can
+  // arrive AFTER live messages (the display forwards every snapshot; ADR 0047
+  // for the `assertedAt` stamp). All startTimes are control-minted epochs, so
+  // comparing them never crosses machine clocks:
   //  - a blank lane takes whatever the snapshot has (the fresh-open case);
   //  - a NEWER startTime is a later run — take it;
   //  - the SAME startTime + snapshot `finished` while we still run is a stop
@@ -313,7 +281,6 @@ export const Stopwatch: React.FC<Props> = ({
     mergeRecovery(recovery);
   }, [recovery]);
 
-  // Controlled lane state (control page): apply on every change.
   useEffect(() => {
     if (laneState === undefined) {
       return;
@@ -328,9 +295,7 @@ export const Stopwatch: React.FC<Props> = ({
       // literal `clearInterval` in the cleanup, not the shared helper.
       // eslint-disable-next-line @eslint-react/web-api-no-leaked-interval
       intervalRef.current = setInterval(() => {
-        // A tick that lands after a synchronous freeze (which nulls the handle)
-        // must not overwrite the frozen time — bail if we are no longer the
-        // active ticker.
+        // Nulled by a synchronous freeze (`clearTick`).
         if (intervalRef.current === null) return;
         setTime(Date.now() - startTimeRef.current!);
       }, 50);
@@ -347,15 +312,13 @@ export const Stopwatch: React.FC<Props> = ({
         display: isReady ? 'flex' : 'none',
         alignItems: 'center',
         justifyContent: 'center',
-        // Keep a (control-variant) lane numeral inside its column so a running
-        // time cannot bleed sideways onto the centre Start / False Start controls.
+        // Fences a running control-variant numeral off the centre start strip.
         maxWidth: '100%',
         overflow: 'hidden',
       }}
     >
-      {/* The plate variant draws the white plate around the TIME ONLY — the
-          UNOFFICIAL marker below sits outside it on the bare (keyed/composited)
-          ground, so the plate's height is constant by construction. */}
+      {/* The plate wraps the TIME ONLY, so its height is constant; the marker
+          sits outside it on the bare ground. */}
       {onPlate ? (
         <Plate
           bordered={false}
@@ -389,12 +352,9 @@ export const Stopwatch: React.FC<Props> = ({
           textShadow={shadow}
         />
       )}
-      {/* Kept mounted, toggled via visibility (the Countdown reserve-row
-          pattern): the marker row always occupies its line, so the numeral —
-          and the plate around it — never move when a lane freezes/resets. On
-          the plate variant it reads white with the §7 protection halo (the
-          slate outline — the opposite of the font color), since it paints on
-          the bare ground below the plate. */}
+      {/* Kept mounted, toggled via visibility, so the numeral (and its plate)
+          never move when a lane freezes/resets. White + the §7 halo on every
+          variant: it paints on the bare ground, below any plate. */}
       <Typography
         component="div"
         sx={{

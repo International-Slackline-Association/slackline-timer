@@ -1,22 +1,22 @@
 /**
- * The desk arithmetic a lane card's geometry is held against (FREESTYLE_BOARD_UX
+ * The desk arithmetic a lane card's geometry is held against (freestyle-board-ux
  * §2/§6), plus the two things a jsdom suite needs before it can render the desk
  * at all. jsdom does no layout, so anything that depends on the column a card
  * renders in is asserted against this model rather than a measurement — kept in
  * one place so the why-line's wrap budget and the transport row's width reserve
  * cannot drift apart.
  *
- * The model is no longer arithmetic on trust: `ControlPage.test`'s desk branch
- * solves the *rendered* track lists against it (`solveTracks`), so a change to
- * `DESK_SX` or the run deck reds this file rather than quietly outdating it.
+ * `ControlPage.test`'s desk branch solves the *rendered* track lists against it
+ * (`solveTracks`), so a change to `DESK_SX` or the run deck fails against this
+ * model instead of quietly outdating it.
  */
 import { boardGeometry, deskGate, deskMedia, deskRails } from 'app/theme/tokens';
 
 /** The desk gate's width, both boards — the width `useMediaQuery` is asked about. */
 export const DESK_MIN_PX = deskGate.minWidth;
 
-/** …and the height, the Freestyle gate's second half (fsux-desk-fold-budget,
- * raised by `freestyle-board-fold-budget`): a 1280x800 screen is wide enough for
+/** …and the height, the Freestyle gate's second half (fsux-desk-fold-budget):
+ * a 1280x800 screen is wide enough for
  * the three columns and ~80 px too short to hold them — the battle desk's last
  * control measures 879 — so anything shorter takes the tab layout. */
 export const DESK_MIN_HEIGHT_PX = deskGate.minHeight;
@@ -37,8 +37,8 @@ export const COMPACT_HEIGHT_PX = 768;
  * half of the gate exists for. */
 export const SHORT_DESK_HEIGHT_PX = 720;
 
-/** The 16:10 laptop that sits between the two: past the width gate, past the
- * OLD height gate, and still ~80 px short of the desk it used to take. */
+/** The 16:10 laptop that sits between the two: past the width gate and still
+ * ~80 px short of the desk. */
 export const TALLISH_DESK_HEIGHT_PX = 800;
 
 /** The page Stack's side padding at `sm` and up (`padding: { xs: 1, sm: 2 }`). */
@@ -55,8 +55,9 @@ export const SETUP_RAIL_PX = deskRails.setup;
 export const SCORE_RAIL_PX = deskRails.record;
 
 /** A line inside the score rail: the rail less the panel's `p: 2` inset, both
- * sides, and its hairline. The rail's two athlete panels declare
- * a `fieldWidths.wide` flex basis and floor, so at this width they stack and each one gets the lot. */
+ * sides, and its hairline. The rail's two athlete panels declare a
+ * `fieldWidths.wide` flex basis and floor, so at this width they stack and each
+ * one gets the lot. */
 export const SCORE_RAIL_CONTENT_PX = SCORE_RAIL_PX - 2 * 16 - 2;
 
 /** The live column of the narrowest three-column desk (1280 px): the viewport

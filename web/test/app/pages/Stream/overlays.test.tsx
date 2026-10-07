@@ -171,7 +171,7 @@ describe('RankingsOverlay', () => {
       );
       await screen.findByText('Jane');
       const field = window.getComputedStyle(screen.getByTestId('ranked-field'));
-      // 48 reference px: the old `pt: 6` at 1080p, two thirds of it at 720p.
+      // 48 reference px: `pt: 6` at 1080p, two thirds of it at 720p.
       expect(px(field.paddingTop)).toBeCloseTo((48 * height) / 1080, 1);
     } finally {
       restore();
@@ -201,7 +201,7 @@ describe('RankingsOverlay', () => {
 
   it('labels the freestyle points unit (PTS) on the top row only', async () => {
     // Bare judged overalls ("31.0") read as points, not a time — a "PTS"
-    // microlabel names the column once, on row 1 (rankings-result-legend).
+    // microlabel names the column once, on row 1.
     const ranked: RankedAthlete[] = [
       { athlete: athlete('a1', 'Jane Doe'), bestTimeMs: 0, overall: 31 },
       { athlete: athlete('a2', 'John Roe'), bestTimeMs: 0, overall: 27 },
@@ -301,9 +301,9 @@ describe('RankingsOverlay', () => {
   });
 
   it('shrinks a long name to fit and pins the result so it stays inside the plate (rankings-name-result-clip)', async () => {
-    // Regression: a long family name overran the tapered plate and pushed the
-    // right-aligned result past the edge, where Plate's overflow:hidden clipped it.
-    // The name now shrinks-to-fit (measured uniform down-scale) rather than
+    // Regression: a long family name must not overrun the tapered plate and
+    // push the right-aligned result under Plate's overflow:hidden clip. The
+    // name shrinks-to-fit (measured uniform down-scale) rather than
     // ellipsizing, so the whole name stays legible.
     const ranked: RankedAthlete[] = [
       { athlete: athlete('a1', 'Taylor St. Germain-Villaseñor'), bestTimeMs: 83_450 },
@@ -323,7 +323,7 @@ describe('RankingsOverlay', () => {
     expect(fit).toContainElement(screen.getByText('Taylor'));
     expect(window.getComputedStyle(fit).transform).toContain('scale');
 
-    // The old ellipsis clip is gone — no rankings row still carries it.
+    // No rankings row carries an ellipsis clip.
     const nameBox = screen.getByText('Taylor').parentElement as HTMLElement;
     expect(window.getComputedStyle(nameBox).textOverflow).not.toBe('ellipsis');
 
@@ -469,7 +469,7 @@ describe('RankingsOverlay', () => {
     const plate = screen.getByTestId('ranking-plate');
     expect(window.getComputedStyle(plate).backgroundColor).toBe('rgb(255, 255, 255)');
 
-    // …so the name must be dark ink, not white-on-white (the bug).
+    // …so the name must be dark ink, not white-on-white.
     expect(window.getComputedStyle(name).color).toBe('rgb(35, 31, 32)'); // overlay.nameInk (#231f20)
     // The result numeral on the plate is dark too.
     expect(window.getComputedStyle(screen.getByText('1:23.45')).color).toBe('rgb(35, 31, 32)');
@@ -477,11 +477,12 @@ describe('RankingsOverlay', () => {
     // The rank numeral sits OUTSIDE the plate on the transparent bg → stays white.
     expect(window.getComputedStyle(screen.getByText('1')).color).toBe('rgb(255, 255, 255)');
 
-    // Dark-ink-on-white-plate text cancels the StreamLayout footage shadow so it
-    // reads as flat plate text, not a dark double-image (the leak fix). The
-    // declaration sits on the filled plate; the name + result inherit it. jsdom 29
-    // reports the inherited (unresolved var()) footage shadow from getComputedStyle
-    // rather than honoring the element's own override, so assert the emotion rule.
+    // Dark-ink-on-white-plate text cancels the StreamLayout footage shadow so
+    // it reads as flat plate text, not a dark double-image. The declaration
+    // sits on the filled plate; the name + result inherit it. jsdom 29 reports
+    // the inherited (unresolved var()) footage shadow from getComputedStyle
+    // rather than honoring the element's own override, so assert the emotion
+    // rule.
     const flatCss = [...document.querySelectorAll('style')].map((s) => s.textContent).join('');
     expect(flatCss).toContain('text-shadow:none');
   });
@@ -514,9 +515,9 @@ describe('RankingsOverlay', () => {
   });
 
   it('renders the LAAX v2 profile art geometry off the 1080p reference', async () => {
-    // `LAAX 2026_Profile top 4.svg`: rank-1 card 298.81×498.02 (the VS panel
-    // size), per-rank uniform taper, constant 9px stroke, numerals 156.12→66px
-    // bottom-aligned left of each card.
+    // `LAAX 2026_Profile top 4.svg` (design-system §7): rank-1 card
+    // 298.81×498.02 (the VS panel size), per-rank uniform taper, constant 9px
+    // stroke, numerals 156.12→66px bottom-aligned left of each card.
     const ranked: RankedAthlete[] = [83, 84, 85, 86].map((s, i) => ({
       athlete: athlete(`a${i + 1}`, `Racer R${i + 1}`),
       bestTimeMs: s * 1000,
@@ -629,10 +630,10 @@ describe('RankingsOverlay', () => {
   });
 
   it('widens the numeral column to the field’s widest rank label, equally on every row', async () => {
-    // A `=1` tie label is two glyphs wide. The column is sized ONCE per field to
-    // the widest label and applied to every row, so the plates keep one left edge
-    // AND the widest numeral still starts inside the 96px title-safe inset
-    // (it used to overflow leftward out of a one-digit box).
+    // A `=1` tie label is two glyphs wide. The column is sized ONCE per field
+    // to the widest label and applied to every row, so the plates keep one left
+    // edge AND the widest numeral still starts inside the 96px title-safe
+    // inset.
     const ranked: RankedAthlete[] = [
       { athlete: athlete('a1', 'Jane Doe'), bestTimeMs: 83_450 },
       { athlete: athlete('a2', 'John Roe'), bestTimeMs: 83_450 },
@@ -966,9 +967,9 @@ describe('RankingsOverlay', () => {
   });
 
   it('tags each profile-variant standings card with its placing round', async () => {
-    // The profile cut must disambiguate the same way the names cut does (goal
-    // g3): a slower time above a faster one is a bracket outcome, so each of the
-    // top-4 portrait cards carries the placing-round tag next to its result.
+    // The profile cut must disambiguate the same way the names cut does: a
+    // slower time above a faster one is a bracket outcome, so each of the top-4
+    // portrait cards carries the placing-round tag next to its result.
     const standings = [
       { athlete: athlete('a1', 'Ida Ace'), rank: 1, source: 'final', bestTimeMs: 84_000 },
       { athlete: athlete('a2', 'Bea Bow'), rank: 2, source: 'final', bestTimeMs: 83_000 },
@@ -1305,7 +1306,7 @@ describe('ScoreCardOverlay (freestyle judged table)', () => {
     for (const line of ['DIFFICULTY', 'COMBO', 'STYLE']) {
       expect(screen.getByText(line)).toBeInTheDocument();
     }
-    // TRICK only stacks once now (TRICK/DIFFICULTY); BEST TRICK is gone.
+    // TRICK stacks once (TRICK/DIFFICULTY); no BEST TRICK row.
     expect(screen.getAllByText('TRICK')).toHaveLength(1);
     for (const line of ['CONTROL', 'PENALTY', 'BEST']) {
       expect(screen.queryByText(line)).not.toBeInTheDocument();
@@ -1384,7 +1385,7 @@ describe('ScoreCardOverlay (freestyle judged table)', () => {
     );
     expect(window.getComputedStyle(screen.getByText('32.50')).color).toBe('rgb(35, 31, 32)');
     // The penalty keeps the chromatic exception: solid stop red, white numeral,
-    // no 28% wash (which left the digits pale over bright footage).
+    // no 28% wash (it leaves the digits pale over bright footage).
     const penalty = screen.getByTestId('scorecard-cell-controlPenalty');
     expect(window.getComputedStyle(penalty).backgroundColor).toBe('rgb(240, 78, 52)');
     expect(window.getComputedStyle(screen.getByText('3.50')).color).toBe('rgb(255, 255, 255)');
@@ -1447,7 +1448,7 @@ describe('VsOverlay', () => {
     expect(screen.getByText('John')).toBeInTheDocument();
     expect(screen.getByText('Roe')).toBeInTheDocument();
     expect(screen.getByText('1:30.00')).toBeInTheDocument();
-    // Captionless — the head-to-head no longer names its round/plane.
+    // Captionless — the head-to-head names no round/plane.
     expect(screen.queryByText('MEN’S SPEED — FINAL 1')).not.toBeInTheDocument();
   });
 
@@ -1490,7 +1491,7 @@ describe('VsOverlay', () => {
     expect(px(vs.letterSpacing)).toBeCloseTo(emPx('-0.02em', vsEl), 2);
     expect(px(vs.fontSize)).toBeCloseTo(vhPx('10.183vh'), 2);
 
-    // The context caption is gone — the composition is the captionless master.
+    // No context caption — the composition is the captionless master.
     expect(screen.queryByTestId('vs-context-caption')).not.toBeInTheDocument();
 
     // Two 298.81×498.02 portrait panels on the 1920×1080 reference, derived
@@ -2114,7 +2115,7 @@ describe('VsOverlay', () => {
 
   it('draws CONTROL PENALTY identically in the VS table and the score card', async () => {
     // Both freestyle surfaces render the shared ScoreCell, so the penalty cell
-    // cannot drift back onto two treatments (the card used to wash it at 28%).
+    // cannot drift onto two treatments.
     const score: Score = {
       scoreId: 's1',
       compId: COMP,
@@ -2200,8 +2201,8 @@ describe('StreamLayout title-safe frame', () => {
   };
 
   it('insets every overlay 5% of the capture frame (design-system §7 rule 5)', () => {
-    // Was a fixed 48px — only 2.5% wide / 4.4% tall at 1080p, inside the outer
-    // 5% a broadcast chain may crop. Frame-relative, so 720p and 4K match.
+    // A fixed 48px is only 2.5% wide / 4.4% tall at 1080p, inside the outer 5%
+    // a broadcast chain may crop. Frame-relative, so 720p and 4K match.
     const { container } = renderBrackets();
     const style = window.getComputedStyle(container.firstElementChild as HTMLElement);
     expect(px(style.paddingLeft)).toBeCloseTo(vwPx('5vw'), 2); // 96px @1920
@@ -2212,9 +2213,9 @@ describe('StreamLayout title-safe frame', () => {
 
   it('fits the 16:9 bracket canvas inside the title-safe content box', async () => {
     // At the full content-box WIDTH the 16:9 canvas is 1026px tall against a
-    // 972px content box, so the bottom captions spilled past the inset. The
-    // canvas takes the largest 16:9 rectangle the padded frame affords.
-    // (jsdom can't compute the mixed-unit min()/calc(), so assert the rule.)
+    // 972px content box, so the bottom captions would spill past the inset. The
+    // canvas takes the largest 16:9 rectangle the padded frame affords. (jsdom
+    // can't compute the mixed-unit min()/calc(), so assert the rule.)
     renderBrackets();
     await screen.findByTestId('playoff-bracket');
     const css = [...document.querySelectorAll('style')].map((el) => el.textContent).join('');
@@ -2360,8 +2361,8 @@ describe('BracketsOverlay', () => {
     const filled = within(bracket).getByTestId('slot-box_final_r');
     expect(window.getComputedStyle(filled).backgroundColor).toBe('rgb(255, 255, 255)');
 
-    // …and its name is dark ink, not white-on-white (the bug). `John` is the
-    // bold given-name span on the non-winner plate, so it carries the plate ink.
+    // …and its name is dark ink, not white-on-white. `John` is the bold
+    // given-name span on the non-winner plate, so it carries the plate ink.
     const name = within(filled).getByText('John');
     const nameColor = window.getComputedStyle(name).color;
     expect(nameColor).not.toBe('rgb(255, 255, 255)');
@@ -2385,12 +2386,12 @@ describe('BracketsOverlay', () => {
     const empty = within(bracket).getByTestId('slot-box_q_1_3');
     expect(window.getComputedStyle(empty).backgroundColor).toBe(colors.overlay.plateName);
 
-    // The art's 5px plate stroke, frame-relative like the ranking plates' —
-    // the same refVh(5) both name-plate families now carry.
+    // The art's 5px plate stroke, frame-relative like the ranking plates' — the
+    // same refVh(5) both name-plate families carry.
     expect(px(window.getComputedStyle(filled).borderTopWidth)).toBeCloseTo(vhPx(refVh(5)), 2);
 
     // Section labels are the art's PlacardNext-Medium → Oswald 500 with the
-    // tight art tracking, not the g2 pass's 800/spread caps.
+    // tight art tracking, not 800/spread caps.
     const finalsLabel = within(bracket).getByTestId('bracket-label-FINALS');
     const labelStyle = window.getComputedStyle(finalsLabel);
     expect(labelStyle.fontWeight).toBe('500');
@@ -2436,11 +2437,10 @@ describe('BracketsOverlay', () => {
     expect(
       within(within(bracket).getByTestId('slot-small_winner')).getByText('John'),
     ).toBeInTheDocument();
-    // Undecided plates now carry the shared bold UnknownAthlete mark (the same
-    // "to be decided" placeholder as the profile cards) in place of the former
-    // "TBD" word — a thin Material "?" once read as unloaded content, but the
-    // custom glyph's weight reads as intentional. White (overlay.stroke), the
-    // structural-mark colour.
+    // Undecided plates carry the shared bold UnknownAthlete mark (the same "to
+    // be decided" placeholder as the profile cards), not a "TBD" word — a thin
+    // "?" reads as unloaded content, the custom glyph's weight as intentional.
+    // White (overlay.stroke), the structural-mark colour.
     const empty = within(bracket).getByTestId('slot-box_q_1_3');
     expect(within(empty).getByTestId('slot-unknown-box_q_1_3')).toBeInTheDocument();
     expect(within(empty).queryByText('TBD')).not.toBeInTheDocument();
@@ -2583,7 +2583,7 @@ describe('pickLiveMatch (round-following VS)', () => {
   });
 
   it('falls back to the first undecided match in bracket (round, then position) order', () => {
-    // Deliberately shuffled: a decided final, an undecided quarter, an undecided half.
+    // Shuffled: a decided final, an undecided quarter, an undecided half.
     const matches = [
       m('f1', 'final', 0, { winnerId: 'a1' }),
       m('h1', 'half', 0),
@@ -2705,7 +2705,7 @@ describe('WinnerOverlay', () => {
       emPx(overlayArt.bannerTracking, banner),
       2,
     );
-    // Captionless — the card no longer names the title that was won.
+    // Captionless — the card names no title.
     expect(screen.queryByText('MEN’S SPEED — FINAL')).not.toBeInTheDocument();
     // The winner's card (bold first / light last); the loser is not on it.
     expect(screen.getByText('Jane')).toBeInTheDocument();
@@ -2920,8 +2920,7 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
     // (ADR 0017), so the digits anchor to the athletes, not a chronology.
     const tally = await screen.findByTestId('series-tally');
     expect(tally.textContent).toBe('Jane2–1John');
-    // The "… — BEST OF 3" caption sits one step up from the old 24px
-    // (overlay-typography-polish): refVh(32).
+    // The "… — BEST OF 3" caption at refVh(32).
     const caption = screen.getByTestId('rounds-summary-caption');
     expect(px(window.getComputedStyle(caption).fontSize)).toBeCloseTo(vhPx('2.963vh'), 2);
     // Caption and tally names share the WINNER banner's tracking.
@@ -2932,7 +2931,7 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
       );
     }
     // The leading count is race.go green; the trailing count is overlay-label
-    // white — ink.hi is the on-white-plate tier and vanished on keyed footage.
+    // white — ink.hi is the on-white-plate tier and vanishes on keyed footage.
     expect(window.getComputedStyle(screen.getByTestId('series-wins-1')).color).toBe(
       'rgb(101, 188, 123)',
     );
@@ -2983,8 +2982,8 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
         },
       });
       const tally = await screen.findByTestId('series-tally');
-      // The old MUI spacing (24 / 16px) as reference px: equal at 1080p, scaled
-      // with the cards at 720p rather than staying device px.
+      // 24 / 16 reference px: equal at 1080p, scaled with the cards at 720p
+      // rather than staying device px.
       const story = window.getComputedStyle(tally.parentElement as HTMLElement);
       expect(px(story.rowGap)).toBeCloseTo((24 * height) / 1080, 1);
       expect(px(window.getComputedStyle(tally).columnGap)).toBeCloseTo((16 * width) / 1920, 1);
@@ -3019,7 +3018,7 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
       const digit = window.getComputedStyle(screen.getByTestId(id));
       expect(digit.fontSize).toBe(separator.fontSize);
       expect(digit.fontFamily).toBe(separator.fontFamily);
-      // JetBrains Mono is bundled 300–700; an 800 silently fell back to 700.
+      // JetBrains Mono is bundled 300–700; an 800 silently falls back to 700.
       expect(digit.fontWeight).toBe('700');
     }
     expect(separator.fontFamily).toContain('JetBrains Mono');
@@ -3315,10 +3314,11 @@ describe('AthleteCard (photo-less fallback)', () => {
     expect(screen.getByText('Doe')).toBeInTheDocument();
     expect(screen.getByTestId('athlete-card-flag-strip')).toBeInTheDocument();
 
-    // Dark-ink-on-white-plate text cancels the StreamLayout footage shadow so the
-    // card reads as flat plate text, not a dark double-image (the leak fix). An
-    // explicit text-shadow: none computes to 'rgba(0, 0, 0, 0)' under jsdom 29, so
-    // assert the shadow carries no offset rather than matching the literal 'none'.
+    // Dark-ink-on-white-plate text cancels the StreamLayout footage shadow so
+    // the card reads as flat plate text, not a dark double-image. An explicit
+    // text-shadow: none computes to 'rgba(0, 0, 0, 0)' under jsdom 29, so
+    // assert the shadow carries no offset rather than matching the literal
+    // 'none'.
     expect(window.getComputedStyle(within(photo).getByText('JD')).textShadow).not.toContain('px');
     expect(window.getComputedStyle(screen.getByText('Jane')).textShadow).not.toContain('px');
     expect(window.getComputedStyle(screen.getByText('Doe')).textShadow).not.toContain('px');
@@ -3363,9 +3363,9 @@ describe('AthleteCard (photo-less fallback)', () => {
     const a = athlete('a1', 'Jane Doe');
     const { container } = render(<AthleteCard athlete={a} />);
 
-    // The white band must stop ABOVE the strip so it never paints over the flag
-    // (the second compounding cause of the broken render). Its bottom edge is
-    // raised by the strip height rather than anchored to the card foot (bottom:0).
+    // The white band must stop ABOVE the strip so it never paints over the
+    // flag. Its bottom edge is raised by the strip height rather than anchored
+    // to the card foot (bottom:0).
     const band = container.querySelector('[data-band]') as HTMLElement;
     expect(band).not.toBeNull();
     expect(window.getComputedStyle(band).bottom).not.toBe('0px');
@@ -3375,17 +3375,18 @@ describe('AthleteCard (photo-less fallback)', () => {
 describe('overlay card metrics (frame-relative rules)', () => {
   it('scales the type floor with the capture frame instead of pinning raw px', () => {
     // The floor is a 1080p legibility metric, so it belongs in the refVh family
-    // like every other overlay font size (ADR 0034 §4). As a hard px value it
-    // outran the shrink-to-fit wherever the canvas is smaller than the capture
-    // frame — on the ~1150px admin bracket preview every narrow name started at
-    // the full floor and was scaled back by its own name length, so sibling
-    // quarter cards read as a size lottery the broadcast render never shows.
+    // like every other overlay font size (ADR 0034 §4). A hard px value would
+    // outrun the shrink-to-fit wherever the canvas is smaller than the capture
+    // frame — on the ~1150px admin bracket preview every narrow name would
+    // start at the full floor and be scaled back by its own name length, so
+    // sibling quarter cards read as a size lottery the broadcast render never
+    // shows.
     expect(overlayTypeFloor).toBe(refVh(OVERLAY_TYPE_FLOOR_PX));
   });
 
   it('lands the type floor on the 20px broadcast text minimum at 1920x1080', () => {
-    // 16px sat under the usual 20-24px broadcast minimum and the quarter/semi
-    // profile-box names sat exactly on it (overlay-type-floor-broadcast-min).
+    // The quarter/semi profile-box names sit exactly on the floor, so it may
+    // not drop under the usual 20-24px broadcast minimum.
     const restore = pinViewport(1920, 1080);
     expect(vhPx(overlayTypeFloor)).toBeCloseTo(20, 2);
     restore();
@@ -3394,8 +3395,8 @@ describe('overlay card metrics (frame-relative rules)', () => {
   it('never lays out an overlay card gap as a percentage vertical margin', () => {
     // A `%` margin — top or bottom — resolves against the containing block's
     // WIDTH, so a gap written that way tracks the wrong axis and collapses on a
-    // shrink-wrapped card (`athlete-card-gap-units`). The overlay cards are
-    // container-query boxes: vertical gaps are `cqh`.
+    // shrink-wrapped card. The overlay cards are container-query boxes:
+    // vertical gaps are `cqh`.
     const dir = resolve(process.cwd(), 'src/app/pages/Stream');
     const offenders = readdirSync(dir)
       .filter((f) => f.endsWith('.tsx'))

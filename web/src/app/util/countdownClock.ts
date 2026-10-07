@@ -1,16 +1,16 @@
 /**
  * The `Countdown` display's internal clock machine — the pure core behind the
- * most-mounted timer leaf (HSM rules; the leaf-level completion of ADR 0032).
+ * most-mounted timer leaf (the leaf-level completion of ADR 0032).
  * The domain truth is ONE discriminated union — the same
  * `CountdownDisplayState` shape the control page already hands a controlled
- * clock (rule 1: `running && onBreak`, `expired && onBreak` are
- * unrepresentable, and each variant carries only the fields valid in it) —
+ * clock (`running && onBreak`, `expired && onBreak` are unrepresentable, and
+ * each variant carries only the fields valid in it) —
  * so a controlled `display` prop applies verbatim instead of being exploded
  * into booleans. Every other input is a pure `→ CountdownDisplayState`
  * mapper: wire messages via `clockFromMessage`, a recovered snapshot lane via
  * `clockFromRecovery`.
  *
- * Transitions are a pure `(store, event) → store` reducer (rule 3): no I/O,
+ * Transitions are a pure `(store, event) → store` reducer: no I/O,
  * no `Date.now()` — wall clock rides in on `at` — exhaustively switched with
  * `never` checks. The component's interval is plumbing at the edge: it
  * dispatches `TICK` and detects the zero-crossings (`RUN_ZERO`/`BREAK_ZERO`
@@ -28,7 +28,7 @@ import { remainingCeilSecond, remainingFrom } from 'app/util/time';
 
 /**
  * The lane-scoped members of the countdown wire union — session-scoped
- * messages carry no `timerId` (ws-session-message-family) and never reach a
+ * messages carry no `timerId` and never reach a
  * clock; the component's `'timerId' in message` filter narrows to exactly this.
  */
 export type CountdownLaneMessage = Extract<
@@ -40,14 +40,12 @@ export interface ClockStore {
   /** The domain truth: which face the clock shows, with its wall-clock anchor. */
   state: CountdownDisplayState;
   /**
-   * The live numeral (a display projection, rule 6 — never domain state): the
+   * The live numeral (a display projection, never domain state): the
    * ticking clock's rendered ms — the run clock while `running`, the break
-   * clock while `onBreak`. Seeded to the whole second IN PROGRESS (ceil) when
-   * a state applies — a fresh anchor is a few ms old by then and `formatClock`
-   * floors, so a raw seed would flash `01:59` for a `02:00` start — then
-   * re-derived RAW from the same anchor per tick, so every receiver sharing a
-   * wire anchor lands on the same whole second (the smear regression). The
-   * static faces (idle budget, held run, expired 0) render off `state`.
+   * clock while `onBreak`. Seeded by `remainingCeilSecond` when a state
+   * applies, then re-derived RAW from the same anchor per tick, so every
+   * receiver sharing a wire anchor lands on the same whole second. The static
+   * faces (idle budget, held run, expired 0) render off `state`.
    */
   liveMs: number;
 }
@@ -127,7 +125,7 @@ const resting = (remainingMs: number): CountdownDisplayState =>
 /**
  * Wire message → next state (message-driven preview surfaces). `at` is the
  * receipt wall clock — the anchor fallback for a pre-feature sender that
- * omits the shared wire epoch (the old receipt-anchored behaviour).
+ * omits the shared wire epoch.
  */
 export const clockFromMessage = (
   message: CountdownLaneMessage,
@@ -165,8 +163,8 @@ export const clockFromMessage = (
 /**
  * Recovered snapshot lane → state (peer-to-peer state recovery, preview
  * surfaces). Anchors prefer the shared send epoch on the row and fall back to
- * receipt (`at`). On break the run is held — the union cannot represent the
- * old bag's `isRunning && onBreak` combo (both clocks ticking at once). A
+ * receipt (`at`). On break the run is held — the union cannot represent a row's
+ * `isRunning && onBreak` (both clocks ticking at once). A
  * resting row at/below zero recovers as `expired` (`resting`, matching the
  * authoritative-stop mapping above): the row cannot carry the idle/expired
  * distinction, and rendering a spent budget as an idle 00:00 would clobber a

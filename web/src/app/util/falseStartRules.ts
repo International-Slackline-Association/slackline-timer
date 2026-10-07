@@ -1,6 +1,6 @@
 /**
  * Pure false-start rules for the Speedline timer console (rules S2–S4), used by
- * `useRaceRecorder`. React-free and table-testable, the `raceTime.ts` pattern.
+ * `useRaceRecorder`.
  *
  * A false start is attributed to one lane and counted per lane, per **attempt**
  * (one start→finish cycle — what `runWins` tallies). The counter is capped at 2

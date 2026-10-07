@@ -21,7 +21,7 @@
 //
 //   API_URL=<HttpApiUrl output of the backend stack> \
 //   AUTH_TOKEN=<idToken> \
-//   node server/scripts/seedRemote.mjs resources/seed/prod/laax-2026.seed.json --yes
+//   node server/scripts/seedRemote.mjs resources/seed/prod/<event>.seed.json --yes
 //
 // Flags:
 //   --assets <dir>  directory the athlete `photo` filenames resolve against

@@ -19,11 +19,10 @@ const person: Pick<Athlete, 'firstName' | 'lastName'> = {
 };
 
 describe('AthleteName (the LAAX bold-first / light-last split)', () => {
-  // Regression fence. The `cqh` branch declared no `fontFamily`, so MUI's
-  // `theme.typography.body1` won and both names rendered in `fonts.body` (Saira)
+  // Regression fence: a branch that declares no `fontFamily` lets MUI's
+  // `theme.typography.body1` win, rendering both names in `fonts.body` (Saira)
   // instead of the condensed display face — invisible to every weight/colour
-  // assertion above, and it also silently voided the 300, which Saira omits.
-  // `fixed` was already safe (`fontFamily: 'inherit'`); pin both so neither drifts.
+  // assertion above, and Saira omits the 300. Pin both modes so neither drifts.
   it.each(['fixed', 'cqh'] as const)('renders %s mode in the display face', (sizing) => {
     render(
       <div style={{ fontFamily: fonts.display }}>
@@ -70,10 +69,10 @@ describe('AthleteName (the LAAX bold-first / light-last split)', () => {
   it('fixed sizing (default) does not clamp the name to the body1 rem — it inherits the caller size', () => {
     render(<AthleteName athlete={person} />);
     // The spans declare `font-size: inherit` so the caller's fontSize + the
-    // wrapper's display face flow through. A default body1 span would impose its
-    // fixed `rem` size in the body font — the name-strip "tiny name" bug. jsdom
-    // leaves the unresolved `inherit` as its 'medium' initial, so assert the RULE
-    // (no imposed rem, no cqh) rather than a resolved px value.
+    // wrapper's display face flow through. A default body1 span would impose
+    // its fixed `rem` size in the body font. jsdom leaves the unresolved
+    // `inherit` as its 'medium' initial, so assert the RULE (no imposed rem, no
+    // cqh) rather than a resolved px value.
     const given = window.getComputedStyle(screen.getByText('Amanda'));
     expect(given.fontSize).not.toMatch(/rem$/);
     expect(given.fontSize).not.toContain('cqh');
@@ -86,8 +85,8 @@ describe('AthleteName (the LAAX bold-first / light-last split)', () => {
   });
 
   it('cqh sizing leaves accent headroom (line-height ≥ 1) so uppercase diacritics are not clipped', () => {
-    // The smallest profile card clipped uppercase accents (É) with the former
-    // 0.95/1 line-height under an overflow:hidden band (overlay-typography-polish).
+    // A sub-1 line-height (0.95/1) under an overflow:hidden band clips
+    // uppercase accents (É) on the smallest profile card.
     render(<AthleteName athlete={person} sizing="cqh" />);
     expect(window.getComputedStyle(screen.getByText('Amanda')).lineHeight).toBe('1.1');
     expect(window.getComputedStyle(screen.getByText('Montminy')).lineHeight).toBe('1.1');

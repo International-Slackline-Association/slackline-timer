@@ -33,18 +33,13 @@ const SUMMARY_ART = {
  * edge in `race.go`. As the operator works a speed match the tally climbs
  * 1-0 → 1-1 → 2-1 on camera.
  *
- * Board-driven and read-only: the running tally rides the control board's
- * `updateSelection` as `selection.runWins` (ADR 0017 §4), so the overlay never
- * needs a second source — it reads the same live selection VS/SVO already follow.
- * No `Time`/`Score` fetch: the cards are pure identity (the shared `AthleteCard`).
- * The exact run order isn't on the wire (ADR 0017), so the digits anchor to the
- * athletes' names rather than feign a chronological run sequence.
+ * Board-driven: the tally rides the board's `updateSelection` as
+ * `selection.runWins` (ADR 0017 §4). No `Time`/`Score` fetch — the cards are
+ * pure identity. The run order isn't on the wire (ADR 0017), so the digits
+ * anchor to the athletes' names rather than feign a chronological sequence.
  *
- * Which match: the same precedence as VS (`pickMatch`) — explicit `&match=` >
- * the board's live `selection.matchId` > the first winner-less match by position.
- * Fail-safe: until at least one run resolves (the tally sums above zero) the
- * overlay reports `empty` and paints nothing — correct on-air behaviour before
- * the series has a story to tell.
+ * Which match: `pickMatch`, as VS. Until at least one run resolves the overlay
+ * reports `empty` and paints nothing.
  */
 export const RoundsSummaryOverlay = () => {
   const { round, gender } = useParams();
@@ -90,10 +85,8 @@ const SummaryBody = ({
   const roundMatches = (matches.data ?? []).filter((m) => m.round === round);
   const match = pickMatch(roundMatches, matchId, selection);
 
-  // The series tally lives on the SPEED arm of the selection union alone
-  // (`SpeedSelection`), and this is a speed overlay — so the discipline check
-  // that narrows it is the same guard that keeps a freestyle board sharing the
-  // relay room out of the digits.
+  // `runWins` exists only on the speed arm of the union; the narrowing check also
+  // keeps a freestyle board sharing the relay room out of the digits.
   const runWins = selection?.discipline === 'speed' ? selection.runWins : undefined;
   const athleteById = (id?: string | null) =>
     id ? (athletes.data ?? []).find((a) => a.athleteId === id) : undefined;
@@ -185,7 +178,7 @@ const TallyName = ({ athlete }: { athlete?: Athlete }) =>
     </Typography>
   ) : null;
 
-/** A best-of-3 score numeral; the leading lane's count goes `race.go` green. */
+/** A best-of-3 score numeral; the leader's count goes `race.go` green. */
 const SeriesNumeral = ({
   value,
   lead,
@@ -199,9 +192,8 @@ const SeriesNumeral = ({
     fontWeight={700}
     fontSize={refVh(SUMMARY_ART.numeral)}
     lineHeight={1}
-    // The trailing count is overlay-label white, not ink.hi: `ink.*` is the
-    // on-white-plate tier and vanishes keyed over dark footage on this
-    // transparent ground (the inherited footage scrim shadow backs both).
+    // The trailing count is overlay-label white, not an `ink.*` tone, which
+    // vanishes keyed over dark footage on this transparent ground.
     color={lead ? colors.race.go : colors.overlay.label}
     testId={testId}
   >

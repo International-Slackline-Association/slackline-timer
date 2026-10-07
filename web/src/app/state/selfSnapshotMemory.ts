@@ -65,8 +65,7 @@ export const storeSelfSnapshot = (
   try {
     window.localStorage.setItem(storageKey(sessionId, discipline), JSON.stringify(record));
   } catch {
-    // Private-mode / disabled / full storage: the panel simply has no fallback,
-    // which is exactly where it stood before this feature.
+    // Private-mode / disabled / full storage: the panel has no local fallback.
   }
 };
 

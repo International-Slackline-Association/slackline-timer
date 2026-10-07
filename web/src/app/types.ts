@@ -1,14 +1,9 @@
 /**
- * Competition data-plane entities and enums — the web copy.
- *
- * The repo has no npm workspaces, so these are consciously duplicated from
- * `server/src/core/types.ts` (the authoritative copy: the enums end up inside
- * DynamoDB sort keys). `types.parity.test.ts` asserts the two stay identical —
- * if that test fails, fix the drift, never the test.
- *
- * This file must stay free of imports: it is compiled by the server package's
- * type-checker if ever imported across, and keeping it dependency-free keeps
- * the parity check trivial.
+ * Competition data-plane entities and enums — the web copy of
+ * `server/src/core/types.ts` (authoritative: the enums end up inside DynamoDB
+ * sort keys). No npm workspaces, so the duplication is conscious;
+ * `types.parity.test.ts` asserts the two stay identical — if it fails, fix the
+ * drift, never the test.
  */
 
 /** Rounds a Match can belong to (timertimer `Match.round`). */
@@ -204,11 +199,9 @@ export interface FreestyleFormatPreset {
 /**
  * Championship Freestyle timing formats (rules F4/F5): quali (2:00 run / 5:00
  * warm-up) and battle (2:30 run / 7:00 warm-up). Keyed by board mode — format
- * and mode are the SAME operator input (the ADR 0036 respec), so picking a mode
- * on the console applies its timings. These are format constants the rules
- * define, not per-competition data — the active-budget/warm-up half of the
- * config direction ADR 0019 §6 deferred, kept as console constants so the
- * operator stops retyping 150/420 every battle.
+ * and mode are the SAME operator input (ADR 0036), so picking a mode on the
+ * console applies its timings. Rule-defined console constants, not
+ * per-competition data (the half of ADR 0019 §6's config direction it deferred).
  */
 export const FREESTYLE_FORMAT_PRESETS: Record<'quali' | 'battle', FreestyleFormatPreset> = {
   quali: { runSeconds: 120, warmupSeconds: 300 },

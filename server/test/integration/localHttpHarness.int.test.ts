@@ -102,7 +102,7 @@ describe.skipIf(!reachable)('localHttpHarness (SAM-free HTTP data plane)', () =>
 
   it('routes …/matches/seed to the matches handler (literal beats {matchId})', async () => {
     // An empty body fails the matches validator (400) — proof it reached the
-    // matches handler and passed requireAdmin, not the {matchId} PUT/DELETE.
+    // matches handler and passed requireWrite, not the {matchId} PUT/DELETE.
     const res = await fetch(`${BASE}/competitions/${compId}/matches/seed`, {
       method: 'POST',
       headers: { ...AUTH, 'content-type': 'application/json' },
@@ -166,10 +166,9 @@ describe.skipIf(!reachable)('localHttpHarness (SAM-free HTTP data plane)', () =>
     await expect(fetch(`http://${lanIp}:${PORT}/health`)).rejects.toThrow();
   });
 
-  // The literal body is the wire contract verify-g3's readiness probe asserts
-  // (driver.mjs backendReady) so a foreign process squatting :3002 can't be
-  // misread as the harness being up — keep the string in sync with
-  // scripts/lib/harnessHealth.mjs.
+  // The literal body is the readiness-probe wire contract, so a foreign process
+  // squatting :3002 can't be misread as the harness being up — keep it in sync
+  // with scripts/lib/harnessHealth.mjs.
   it('answers the harness-identifying readiness probe (GET /health)', async () => {
     const res = await fetch(`${BASE}/health`);
     expect(res.status).toBe(200);

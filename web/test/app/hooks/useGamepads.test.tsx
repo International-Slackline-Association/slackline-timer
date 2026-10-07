@@ -183,7 +183,7 @@ describe('useGamepads — press callback', () => {
     connected = [fakePad(0, [true])];
     pollOnce();
 
-    // Release (true → false), then re-press well within the old 1000ms window.
+    // Release (true → false), then re-press 120 ms later.
     connected = [fakePad(0, [false])];
     pollOnce();
     vi.advanceTimersByTime(120);

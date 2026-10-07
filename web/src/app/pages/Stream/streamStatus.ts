@@ -1,9 +1,7 @@
 /**
- * The on-air lifecycle of an overlay. `ready` is the only state that paints —
- * `loading`/`empty`/`error` all render nothing visible (fail-safe on camera),
- * but are observable off-air (the `StreamLayout` stamps it on the root as
- * `data-stream-status` + a visually-hidden node; `/admin/overlays` surfaces it
- * as a severity chip).
+ * The on-air lifecycle of an overlay. Only `ready` paints; the rest are
+ * observable off-air only (see `StreamLayout`; `/admin/overlays` shows a
+ * severity chip).
  */
 export type StreamStatus = 'loading' | 'empty' | 'error' | 'ready';
 
@@ -26,9 +24,8 @@ export const deriveStreamStatus = (
  * `deriveStreamStatus` over the several queries an overlay body joins (e.g.
  * matches + athletes): loading/error if ANY constituent is. Bodies gate their
  * render on `status !== 'ready'`, so the reported status and what's on camera
- * can't drift. Deliberately a pure helper, not a `QueryStates`-style component
- * — off-`ready` overlays must render nothing (fail-safe on camera), so there
- * is no triad to render.
+ * can't drift. A pure helper, not a `QueryStates`-style component: off-`ready`
+ * overlays render nothing, so there is no triad to render.
  */
 export const streamStatusFromQueries = (
   queries: readonly { isLoading: boolean; isError: boolean }[],

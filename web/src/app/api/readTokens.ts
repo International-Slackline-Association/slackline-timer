@@ -11,7 +11,8 @@ import {
 } from 'app/util/readTokenCache';
 
 /**
- * Read-token mutations (admin only). A read token is the credential OBS/H2R
+ * Read-token mutations (competition write access: superadmin or a granted
+ * manager). A read token is the credential OBS/H2R
  * overlays carry in their `/stream/*` URL — read-only, competition-scoped,
  * expiring with the event. Revoking bumps the competition's tokenVersion, which
  * invalidates every outstanding token at once. See server/src/core/readToken.ts.

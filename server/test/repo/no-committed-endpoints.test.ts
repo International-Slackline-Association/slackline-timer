@@ -5,11 +5,10 @@ import { extname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // ADR 0048 in enforced form: environment-specific AWS identifiers belong in
-// configuration, never in the tree. Comments alone did not hold that line, so
-// this walks every *tracked* file (`git ls-files`, which puts ignored artefacts
-// and node_modules out of scope by construction) and fails on any literal that
-// identifies a specific deployment — the shape the ADR 0025 secrets guard uses,
-// because a rule only survives if reinstating the old form turns a suite red.
+// configuration, never in the tree. Walks every *tracked* file (`git ls-files`
+// keeps ignored artefacts and node_modules out by construction) and fails on any
+// literal that identifies a specific deployment, the same assert-the-rule shape
+// as the ADR 0025 secrets guard.
 //
 // The patterns match the *id-bearing* forms only, so prose about `execute-api`
 // or `cloudfront.net` stays legal and a hit means a real id is present.

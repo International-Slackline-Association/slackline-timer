@@ -5,10 +5,6 @@
  * Start (long beep — the judge decides when to resume). Battle has NO break
  * clock (ADR 0036): the changeover is a control-local pause count-up owned by
  * the battle machine, so nothing here routes or auto-resumes anything.
- *
- * React-free and side-effect-free so the allowance and the break-clock
- * derivation are unit tested off the realtime page components — mirroring
- * `timerSnapshot.ts` / `raceTime.ts` / `scoreInput.ts`.
  */
 
 import { remainingFrom } from 'app/util/time';

@@ -77,13 +77,13 @@ describe('AthleteNameStrip (LAAX name lower-third)', () => {
     render(<AthleteNameStrip athlete={athlete()} />);
     const nameBox = screen.getByText('Amanda').parentElement as HTMLElement;
     const fontSizePx = parseFloat(window.getComputedStyle(nameBox).fontSize);
-    // The LAAX ref (Names_amanda_montminy_onDark.png) sets cap-height at ~0.63 of
-    // the strip, centred with margin — the caps do NOT fill the plate. With the
-    // display face's ~0.72 cap-height ratio that lands the font UNDER the strip
-    // height, so the whole em box fits and a single centred line can never
-    // overflow the 92px overflow:hidden plate vertically (the frame-clip bug the
-    // old 1.25× em overshoot caused). Still large and legible beside the flag —
-    // not the old small fixed 3.4rem (~54px).
+    // The LAAX ref (Names_amanda_montminy_onDark.png; design-system §7) sets
+    // cap-height at ~0.63 of the strip, centred with margin — the caps do NOT
+    // fill the plate. With the display face's ~0.72 cap-height ratio that lands
+    // the font UNDER the strip height, so the whole em box fits and a single
+    // centred line can never overflow the 92px overflow:hidden plate vertically
+    // (an em overshoot clips at the frame). Still large and legible beside the
+    // flag.
     expect(fontSizePx).toBeLessThanOrEqual(OVERLAY_NAME_STRIP.height);
     expect(fontSizePx).toBeGreaterThanOrEqual(OVERLAY_NAME_STRIP.height * 0.7);
   });

@@ -142,7 +142,7 @@ describe('laneLocks — the lane transport', () => {
     expect(locks.takeBreak).toEqual({ kind: 'noBreaks', lane: 1 });
   });
 
-  // Start doubles as the break cancel (DECISIONS 0019 §2) — it stays live.
+  // Start doubles as the break cancel (ADR 0019 §2) — it stays live.
   it('keeps Start live on a lane paused on a break', () => {
     const locks = laneLocks({
       ...idleLane,
@@ -222,7 +222,7 @@ describe('bestTrickLocks — the try series', () => {
     expect(locks.series).toEqual(locks.settings);
   });
 
-  // An open try is deliberately not one of their locks (§4.7 lists neither):
+  // An open try is not one of their locks (§4.7 lists neither):
   // both are the way out of the series, DISARM stops the window with it, and
   // the tally confirm — not a lock — is what guards the counts (§4.8).
   it('leaves both series-wide presses live through an open try', () => {

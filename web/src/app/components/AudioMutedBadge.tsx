@@ -6,7 +6,7 @@ import { CornerBadge } from 'app/components/CornerBadge';
  * anywhere (the unlock gesture installed by the hook).
  *
  * Projector-only by construction: its hosts render it only on the `projector`
- * variant. Unlike ConnectionLostBadge it deliberately paints over chroma-keyed
+ * variant. Unlike ConnectionLostBadge it paints over chroma-keyed
  * grounds too (no `useChromaSuppressed` guard): the muted state can only be
  * fixed by a gesture on the tab itself, so on the keyed projector rig — exactly
  * the surface whose beeps feed the venue PA — hiding it would recreate the

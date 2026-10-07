@@ -336,7 +336,7 @@ describe('useWS receive path (ADR 0051)', () => {
       act(() => {
         receiveRaw('{not json');
         receiveRaw('null');
-        // The review's crash frame: a known type without the data it promises.
+        // A crash frame: a known type without the data it promises.
         receive({ type: 'updatePreview', sessionId: 'x' });
         receive({ type: 'no_such_type', sessionId: 's1', data: {} });
       });
@@ -393,26 +393,25 @@ describe('useWS receive path (ADR 0051)', () => {
 
 describe('SessionWSMessage (shared session-scoped union)', () => {
   // The five session-scoped variants are factored into one union carried by
-  // both mode unions, WITHOUT the Countdown envelope's `timerId`. Dropping the
-  // former `timerId: -1` sentinel is wire-compatible: lane consumers filter on
-  // `timerId !== <lane id>`, so a missing `timerId` is filtered out exactly as
-  // `-1` was. These type-level assertions pin the shape so it can't drift back.
+  // both mode unions, WITHOUT the Countdown envelope's `timerId`. Lane consumers
+  // filter on `timerId !== <lane id>`, so a missing `timerId` is filtered out
+  // exactly as a `-1` sentinel would be.
   it('carries no timerId on any variant', () => {
     expectTypeOf<SessionWSMessage<unknown>>().not.toHaveProperty('timerId');
   });
 
   it('is a member of both the Stopwatch and Countdown unions', () => {
     // A session variant with only the shared envelope (no timerId) must be
-    // assignable to both mode unions — the whole point of factoring it out.
+    // assignable to both mode unions.
     const preview = { sessionId: 's', type: 'updatePreview', data: { enabled: true } } as const;
     expectTypeOf(preview).toMatchTypeOf<StopwatchWSMessage>();
     expectTypeOf(preview).toMatchTypeOf<CountdownWSMessage>();
   });
 
   it('lets start_countdown / start_break carry an optional shared startedAt anchor', () => {
-    // The smear fix: the countdown clocks now carry the control's start epoch on
-    // the wire (mirroring the stopwatch's absolute startTime), so receivers
-    // derive off one shared anchor instead of each re-anchoring to its receipt.
+    // The countdown clocks carry the control's start epoch on the wire
+    // (mirroring the stopwatch's absolute startTime), so receivers derive off one
+    // shared anchor instead of each re-anchoring to its receipt.
     const startCountdown: DistributiveOmit<CountdownWSMessage, 'sessionId'> = {
       type: 'start_countdown',
       timerId: 1,
@@ -436,9 +435,8 @@ describe('SessionWSMessage (shared session-scoped union)', () => {
   });
 
   it('lets a Countdown session message build without a timerId', () => {
-    // The Freestyle control page builds these; before the refactor it stamped a
-    // sentinel timerId:-1. It must now build (and type-check) without one — note
-    // the DistributiveOmit, which is required so the lane variants keep theirs.
+    // The Freestyle control page builds these without a timerId; the
+    // DistributiveOmit is required so the lane variants keep theirs.
     const msg: DistributiveOmit<CountdownWSMessage, 'sessionId'> = {
       type: 'updateSelection',
       data: {

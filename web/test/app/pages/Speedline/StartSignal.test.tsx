@@ -32,7 +32,7 @@ describe('RaceStartSignal token mapping', () => {
   it('phase 0 (idle) shows both bulbs dark/unlit (race.idle), never red — ADR 0041', () => {
     render(<RaceStartSignal currentPhase={0} />);
     // Idle is dark: red-red on air reads as an error/abort indicator, so the
-    // armed red look now begins only at PRE_BEEP_PHASE.
+    // armed red look begins only at PRE_BEEP_PHASE.
     expect(bulbFills()).toEqual([IDLE, IDLE]);
     // The housing still shows through (two dark bulbs), it is not hidden.
     expect(window.getComputedStyle(screen.getByTestId('start-bulb-0').parentElement!).display).toBe(
@@ -118,8 +118,8 @@ describe('RaceStartSignal token mapping', () => {
     expect(housing().display).toBe('none');
   });
 
-  // `ftt-followup-speedline-board-run-interlocks-1`: collapsing the control
-  // page's bulbs on clear lifted Start / Abort / Reset ~30 px under the hand.
+  // Collapsing the control page's bulbs on clear would lift Start / Abort /
+  // Reset ~30 px under the hand.
   it('hides the control bulbs once cleared but keeps their slot (small)', () => {
     const { rerender } = render(<RaceStartSignal currentPhase={3} size="small" />);
     const root = () => window.getComputedStyle(screen.getByTestId('start-bulb-0').parentElement!);

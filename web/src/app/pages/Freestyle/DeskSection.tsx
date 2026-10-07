@@ -15,14 +15,13 @@ const RULE_SX = {
 } as const;
 
 /**
- * One numbered section of the Freestyle chronology (FREESTYLE_BOARD_UX §2).
+ * One numbered section of the Freestyle chronology (freestyle-board-ux §2).
  *
  * The caption is the only thing that marks where the operator is, and it marks
- * it three ways — weight, ink and the gutter rule. Ink alone was a ~2:1
- * grey-on-grey swap that vanished at the 25 % scale a desk is scanned at, and a
- * mark carried by colour alone is no mark (WCAG 1.4.1). Emphasis only: nothing
- * folds and no section moves between board states (C14), so a section the operator has
- * learned to find stays exactly where it was learned.
+ * it three ways — weight, ink and the gutter rule. Ink alone (~2:1 grey on
+ * grey) vanishes at the 25 % scale a desk is scanned at, and a mark carried by
+ * colour alone is no mark (WCAG 1.4.1). Emphasis only: nothing folds and no
+ * section moves between board states (rubric C14, §8).
  *
  * The accessible name is the step's name alone (`stepName`), not the caption:
  * the number under it renumbers with the mode — quali has no best-trick step —
@@ -43,7 +42,7 @@ export const DeskSection = ({
    * Print the numbered caption. The desk always does — it is the only mark of
    * where the operator is across seven sections shown at once. The tab layout
    * shows ONE section and names it on the tab that opened it, so the caption is
-   * the same word twice for ~26 px of fold budget (`freestyle-compact-run-tab-fold`).
+   * the same word twice for ~26 px of fold budget.
    * The section keeps its landmark name and `aria-current` either way.
    */
   showCaption?: boolean;

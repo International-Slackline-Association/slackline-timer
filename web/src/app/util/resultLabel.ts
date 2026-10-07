@@ -3,9 +3,7 @@
  *
  * Speed and freestyle encode a result differently (best elapsed time vs a judged
  * `overall`, each with its own DNF encoding — see doc/dev/architecture.md), yet every
- * overlay that shows a single athlete's result applies the same rule. Extracted
- * here so VsOverlay, useLiveSideAthlete, and RankingsOverlay share one source of
- * truth instead of three drifting copies.
+ * overlay that shows a single athlete's result applies the same rule.
  */
 
 import { colors } from 'app/theme/tokens';
@@ -53,7 +51,7 @@ export const resultLabel = (
 /**
  * The result label for a standings row, where every result field is optional
  * (a bracket placement can exist before any run). `resultLabel` would render an
- * absent result as `00:00:00` / `0.0`, so the no-result case gets an explicit
+ * absent result as `00:00:00` / `0.00`, so the no-result case gets an explicit
  * em dash.
  */
 export const standingsResultLabel = (

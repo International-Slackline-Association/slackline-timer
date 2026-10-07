@@ -50,8 +50,8 @@ const traceSummary = (data: unknown): string => {
 };
 
 const DAMPER_WINDOW_MS = 60_000;
-// A client pings every 8 min against a 20 min row TTL (core/db.ts), so more
-// than one refresh per connection per minute is a flood.
+// A client pings every 8 min against CONNECTION_TTL_SECONDS (core/db.ts), so
+// more than one refresh per connection per minute is a flood.
 const pingDamper = createConnectionDamper({ windowMs: DAMPER_WINDOW_MS, maxEntries: 5000 });
 // A page sends one `request_state` per socket OPEN (ADR 0050).
 const requestStateDamper = createConnectionDamper({ windowMs: 5_000, maxEntries: 5000 });
@@ -72,15 +72,10 @@ export const main: APIGatewayProxyHandler = async (event) => {
   const message = parsed.frame;
   const sessionId = message.sessionId ?? 'default';
 
-  // App-level keepalive (ADR 0024): clients ping every ~8 min so API Gateway's
-  // 10-min idle timeout never fires. The send itself already reset the idle timer.
-  // The ping also heartbeats this connection's row (refreshConnectionTtl) so its
-  // short TTL can prune dead rows fast without ever evicting a live socket
-  // (db.ts) — conditional-on-existence there, so a ping racing an expiry/prune
-  // can't resurrect the row, and a failed refresh must never fail the keepalive.
-  // Handled before the membership/read-only checks and the fan-out: a ping stays
-  // out of the drop log and never relays. The damper bounds a ping flood to one
-  // refresh per connection per minute per container.
+  // Keepalive (ADR 0024): the send itself resets API Gateway's idle timer; the
+  // ping also heartbeats the connection row's TTL (db.refreshConnectionTtl), and
+  // a failed refresh must never fail the keepalive. Handled before the
+  // membership/read-only checks: a ping never relays and stays out of the drop log.
   if (message.type === 'ping') {
     if (pingDamper.admit(connectionId, now)) {
       await db.refreshConnectionTtl({ sessionId, connectionId }).catch(() => {});

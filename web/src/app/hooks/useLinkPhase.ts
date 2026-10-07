@@ -7,22 +7,21 @@ import { useStaleAfterGrace } from 'app/hooks/useStaleAfterGrace';
  * A not-OPEN socket is two different reports depending on whether the link was
  * ever up — a first handshake has lost nothing (and has no run to reassure
  * anyone about), a drop has lost the preview — crossed with the grace clock.
- * Reading them as one opened every fresh board (i.e. every Hosted-UI redirect)
- * on `Reconnecting… — clocks keep running`: a fault it had not had, in the slot
- * the operator checks before the first run.
+ * Read as one, every fresh board (every Hosted-UI redirect) would open on
+ * `Reconnecting… — clocks keep running`, a fault it never had.
  */
 export type LinkPhase = 'open' | 'connecting' | 'unreachable' | 'reconnecting' | 'lost';
 
 /**
- * The control boards' one link grader, over the two primitives that answer the
- * two questions (`useStaleAfterGrace` — how long has it been down;
- * `useHasEverOpened` — was it ever up).
+ * The one link grader, over the two primitives that answer the two questions
+ * (`useStaleAfterGrace` — how long has it been down; `useHasEverOpened` — was
+ * it ever up).
  *
- * Called once per socket, by the socket's owner (`useControlSession`): every
- * surface that reports the link — the header's chip, the tally plate's sub-line
- * — reads the resulting phase instead of re-grading `readyState` on its own, so
- * the loudest object on the board and the slot above it cannot say different
- * things about the same link.
+ * Called once per socket, by the socket's owner (`useControlSession`, the
+ * display pages, `StreamLayout`): every surface that reports the link — the
+ * header's chip, the tally plate's sub-line — reads the resulting phase instead
+ * of re-grading `readyState` on its own, so the loudest object on the board and
+ * the slot above it cannot say different things about the same link.
  */
 export const useLinkPhase = (readyState: ReadyState): LinkPhase => {
   // Reconnects are unbounded (ADR 0024), so the down states need the grace

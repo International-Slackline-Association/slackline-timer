@@ -6,7 +6,7 @@ import { ALPHA3_TO_ALPHA2 } from './countryAlpha2';
 import { IOC_TO_ALPHA2 } from './iocAlpha2';
 
 // flag-icons renders 4:3 flags via a CSS background; size by height and derive
-// the matching width so call sites keep passing only `height` as before.
+// the matching width.
 const ASPECT = 4 / 3;
 
 /**

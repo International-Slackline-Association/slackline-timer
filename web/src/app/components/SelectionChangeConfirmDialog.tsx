@@ -22,9 +22,8 @@ export const SelectionChangeConfirmDialog = ({
 }) => {
   const target = pendingChange?.kind === 'gender' ? 'gender' : 'round';
   // The change asked about, in one place: the destructive button and the name
-  // the handset readout gives the question (§4.8). One dialog stands over both
-  // pickers, so the fixed `Change the match` pointed the operator's way out at
-  // a control neither door carries.
+  // the handset readout gives the question (freestyle-board-ux §4.8). One
+  // dialog stands over both pickers, so it names the picker actually changed.
   const changeAction = `Change ${target}`;
   return (
     <BoardConfirmDialog

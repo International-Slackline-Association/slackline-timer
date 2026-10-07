@@ -11,19 +11,16 @@ import { type Athlete } from 'app/types';
  *
  * The imported flag-icons `.fi` rule sets `width:1.333333em; line-height:1em;
  * background-size:contain`, which at equal specificity beats a plain `sx`, so a
- * naive block collapses to a ~1.3em sliver / contained crop. We therefore size
- * the block ourselves and raise specificity with the emotion `&&` self-selector
- * (doubled class → 0,2,0). ALL sizing — the defaults and the caller's `sx` —
- * must stay inside that `&&` block to beat `.fi`; the defaults come before the
- * spread so a caller can still reshape per card (e.g. pin an explicit width on
- * a square block whose `width:100%` would collapse to a sliver in a flex row).
+ * naive block collapses to a ~1.3em sliver / contained crop. The emotion `&&`
+ * self-selector (doubled class → 0,2,0) beats it, so ALL sizing — the defaults
+ * and the caller's `sx` — must stay inside that block; the defaults precede the
+ * spread so a caller can reshape per card (e.g. pin an explicit width on a
+ * square block whose `width:100%` would collapse to a sliver in a flex row).
  *
- * `square` appends the `fis` class (the 1x1 SVG asset) and locks a 1:1 ratio for
- * the genuinely-square strip blocks (the SVO lower-third). `contain`
- * renders the flag at its native 3:2 ratio, sized off its height and uncropped —
- * for the AthleteCard foot strip, where a `cover` flex block over-cropped the
- * sprite into a broken sliver. Renders nothing for an unknown
- * code so the card stays clean rather than printing the raw code.
+ * `square` appends the `fis` class (the 1x1 SVG asset) and locks 1:1 (the
+ * ranking and score-card plates). `contain` renders the flag whole at its
+ * native 3:2, sized off its height (`WideFlag`'s fallback). Renders nothing for
+ * an unknown code rather than printing it.
  */
 export const FlagBlock = ({
   code,
@@ -63,19 +60,14 @@ export const FlagBlock = ({
 };
 
 /**
- * The one-or-two-nation flag row shared by every surface — the single fold of the
- * two flag renderings (ADR 0034 §7, COMPONENT_LAYER FlagRow). It resolves the
- * athlete's primary plus optional second nationality (`country2`) off `toAlpha2`
- * and abuts them in a row; each unknown code drops out (so a stray `country2`
- * leaves no gap).
+ * The one-or-two-nation flag row (ADR 0034): the athlete's `country` plus
+ * optional `country2`, abutted; an unknown code drops out without a gap.
  *
- * - **`block`** (default) — the overlay CSS-background `FlagBlock`s (RankingsOverlay
- *   full-height strip, AthleteCard foot, name strips). `square`/`contain`
- *   forward to both blocks; the wrapping `Stack` (`sx`) and each block's shape
- *   (`itemSx`) stay the caller's per-art knobs. `itemTestId` tags each block (the
- *   SVO lower-third asserts one flag per nationality).
- * - **`inline`** — the MUI height-sized `CountryFlag`s of the bracket name-plate
- *   dual-nation row, spaced and centred in-line rather than stretched to fill.
+ * - **`block`** (default) — CSS-background `FlagBlock`s (the ranking, score-card
+ *   and bracket name plates). `square`/`contain` forward to every block; `sx`
+ *   shapes the row, `itemSx` each block.
+ * - **`inline`** — height-sized `CountryFlag`s, spaced and centred in-line
+ *   (`AthleteNameStrip`).
  */
 export const FlagRow = ({
   athlete,

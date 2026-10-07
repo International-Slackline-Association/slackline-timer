@@ -2,14 +2,10 @@
  * The Freestyle warm-up channel (`timerId 0`) — a pure machine in the
  * `battleMachine.ts` idiom, but a *separate* one (three channels, three
  * charts): warm-up is a shared countdown independent of the two performance
- * lanes' mutual exclusion and of the best-trick series (ADR 0015 §1).
- * It used to live as ~100 lines of `useState` smeared across five regions of
- * the Freestyle ControlPage, re-implementing by hand the
- * owner + controlled-display + peer-apply + snapshot-hydrate shape the lanes
- * get from their reducer; now the state lives here in exactly one place and
- * the page consumes it through `useWarmupChannel`.
+ * lanes' mutual exclusion and of the best-trick series (ADR 0015 §1). The page
+ * consumes it through `useWarmupChannel`.
  *
- * Design (per the HSM rules): the clock is a discriminated union — a running
+ * Design: the clock is a discriminated union — a running
  * clock carries its wall-clock anchor plus the remaining AT that anchor, so
  * the live value is derived, never accumulated — the reducer is pure
  * `(state, event) -> { state, effects }` (no I/O, no `Date.now()`: wall clock
@@ -71,8 +67,8 @@ export const initialWarmupState = (defaultSeconds: number): WarmupState => ({
   clock: { kind: 'idle', remainingMs: defaultSeconds * 1000 },
 });
 
-/** The controlled display for the card's `Countdown` (rule 2 — derived, the
- * clock union IS the display shape; warm-up has no break variant, so the
+/** The controlled display for the card's `Countdown` (the clock union IS the
+ * display shape; warm-up has no break variant, so the
  * narrow union is what leaves here and the `Countdown` call site is where it
  * gets checked against `CountdownDisplayState`). */
 export const warmupDisplay = (state: WarmupState): WarmupClock => state.clock;
@@ -94,8 +90,8 @@ export interface WarmupCardState {
  * function of the channel.
  *
  * `clock.kind` alone is not enough, for the reason `laneCard` needs `armedMs`:
- * a stopped window is `idle` too, so a warm-up used down to 04:59 rendered
- * pixel-identical to a fresh 05:00 one but for the digits (audit S02). The
+ * a stopped window is `idle` too, so a warm-up used down to 04:59 would render
+ * like a fresh 05:00 one but for the digits (S02). The
  * distance to the armed default is what separates them.
  */
 export const warmupCardState = (state: WarmupState): WarmupCardState => {
@@ -116,7 +112,7 @@ export const warmupCardState = (state: WarmupState): WarmupCardState => {
  * machine state IS the snapshot source. Same canonical pre-send row the lanes
  * produce (`laneSnapshot`); `buildCountdownSnapshot` adjusts a running clock
  * for wall-clock elapsed at send, so a running clock hands over its target +
- * anchor unadjusted here. Still no `breaksLeft` — warm-up is an allowance-free
+ * anchor unadjusted here. No `breaksLeft` — warm-up is an allowance-free
  * channel — but it DOES carry `armedMs` (ADR 0046 §2, amended): the armed
  * default is what tells a joining audience surface a stopped window from a fresh
  * one, the same distance `warmupCardState` reads for the operator's
@@ -284,14 +280,11 @@ export const reduce = (state: WarmupState, event: WarmupEvent): WarmupResult => 
         return { state, effects: [] };
       }
       const w = countdownLaneState(row);
-      // The room owns the armed budget (ADR 0046 §2, the `laneFromSnapshot`
-      // rule one channel over): a joiner keeping its own `defaultSeconds` reads
-      // a HELD window as ARMED — `warmupCardState` separates the two by the
-      // distance to the default — and then re-arms the whole room to that
-      // default on its next RESET, which every peer applies as PEER_RESET. Rides
-      // every phase, because the joiner's next RESET does too. A pre-feature
-      // peer omits it and the local default stands (unlike a lane, this channel
-      // always holds one, so there is nothing to invent).
+      // The room owns the armed budget (ADR 0046 §2; the `LaneState` rule one
+      // channel over): a joiner keeping its own `defaultSeconds` would read a
+      // HELD window as ARMED and re-arm the room to that default on its next
+      // RESET. A pre-feature peer omits it and the local default stands (unlike
+      // a lane, this channel always holds one, so there is nothing to invent).
       const next =
         w.armedMs != null ? { ...state, defaultSeconds: w.armedMs / 1000 } : { ...state };
       if (w.isRunning) {
@@ -334,8 +327,7 @@ export const peerWarmupEvent = (message: CountdownWSMessage, at: number): Warmup
     case 'start_countdown':
       return {
         type: 'PEER_START',
-        // Prefer the shared wire anchor; a pre-feature sender omits it, so fall
-        // back to receipt — the old ~RTT-anchored behaviour.
+        // A pre-feature sender omits the wire anchor: fall back to receipt.
         startedAt: message.data.startedAt ?? at,
         remainingMs: message.data.remainingMs,
       };
@@ -348,12 +340,8 @@ export const peerWarmupEvent = (message: CountdownWSMessage, at: number): Warmup
   }
 };
 
-/**
- * `useReducer` adapter, byte-compatible with the other two machines' stores:
- * the pure `warmup` state plus a queue of pending `effects` for the page's
- * `useEffectDrain` (effects-as-data; `DRAIN` clears the queue after the edge
- * has performed it).
- */
+/** `useReducer` adapter, shaped like the other two machines' stores: the pure
+ * `warmup` state plus the pending-effects queue (see `effectStore.ts`). */
 export interface WarmupStore {
   warmup: WarmupState;
   effects: TimerEffect[];

@@ -1,6 +1,6 @@
 /**
  * Per-competition memory of the Freestyle board's last-chosen Quali/Battle mode
- * (the optional ADR 0036 follow-up): reopening the same comp's board restores
+ * (ADR 0036): reopening the same comp's board restores
  * the operator's last mode instead of defaulting. Keyed off `compId` (= the
  * relay sessionId), alongside the localStorage-backed `selectedCompetition` —
  * device-local operator convenience, never data-plane state.

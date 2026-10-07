@@ -1,9 +1,7 @@
-// Local WebSocket harness — an in-process stand-in for the deployed API Gateway
-// WebSocket relay. There is no local WebSocket emulator we rely on (LocalStack
-// WS + postToConnection needs the Pro license, ADR 0023, phase 2), so this
-// ~purpose-built server runs the REAL relay handlers (authorizer /
-// connectionHandler / messageHandler) against LocalStack DynamoDB, with no drift
-// from prod. It replicates:
+// Local WebSocket harness — an in-process stand-in for the API Gateway WebSocket
+// relay (LocalStack WS + postToConnection needs the Pro license, ADR 0023 phase
+// 2). Runs the REAL authorizer / connectionHandler / messageHandler against
+// LocalStack DynamoDB. It replicates:
 //
 //   - $connect    — query-param auth via the authorizer Lambda, then
 //                   connectionHandler writes the connection row.
@@ -14,9 +12,8 @@
 //     a gone connection answers 410 so the handler prunes it (matching real
 //     ApiGatewayManagementApi semantics).
 //
-// The three handlers are TypeScript with path-alias imports, so they are
-// bundled once with esbuild at startup and dynamic-imported — the same bundler
-// CDK's NodejsFunction uses, so what runs here is what ships.
+// The handlers are bundled once at startup with esbuild, the bundler CDK's
+// NodejsFunction uses.
 //
 // Bind address, Host and Origin checks: lib/harnessGuard.mjs. The Origin check
 // is what stops any website from opening ws://127.0.0.1:3001?Authorization=local-dev
@@ -149,15 +146,11 @@ const run = async () => {
 
   const wss = new WebSocketServer({ noServer: true });
 
-  // Authorize + register BEFORE completing the WS handshake, matching API
-  // Gateway's ordering: the $connect authorizer and connectionHandler finish
-  // before the client's socket ever reaches OPEN. Accepting first lets a
-  // message sent the instant the client opens — the preview's `request_state` —
-  // race the membership row and the message listener and get dropped (a race
-  // prod cannot have). A denied
-  // $connect, or a non-200 from connectionHandler, rejects the handshake
-  // outright (close-before-open) as API Gateway does, which is what the web's
-  // auth-denied detection expects (useWebSocket.tsx).
+  // Authorize + register BEFORE completing the handshake, as API Gateway does:
+  // accepting first lets a frame sent on open (`request_state`) race the
+  // membership row and get dropped, a race prod cannot have. A denied $connect
+  // or a non-200 from connectionHandler rejects the handshake (close-before-open),
+  // which the web's auth-denied detection expects (useWebSocket.tsx).
   const upgrade = async (req, socket, head) => {
     const rejected = rejectionStatus(req);
     if (rejected) {

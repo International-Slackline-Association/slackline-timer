@@ -1,13 +1,5 @@
-// Read-only audit of the timer's Cognito app client against the least-privilege
-// policy (appClientPolicy.mjs). Prints a pass/fail per check and exits non-zero
-// if any hard check fails — safe to wire into a periodic security check.
-//
-// Auth is your AWS CLI v2 session — see README.md.
-//
-// Usage:
-//   node scripts/cognito/verifyAppClient.mjs
-//   node scripts/cognito/verifyAppClient.mjs --client-id <id> --profile <profile>
-//   node scripts/cognito/verifyAppClient.mjs --json      # machine-readable
+// Read-only audit of the timer's Cognito app client against appClientPolicy.mjs;
+// exits non-zero on any hard failure. Auth: the AWS CLI v2 session (README.md).
 
 import { describeClient, evaluate, parseArgs, requireConfig, runMain } from './appClientPolicy.mjs';
 

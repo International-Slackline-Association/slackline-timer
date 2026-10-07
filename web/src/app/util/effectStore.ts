@@ -3,8 +3,8 @@
  * lanes, `bestTrickSeries`). Each store carries its pure domain state alongside a
  * queue of pending effects for the edge to drain (effects-as-data, so the
  * transition stays pure and the drain is order-independent even if several events
- * land before a render). These two helpers own the queue mechanics both reducers
- * used to inline; the machines stay separate — only the boilerplate is shared.
+ * land before a render). Only the queue mechanics are shared; the machines stay
+ * separate.
  *
  * Both preserve referential identity when nothing changes (an empty drain, a
  * no-effect transition), so an idle dispatch never forces a re-render or a

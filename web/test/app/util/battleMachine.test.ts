@@ -409,10 +409,10 @@ describe('battleMachine — armedMs + isPristine (the re-arm guard, ADR 0046)', 
   });
 
   it('PEER_SNAPSHOT hydrates a pristine room lane as pristine, not held', () => {
-    // The B2 regression: a joiner whose format default is 120s joins a room
-    // armed at 90s. While armedMs stayed local the hydrated 90s budget sat
-    // against a 120s armed value, so the lane read HELD — locking the joiner's
-    // format controls and making its Reset broadcast 120s back to the room.
+    // B2 (ADR 0046 §2): a joiner whose format default is 120s joins a room armed
+    // at 90s. With a local armedMs the hydrated 90s budget would sit against a
+    // 120s armed value and read HELD — locking the joiner's format controls and
+    // making its Reset broadcast 120s back to the room.
     const r = reduce(fresh(), {
       type: 'PEER_SNAPSHOT',
       at: 10_000,
@@ -935,9 +935,9 @@ describe('battleMachine — laneSnapshot (the request_state contribution)', () =
   });
 
   it('produces canonical control rows that feed buildCountdownSnapshot directly', () => {
-    // Locks the type unification (canonical-countdown-control-row-type): the
-    // reducer's laneSnapshot output IS the CountdownControlRow buildCountdownSnapshot
-    // consumes, so a running lane feeds the pre-send builder with no re-shaping.
+    // The reducer's laneSnapshot output IS the CountdownControlRow
+    // buildCountdownSnapshot consumes, so a running lane feeds the pre-send
+    // builder with no re-shaping.
     const snapshot = buildCountdownSnapshot({
       isPreviewEnabled: true,
       now: 500,
@@ -1028,8 +1028,8 @@ describe('battleMachine — peerBattleEvent (the wire → PEER_* table)', () => 
     peerBattleEvent({ ...message, sessionId: 's' } as CountdownWSMessage, 999);
 
   it('maps the five lane message types onto the peer events', () => {
-    // No wire `startedAt` ⇒ the anchor falls back to receipt (`at`), preserving
-    // the old ~RTT-anchored behaviour for a pre-feature sender.
+    // No wire `startedAt` ⇒ the anchor falls back to receipt (`at`): ~RTT-late,
+    // the best a sender without the field allows.
     expect(lane({ type: 'start_countdown', timerId: 1, data: { remainingMs: 5 } })).toEqual({
       type: 'PEER_START',
       lane: 1,
@@ -1069,8 +1069,8 @@ describe('battleMachine — peerBattleEvent (the wire → PEER_* table)', () => 
   });
 
   it('prefers the shared wire startedAt over receipt for start_countdown / start_break', () => {
-    // The convergence fix: when the wire carries a start epoch, every receiver
-    // anchors to it regardless of its own receipt time (`at`).
+    // When the wire carries a start epoch, every receiver anchors to it
+    // regardless of its own receipt time (`at`).
     expect(
       lane({ type: 'start_countdown', timerId: 1, data: { remainingMs: 5, startedAt: 4200 } }),
     ).toEqual({ type: 'PEER_START', lane: 1, startedAt: 4200, remainingMs: 5 });

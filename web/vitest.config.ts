@@ -5,7 +5,7 @@ import { defineConfig } from 'vitest/config';
 // `configLoader: 'native'`, which has no esbuild pre-bundle to guess it.
 import { TEST_TIMEOUT_MS } from './test/timeouts.ts';
 
-// Separate from vite.config.ts on purpose: tests don't need vite-plugin-checker
+// Separate from vite.config.ts: tests don't need vite-plugin-checker
 // (it runs tsc in a worker and fights the test runner). `resolve.tsconfigPaths`
 // keeps the `app/...` import alias working inside tests.
 //
@@ -21,8 +21,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./test/setup.ts'],
     include: ['test/**/*.{test,spec}.{ts,tsx}'],
-    // Raised off the 5s default for query-heavy suites; the ceiling only bites
-    // on a genuine hang, so healthy runs are unaffected. Paired with Testing
+    // Raised off the 5s default for query-heavy suites; paired with Testing
     // Library's own ceiling in ./test/timeouts.ts.
     testTimeout: TEST_TIMEOUT_MS,
     coverage: {

@@ -30,7 +30,7 @@ export const buzzButton = (index: number): { handset: number; color: BuzzColor }
 });
 
 /** Swatch per physical key colour. Matches the handset, not the palette, so it
- *  stays out of the tokens (a real-world-colour exemption in `noRawColour`). */
+ *  stays out of the tokens (a real-world-colour exemption in `noRawColour.test.ts`). */
 export const buzzSwatch: Record<BuzzColor, string> = {
   Red: '#e53935',
   Yellow: '#fdd835',
@@ -41,7 +41,7 @@ export const buzzSwatch: Record<BuzzColor, string> = {
 
 /**
  * The one hardware↔screen colour pair that actively misleads, said out loud on
- * every surface that lists the mapping (FREESTYLE_BOARD_UX §4.14): the handset's
+ * every surface that lists the mapping (freestyle-board-ux §4.14): the handset's
  * red key is the board's green control. Both boards start from red, so one
  * sentence serves both desks — a second copy is how the two would drift.
  */

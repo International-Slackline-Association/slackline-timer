@@ -1,9 +1,8 @@
 // Provision the athlete-photo bucket in the LocalStack container
 // (docker/docker-compose.yml → S3). Idempotent: an existing bucket is left
 // alone, the policy + CORS are re-applied. Mirrors the photos bucket in
-// infra/slackline-stack.ts at the level local dev needs — minus the OAC/signing
-// edge (no local analogue, the bucket is public-read offline; see
-// doc/dev/decisions.md 0023 §2). Wired into `npm run db:init` next to
+// infra/slackline-stack.ts minus the OAC/signing edge: the bucket is
+// public-read offline (ADR 0023 §2). Wired into `npm run db:init` next to
 // createLocalTables. See doc/dev/local-dev.md.
 
 import {

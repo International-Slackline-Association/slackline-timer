@@ -11,8 +11,7 @@ import { createApp } from '../../infra/app';
 // This test makes it self-enforcing: it synthesizes the REAL app and fails if a
 // synthesized stack has no live/planned ledger entry (a stack was added/renamed
 // without recording it), or if a RETAIN resource is missing from that entry's
-// `orphans` (a retained resource was added that a teardown would leak). So the
-// info the user must keep about each stack cannot silently drift as code changes.
+// `orphans` (a retained resource was added that a teardown would leak).
 
 interface Orphans {
   dynamodbTables: string[];
@@ -62,10 +61,9 @@ function retained(stack: Stack) {
   return { tables, buckets };
 }
 
-// Synthesized once at module scope, the same placement slackline-stack.test.ts
-// uses: `Template.fromStack` over all three stacks is the expensive part, and at
-// import time it sits outside vitest's per-test timeout. Inside the test body it
-// ran to ~3s alone but blew the 5s default under full-suite parallel load.
+// Synthesized once at module scope, outside vitest's per-test timeout:
+// `Template.fromStack` over all three stacks takes ~3s alone and blows the 5s
+// default under full-suite parallel load.
 const retainedByStack = new Map(stacks.map((s) => [s.stackName, retained(s)]));
 
 describe('decommission ledger (stacks.json) is complete', () => {

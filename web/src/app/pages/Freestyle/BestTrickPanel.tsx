@@ -36,7 +36,7 @@ interface Props {
   athleteNames: AdvanceNames;
   /**
    * The lane a run is live on, or null: best trick is the phase AFTER both
-   * turns, so a live run locks the whole panel (brief §4.7).
+   * turns, so a live run locks the whole panel (freestyle-board-ux §4.7).
    */
   runningLane: PlayerId | null;
   /** The cap the round defaults to (5 in the final, else 3) for the Begin button. */
@@ -172,7 +172,7 @@ export const BestTrickPanel = (props: Props) => {
     [series],
   );
 
-  // The interlock table (brief §4.7), shared by the buttons and the pad keys.
+  // The interlock table (§4.7), shared by the buttons and the pad keys.
   const locks = bestTrickLocks({ series, runningLane: props.runningLane });
 
   useGamepads(({ button }) => {
@@ -297,11 +297,10 @@ export const BestTrickPanel = (props: Props) => {
         paddingInline: BEST_TRICK_PAD_INLINE,
       }}
     >
-      {/* Settings and the two series-wide controls, off the try path: Reset
-          series and Leave best trick sit behind a dashed divider rather than
-          beside End try (the S03 finding — the one press with no undo was flush
-          against the loud one). Both still ≥44 px; the offset and the confirm
-          are their guard, not size. */}
+      {/* Settings and the two series-wide controls, off the try path: the
+          presses with no undo sit behind a dashed divider, never flush beside
+          End try (§9 S03). Both ≥44 px; the offset and the confirm are their
+          guard, not size. */}
       <Stack
         direction="row"
         spacing={2}

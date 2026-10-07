@@ -9,37 +9,21 @@ import { type Athlete } from 'app/types';
 import { colors, OVERLAY_NAME_STRIP } from 'app/theme/tokens';
 import { refVw } from 'app/util/overlayScale';
 
-// The flag uses the flag-icons **inline** treatment (`FlagRow variant="inline"`),
-// the same renderer as the bracket name plates — NOT the wide card-foot art
-// (`WideFlag`), which is drawn for the `AthleteCard` portrait foot and distorts
-// when stretched into this taller, narrower block. Sized to the FULL strip height
-// and flush to the left edge to match the delivered name-strip master; a
-// `country2` dual-nationality athlete abuts a second flag.
-
-// The display face's cap-height is ~0.72 of the em; the LAAX reference composite
-// sets the name caps at ~0.63 of the strip
-// height, centred with margin — the caps do NOT fill the plate. Size the font off
-// that cap-height target so the whole em box lands under the strip height: a
-// single centred line then sits fully inside the plate and the strip's
-// overflow:hidden clips only horizontally (long family names), never shearing the
-// caps off the frame bottom the way the old 1.25× em overshoot did.
+// The masters set the name caps at ~0.63 of the strip height (they do NOT fill
+// the plate); sized off the display face's ~0.72em cap height, the whole em box
+// lands under the strip height, so overflow:hidden clips only horizontally.
 const CAP_HEIGHT_RATIO = 0.72;
 const NAME_SIZE_FACTOR = 0.63 / CAP_HEIGHT_RATIO;
 
 /**
- * The LAAX single-athlete **name lower-third** (measured off the `Names_*.png`
- * and name-strip masters — provenance labels for the client-delivered LAAX 2026
- * art, not files in this repo; the measurement record is
- * `doc/dev/design-system/design-system.md` §7 "Athlete card & name strip"):
- * a horizontal strip — the national flag(s) at the left, then
- * the name split bold-first / light-last (`AthleteName`). No photo. The SVO
- * overlays now render the full photo card (`Competitor`); this strip lives on as
- * the timer lower-thirds' compact lane banner (`TimerLaneBlock`) and in the admin
- * `AthleteForm` broadcast preview.
+ * The LAAX single-athlete **name lower-third** (measured off the client's
+ * `Names_*.png` / name-strip masters, not part of this repo; see design-system
+ * §7 "Athlete card & name strip"): flag(s) at the left, then the `AthleteName`
+ * split, on a filled plate. Used as the timer lower-thirds' lane banner
+ * (`TimerLaneBlock`) and in the admin `AthleteForm` broadcast preview.
  *
- * Drawn as a filled overlay plate (`overlay.plateFilled` + `overlay.nameInk`) so
- * the caps stay legible over any footage. An optional `result` (best time /
- * judged overall) renders in the monospace face at the strip's right.
+ * The flag is the flag-icons inline treatment (`FlagRow variant="inline"`), not
+ * `WideFlag`: the card-foot art distorts in this taller, narrower block.
  */
 export const AthleteNameStrip = ({
   athlete,
@@ -51,24 +35,20 @@ export const AthleteNameStrip = ({
   result?: string;
   /** Strip height as a CSS length; fonts + flag + insets all derive from it.
    * The default is the native px the admin broadcast preview draws; the timer
-   * lower-thirds pass a frame-relative `refVh` so the banner scales with the
-   * capture. */
+   * lower-thirds pass a frame-relative `refVh`. */
   height?: string;
-  /** Fixed strip width, or `'fit'` to hug the content (the timertimer
-   * scoreboard treatment) up to a shrink-to-fit ceiling. A number is px. */
+  /** Fixed strip width, or `'fit'` to hug the content up to a shrink-to-fit
+   * ceiling. A number is px. */
   width?: number | 'fit' | string;
 }) => {
   const { slotRef, nameRef, fit } = useFitToWidth();
-  // Every metric below is a fraction of the strip height, so one number drives
-  // the whole strip whatever unit the caller authored it in (the `calc` house
-  // pattern — Countdown's name tier does the same off its size token).
+  // Every metric is a fraction of the strip height, whatever unit it came in.
   const scaled = (factor: number): string => `calc(${height} * ${factor})`;
   const nameFontSize = scaled(NAME_SIZE_FACTOR);
-  // Keep the g2 name:result size ratio (~0.7) so the numeral scales with the name.
+  // Name:result size ratio ~0.7, so the numeral scales with the name.
   const resultFontSize = scaled(NAME_SIZE_FACTOR * 0.7);
-  // The ref's ~2.3%-of-canvas inset (16.5px on the 720 strip), scaled off the
-  // height so a compact strip keeps the proportion. A length, not %, so a
-  // fit-content strip doesn't resolve the inset against its containing block.
+  // The ref's 16.5px inset on the 92-tall strip. A length, not %, so a
+  // fit-content strip doesn't resolve it against its containing block.
   const inset = scaled(0.18);
   return (
     <Plate
@@ -89,9 +69,6 @@ export const AthleteNameStrip = ({
         gap: inset,
       }}
     >
-      {/* National flag(s) at the left — the flag-icons inline treatment shared with
-          the bracket name plates (`FlagRow variant="inline"`); a `country2`
-          dual-nationality athlete abuts a second flag. */}
       <FlagRow
         athlete={athlete}
         variant="inline"

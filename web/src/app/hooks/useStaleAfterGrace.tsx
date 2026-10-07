@@ -11,8 +11,8 @@ export const GRACE_MS = 5_000;
  * past `GRACE_MS` (so a routine token-refresh / keepalive reconnect blip never
  * trips it) and clears the instant the socket reopens.
  *
- * Shared by `ConnectionLostBadge` (the corner overlay indicator) and the H2R
- * bridge status panel so both read the same staleness.
+ * Read by `useLinkPhase` (every page's link grader) and the H2R bridge status
+ * panel, so all read the same staleness.
  */
 export const useStaleAfterGrace = (readyState: ReadyState): boolean => {
   const isOpen = readyState === ReadyState.OPEN;

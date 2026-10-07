@@ -27,8 +27,9 @@ import { formatClock } from 'app/util/time';
  * is spent on first (`boardGeometry.freestyle.cardFloor` — at the 1280 px desk
  * it leaves 2 px), up to the desk's own 16 px. It is read off the card's own
  * width, not the viewport — the 560 px quali card and the 260 px battle lane
- * are the same component on the same desk. Exported because jsdom parses no `clamp()` into
- * computed padding, so the test holds it against the floor the DOM reports.
+ * are the same component on the same desk. Exported because jsdom parses no
+ * `clamp()` into computed padding, so the test holds it against the floor the
+ * DOM reports.
  */
 export const LANE_CARD_PAD_INLINE = `clamp(0px, (100% - ${boardGeometry.freestyle.cardFloor}px) / 2, 16px)`;
 
@@ -70,7 +71,7 @@ interface Props {
   runningLane: PlayerId | null;
   /**
    * A best-trick series is armed: the run board is spent for this match, so
-   * the whole lane transport goes inert (brief §4.7), Reset included — the
+   * the whole lane transport goes inert (freestyle-board-ux §4.7), Reset included — the
    * lanes are re-armed after Leave best trick, never behind the tries.
    */
   bestTrickArmed: boolean;
@@ -139,7 +140,7 @@ export const CountdownControl = (props: Props) => {
   // lane that took a turn never reads as one still armed.
   const card = laneCardState(props.lane);
 
-  // The interlock table (brief §4.7): both the buttons below and the handset
+  // The interlock table (§4.7): both the buttons below and the handset
   // keys read it, so the two are inert at exactly the same instants.
   const locks = laneLocks({
     id: props.id,
@@ -238,10 +239,9 @@ export const CountdownControl = (props: Props) => {
         paddingInline: LANE_CARD_PAD_INLINE,
       }}
     >
-      {/* Who this card belongs to, on ONE row — §2's `PLAYER 1  Bianchi`. Two
-          stacked rows at heading scale spent ~56 px of card height on a label
-          that never changes, and that height was what pushed Start/Stop below
-          the desk's fold on a 900 px screen. */}
+      {/* Who this card belongs to, on ONE row — §2's `PLAYER 1  Bianchi`: a
+          second row for a label that never changes drops Start/Stop below the
+          desk's fold on a 900 px screen. */}
       <Stack
         direction="row"
         data-testid="lane-identity"
@@ -260,7 +260,7 @@ export const CountdownControl = (props: Props) => {
           {props.name || NBSP}
         </Typography>
         {/* The peer cue rides the identity row rather than reserving one of its
-            own — the selection panel's precedent (fsux-desk-fold-budget). The
+            own (the selection panel's precedent). The
             row is already ≥ the chip's 24 px, so §4.12 holds: a peer's Start
             never moves the transport, it only ellipsises the name for 2 s. */}
         {peerApplied && (
@@ -283,26 +283,20 @@ export const CountdownControl = (props: Props) => {
         expiredLabel="TIME"
         held={card.tier === 'held'}
       />
-      {/* The live-path control contract (brief §6): Start and Stop are the 56 ×
-          120 race pair in their own state colour — Start takes the contained
-          `go` fill ONLY as the ADVANCE target, so exactly one lane on the board
-          is ever the loud one — the aux slot is the green handset's on-screen
-          twin, and Reset is the neutral 44 px control, offset behind a dashed
-          divider rather than sitting flush beside Stop (the S03 finding: the
-          two were adjacent, and Reset is the one press with no undo).
+      {/* The live-path control contract (§6): Start and Stop are the 56 × 120
+          race pair in their own state colour — Start takes the contained `go`
+          fill ONLY as the ADVANCE target, so exactly one lane on the board is
+          ever the loud one.
 
-          The pair splits the card in two equal tracks rather than standing as
-          a centred island at its reserve width: the same row renders in a
-          256 px battle lane and a 560 px quali card, and the 120 px reserve
-          plus the 16 px gutter spends that battle lane exactly — leaving
-          nothing for the card padding still to come. A `1fr` track never
-          shrinks past its content, so the reserve stays the floor.
+          Two equal tracks, not a centred island at the reserve width: the same
+          row renders in a 256 px battle lane and a 560 px quali card, and the
+          120 px reserve plus the 16 px gutter spends that battle lane exactly.
+          A `1fr` track never shrinks past its content, so the reserve stays the
+          floor.
 
-          The transport buttons carry a per-lane accessible name ("Start Athlete
-          2"): the battle board renders two of these blocks plus the warm-up
-          strip's own Start/Stop/Reset, so the bare visible label is ambiguous
-          to a screen reader — and to a test, which then has to address a lane
-          by DOM position. */}
+          Per-lane accessible names ("Start Athlete 2"): the board renders two
+          of these blocks plus the warm-up strip's own Start/Stop/Reset, so the
+          bare visible label is ambiguous to a screen reader and to a test. */}
       <Box
         data-testid="lane-transport"
         sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, width: '100%' }}
@@ -338,15 +332,10 @@ export const CountdownControl = (props: Props) => {
           44 px control in the same place. End turn IS the Stop event — the
           manual's battle word for it (a turn ends on a fall or on the clock).
 
-          Reset shares the row, held off behind the dashed divider that is the
-          S03 guard (§6): Reset is the one press with no undo, so what it may
-          never be is flush beside Stop. A row of its own said the same thing
-          and cost the card 52 px — the row that put the aux control itself
-          under a 720 px fold and left the battle desk 2 px of margin at
-          1440x900 (`freestyle-compact-run-tab-fold`, `fsux-battle-fold-margin`).
-          The divider turned on its side keeps the offset and the gutter; the
-          DOM order (aux, then Reset) keeps the tab run Start → Stop → aux →
-          Reset. */}
+          Reset, the one press with no undo, shares the row behind the dashed
+          divider — never flush beside Stop (§9 S03); a row of its own costs
+          the card the fold (Iteration 4 F3). DOM order (aux, then Reset) keeps
+          the tab run Start → Stop → aux → Reset. */}
       <Stack
         direction="row"
         data-testid="lane-aux-row"

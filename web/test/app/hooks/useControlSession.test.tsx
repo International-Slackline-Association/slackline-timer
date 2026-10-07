@@ -310,7 +310,7 @@ describe('useControlSession', () => {
     // deps, which can flip a default push in the window before the room's own
     // selection re-applies. Sending updateSelection first means the room's
     // selection lands ahead of the snapshot, so that window never opens (the
-    // round-12 Lamport stamp keeps it harmless regardless).
+    // Lamport stamp keeps it harmless regardless).
     const { rerender } = renderHook(() => useControlSession(baseParams()));
 
     senderSend.mockClear();
@@ -748,10 +748,10 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
   });
 
   it('claims fresh authority for a local edit already on screen when a peer selection lands', () => {
-    // The commit window is not intent: a peer frame landing in the render the
-    // operator acted in used to consume the forward, so the LOCAL edit went out
-    // as a re-statement — and a re-statement loses every tie by design, so every
-    // peer dropped it (`fs best-trick: B's tally consumes the try`). The
+    // The commit window is not intent: if a peer frame landing in the render the
+    // operator acted in consumed the forward, the LOCAL edit would go out as a
+    // re-statement — which loses every tie, so every peer drops it
+    // (`fs best-trick: B's tally consumes the try`). The
     // adoption can only land a commit later, so a change already on screen when
     // the frame arrives is this operator's, and mints its own authority. Frames
     // commit on their own (ADR 0051), so the edit's commit always precedes the
@@ -862,12 +862,11 @@ describe('useControlSession peer mirroring (ADR 0038)', () => {
 });
 
 /**
- * Both sender-id orders, because the equal-`seq` tiebreak used to END here: a
- * mirror's echo can only tie the panel that authored the value, and the tie fell
- * to `senderId` — two `crypto.randomUUID()`s minted per mount. Which panel won
- * was a coin flip fixed for the life of the room, so every case below had a
- * 50 % chance of being asserted in its passing order. The order is a test
- * dimension now, and no case may depend on which id sorts higher.
+ * Both sender-id orders: a mirror's echo can only tie the panel that authored
+ * the value, and were the tie to fall to `senderId` — two `crypto.randomUUID()`s
+ * minted per mount — the winner would be a coin flip fixed for the life of the
+ * room, and a single-order case would pass half the time. No case may depend
+ * on which id sorts higher.
  */
 describe.each([
   { order: 'actor id low', idA: 'panel-a', idB: 'panel-z' },
@@ -971,7 +970,7 @@ describe.each([
 
   /** An operator edit and a peer frame back to back: the edit's commit, then the
    * frame's — the closest the per-frame receive path (ADR 0051) lets them get,
-   * and the window the stamp forward used to be armed by, regardless of intent. */
+   * and a window that must not arm the stamp forward. */
   const collide = (panel: PanelSim, patch: Partial<FreestyleSelection>, message: unknown) => {
     localEdit(panel, patch);
     deliver(panel, message);
@@ -1014,10 +1013,10 @@ describe.each([
     // The `fs peer-match` driver leg: panel A leaves match m1, and its board
     // retracts the best-trick series that belonged to it a beat later — two
     // pushes inside one round trip. B mirrors the match but rebuilds its own
-    // `bestTrick` view, so its adoption diverges and re-pushes; that echo used
-    // to carry a fresher wall-clock stamp than A's retraction, which B then
-    // dropped — leaving the mirror armed on the series of the match it had just
-    // left, and re-arming A off the echo.
+    // `bestTrick` view, so its adoption diverges and re-pushes; an echo carrying
+    // a fresher wall-clock stamp than A's retraction makes B drop it — leaving
+    // the mirror armed on the series of the match it had just left, and
+    // re-arming A off the echo.
     const tally = { cap: 3, tries: { 1: 1, 2: 0 }, clockRunning: false, rev: 0 };
     const a = makePanel(idA);
     const b = makePanel(idB, (sel) => ({
@@ -1057,8 +1056,8 @@ describe.each([
     // while B's own try clock is still running, so B's adoption REBUILDS
     // `clockRunning` and its re-push diverges permanently from the value it
     // adopted — an echo crossing A's follow-up, once per frame. The echo can
-    // only tie A, and whether a tie outranked A's own authorship used to be the
-    // coin flip: this leg is red in the order where B's id sorts higher.
+    // only tie A, and a tie must never outrank A's own authorship: decided by
+    // `senderId`, this leg is red in the order where B's id sorts higher.
     const running = { cap: 3, tries: { 1: 2, 2: 1 }, turn: 1, clockRunning: true, rev: 0 } as const;
     const cleared = {
       cap: 3,

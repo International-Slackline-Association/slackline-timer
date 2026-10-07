@@ -1,11 +1,9 @@
 /**
- * One lane card's state word and visual tier (FREESTYLE_BOARD_UX §3/§6).
+ * One lane card's state word and visual tier (freestyle-board-ux §3/§6).
  *
- * The reducer already knows everything the operator needs; the board said none
- * of it (audit S02 — lane state was hue-only, and a lane that had taken a turn
- * was pixel-identical to one that had not). This is the missing derivation, in
- * one pure place so the card word, the card frame and the state hue cannot
- * disagree.
+ * Lane state must not be hue-only, and a lane that has taken a turn must not
+ * look like one that has not (S02). One pure derivation, so the card word, the
+ * card frame and the state hue cannot disagree.
  *
  * The one non-obvious row is **held**: a fall leaves the lane `idle` again, so
  * `phase` alone cannot tell "armed and waiting" from "ran, and holds what is

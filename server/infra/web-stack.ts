@@ -24,10 +24,10 @@ import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
-// Security review M6, slice 1. The enforced CSP carries only directives that need
-// no deployment origins; the full policy is in Report-Only until the build-time
-// meta CSP (slice 2) enforces exact origins. No surface is framed: OBS / vMix
-// browser sources load overlays top-level.
+// Header CSP: only directives that need no deployment origins. The exact-origin
+// policy is the build-time meta CSP (ADR 0054); frame-ancestors works only as a
+// header. No surface is framed: OBS / vMix browser sources load overlays
+// top-level.
 export const WEB_CSP_ENFORCED = [
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -57,20 +57,15 @@ export interface SlacklineTimerV1WebStackProps extends StackProps {
 }
 
 /**
- * The web frontend hosting: a private S3 bucket served through CloudFront (OAC),
- * its own stack in eu-central-1 (the backend runs in eu-central-2 — see
- * infra/app.ts). `vite build` output is synced to the bucket by
- * web/internals/deployToS3.mjs; SPA deep links (403/404) rewrite to /index.html
- * so react-router handles them client-side.
+ * Private S3 bucket behind CloudFront (OAC), eu-central-1. Synced by
+ * web/internals/deployToS3.mjs.
  */
 export class SlacklineTimerV1WebStack extends Stack {
   constructor(scope: Construct, id: string, props: SlacklineTimerV1WebStackProps) {
     super(scope, id, props);
     const { stage } = props;
 
-    // Default-OFF WAF attach point (ADR 0031 §5): ops passes the us-east-1
-    // CLOUDFRONT WebACL ARN at deploy time. Empty keeps no WAF association.
-    // Full enable flow is centralized in infra/waf.ts + doc/dev/deploy.md §6.3.
+    // Default-OFF WAF attach point (ADR 0031 §5). Runbook: doc/dev/deploy.md §6.3.
     const wafWebAclArn = new CfnParameter(this, 'WafWebAclArn', {
       type: 'String',
       default: '',
@@ -89,7 +84,7 @@ export class SlacklineTimerV1WebStack extends Stack {
       bucketName: `slackline-timer-v1-ui-${stage}`,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
-      // Build artifacts are rebuildable, so destroy should remove the bucket too.
+      // Rebuildable build output: destroy removes the bucket too.
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });

@@ -340,8 +340,8 @@ describe('buildCountdownSnapshot — armedMs (the room’s armed budget)', () =>
       isPreviewEnabled: true,
       now: 108_000,
       timers: [
-        // Idle at its armed budget (pristine) — the case that used to make a
-        // joiner misread the lane as held and re-arm the room wrong (ADR 0046).
+        // Idle at its armed budget (pristine) — without `armedMs` a joiner
+        // misreads the lane as held and re-arms the room wrong (ADR 0046 §2).
         { timerId: 1, lastRemainingMs: 90_000, isRunning: false, startedAt: null, armedMs: 90_000 },
         // Running: `remainingMs` is spent-down, `armedMs` is what a Reset restores.
         {

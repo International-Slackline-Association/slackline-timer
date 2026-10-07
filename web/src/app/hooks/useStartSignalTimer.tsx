@@ -24,9 +24,8 @@ export type SignalPhase = 'idle' | 'armed' | 'set1' | 'set2' | 'go' | 'cleared';
 export const PRE_BEEP_PHASE = 0.5;
 
 // Each phase maps to the numeric `currentSignalPhase` the previews, the beep
-// contract, the reset guard and the light housing already consume, so the wire
-// (`updateSignalPhase.currentPhase`) and every surface stay on the same values —
-// the named union is an internal remodel, not a protocol change.
+// contract, the reset guard and the light housing consume — the values the wire
+// carries as `updateSignalPhase.currentPhase`; the named union is local only.
 const PHASE_SIGNAL_VALUE: Record<SignalPhase, number> = {
   idle: 0,
   armed: PRE_BEEP_PHASE,
@@ -52,9 +51,8 @@ export const GO_OFFSET_MS = PRE_BEEP_GAP_MS + 2 * LIGHT_STEP_MS;
 // The wall-clock schedule: each phase's offset from the anchor epoch stored when
 // the sequence arms. Transitions are derived from Date.now() - anchor, so a
 // throttled/backgrounded tab that fires a timer late snaps to the correct phase
-// instead of drifting the race-start edge (the ADR 0021 / countdown wall-clock
-// anchoring discipline the rest of the app follows). `armed` at +0, the 2-1-GO
-// run one second apart, `cleared` one second after GO.
+// instead of drifting the race-start edge (ADR 0021). `armed` at +0, the
+// 2-1-GO run one second apart, `cleared` one second after GO.
 const PHASE_SCHEDULE: readonly { readonly phase: SignalPhase; readonly atMs: number }[] = [
   { phase: 'armed', atMs: 0 },
   { phase: 'set1', atMs: PRE_BEEP_GAP_MS },

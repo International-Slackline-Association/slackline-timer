@@ -22,16 +22,11 @@ import { streamStatusFromQueries } from 'app/pages/Stream/streamStatus';
  *
  * The winner is `Match.winnerId` — the single resolved output of both the
  * single-run path (ADR 0013) and best-of-3 (ADR 0017: `winnerId` is PUT only
- * once a lane takes 2 run-wins). So this overlay needs no series-tally on the
- * wire — it consumes the same persisted field VS already reads, keyed by the
- * board's live match. The running-series story (1-0 → 1-1 → …) is the sibling
- * `RoundsSummaryOverlay`'s job, not this one.
+ * once a lane takes 2 run-wins), so no series tally is needed on the wire; the
+ * running series is `RoundsSummaryOverlay`'s job.
  *
- * Which match: the same precedence as VS — explicit `&match=` > the board's live
- * `selection.matchId` (when it names a match in this round) > the first
- * winner-less match by bracket position. Fail-safe: until that match has a
- * `winnerId`, the overlay reports `empty` and paints nothing — correct on-air
- * behaviour while a series is still live (no winner until it's decided).
+ * Which match: `pickMatch`, as VS. Until that match has a `winnerId` the overlay
+ * reports `empty` and paints nothing.
  */
 export const WinnerOverlay = () => {
   const { round, gender } = useParams();

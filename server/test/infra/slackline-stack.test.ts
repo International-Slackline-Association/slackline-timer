@@ -255,9 +255,8 @@ describe('Lambdas', () => {
     }
   });
 
-  // The runtime is a maintenance liability, not just a config value: an
-  // unnoticed EOL version keeps deploying green while going unpatched (nodejs20
-  // sat here past its end-of-life). Pin it so the bump is a deliberate edit.
+  // An EOL runtime keeps deploying green while going unpatched; pinned so every
+  // bump is an explicit edit here.
   it('runs every function on the same supported Node runtime', () => {
     for (const [id, fn] of Object.entries(template.findResources('AWS::Lambda::Function'))) {
       expect(fn.Properties.Runtime, id).toBe('nodejs24.x');
@@ -424,10 +423,8 @@ describe('Lambdas', () => {
     expect(doc).not.toContain('execute-api:ManageConnections');
   });
 
-  // ADR 0031 §3 reserved-concurrency caps, applied now that eu-central-2 is at the
-  // standard 1000 pool: authorizers 50, the relay messageHandler 100 (its own
-  // larger cap after HWC 2026 — see the stack), the 5 entity writers 25, everything
-  // else unreserved. Sum = 2×50 + 100 + 5×25 = 325, leaving 675 free.
+  // ADR 0031 §3 (messageHandler's larger cap: see the stack). Sum = 2×50 + 100 +
+  // 5×25 = 325 of eu-central-2's 1000 pool, leaving 675 unreserved.
   it('applies ADR 0031 §3 reserved-concurrency caps (authorizers 50, messageHandler 100, writers 25)', () => {
     const fns = template.findResources('AWS::Lambda::Function');
     const reservedFor = (idBase: string): number | undefined => {
@@ -479,7 +476,7 @@ describe('WebSocket relay', () => {
     });
   });
 
-  // ADR 0031 §2 (resized 2026-07-23) — the WS stage bucket also meters the
+  // ADR 0031 §2: the WS stage bucket also meters the
   // outbound PostToConnection fan-out, so it must clear fanout-N posts per
   // relayed message (HWC 2026 measured ~300 posts/s peak, ~2000 burst on an
   // overlay mass-reconnect), while staying under the 2500 rps account cap.
@@ -515,7 +512,7 @@ describe('HTTP data plane', () => {
     });
   });
 
-  // ADR 0031 §2 — the stage default now meters only requests matching no route;
+  // ADR 0031 §2: the stage default meters only requests matching no route;
   // every route carries its own bucket (below).
   it('throttles the default stage at 20 rps / 40 burst', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
@@ -548,8 +545,8 @@ describe('HTTP data plane', () => {
       ([, r]) => !String(r.Properties.RouteKey).startsWith('$'),
     );
 
-  // M1: per-route buckets so an overlay-read flood cannot drain the writes. The
-  // numbers are pinned literally; re-sizing them is a deliberate test edit.
+  // Security review M1: per-route buckets so an overlay-read flood cannot drain
+  // the writes. Numbers pinned literally: a re-size is a test edit too.
   it('throttles every route by class (write 10/20, read 30/60, roster 5/10, admin 2/5)', () => {
     const C = '/competitions';
     const WRITE = { ThrottlingRateLimit: 10, ThrottlingBurstLimit: 20 };

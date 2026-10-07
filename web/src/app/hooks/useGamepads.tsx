@@ -89,8 +89,8 @@ export const useGamepads = (onPress: GamepadPressHandler): void => {
             if (gamepad.index === selectedIndexRef.current) {
               seqRef.current += 1;
               const press = { button: i, seq: seqRef.current, at: pressEpoch(gamepad, now) };
-              // The commit between presses is the point (see the JSDoc); at most a
-              // handful per frame, only on a press.
+              // One commit per press (see the JSDoc); at most a handful per
+              // frame, only on a press.
               // eslint-disable-next-line @eslint-react/dom-no-flush-sync
               flushSync(() => onPressRef.current(press));
             }

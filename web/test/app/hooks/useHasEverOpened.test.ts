@@ -19,8 +19,8 @@ describe('useHasEverOpened', () => {
   });
 
   it('stays latched once the link drops', () => {
-    // The whole point: after a drop the socket reads exactly like a first
-    // handshake, and only this flag tells the two apart.
+    // After a drop the socket reads exactly like a first handshake; only this
+    // flag tells the two apart.
     const { result, rerender } = renderHook(({ rs }) => useHasEverOpened(rs), {
       initialProps: { rs: ReadyState.OPEN },
     });

@@ -33,9 +33,8 @@ const MODE_TOOLTIP =
 
 /**
  * Step 1 of the board: pre-run configuration, at the head of the desk's left
- * rail. The mode stays visible on the desk; the longer setup/config surface now
- * sits behind an explicit dialog so the live board can stay shorter without
- * losing access to the exact same controls.
+ * rail. The mode stays visible on the desk; the rest of the setup sits behind
+ * an explicit dialog so the live board stays short.
  */
 export const FreestyleSetupPanel = ({
   sessionId,
@@ -65,7 +64,7 @@ export const FreestyleSetupPanel = ({
   holdsState: boolean;
   blocker: string | null;
   /** The same reading, gated on `boardLive` — the two second fields are drafts,
-   * so only a ticking clock may hold them (§4.5). Handing them `blocker`
+   * so only a ticking clock may hold them (freestyle-board-ux §4.5). Handing them `blocker`
    * unchanged would print a held lane's "Reset Athlete 1 first" under a field
    * that is still editable, since `boardLive ⇒ boardHoldsState` is strict. */
   liveBlocker: string | null;

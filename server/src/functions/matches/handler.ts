@@ -34,8 +34,8 @@ import {
 import { validateMatchInput } from 'core/validators';
 
 /**
- * Match CRUD (mirrors timertimer's MatchLive). Editing gender/round rewrites
- * the sort key → transactional delete+put. Athlete slots are validated to
+ * Match CRUD (mirrors timertimer's MatchLive). Editing discipline/gender/round
+ * rewrites the sort key → transactional delete+put. Athlete slots are validated to
  * exist when set.
  */
 export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = async (event) => {

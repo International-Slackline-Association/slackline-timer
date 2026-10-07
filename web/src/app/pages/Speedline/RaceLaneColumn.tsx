@@ -69,10 +69,8 @@ const LaneTimeEdit = ({
       disabled={isDnf}
       error={invalid}
       placeholder="M:SS.hh"
-      // The format lives in the placeholder while the value is good: a helper
-      // line under every lane costs ~20 px of the 720 px desk's fold budget for
-      // a hint the field is already showing back. It comes out for the two
-      // states that have something to SAY.
+      // Helper text only on error/DNF: a standing format hint would cost
+      // ~20 px of the 720 px fold for what the placeholder already says.
       helperText={
         isDnf ? (
           <>
@@ -117,15 +115,12 @@ interface Props {
  * its false-start flag, and the chip that says whether the time reached the
  * server.
  *
- * The recording controls sit IN the lane rather than in a rail below the board
- * (`speedline-desk-layout`): the operator reads a stop and its save as one
- * event, and the board's two identical columns are only telling apart by what
- * stands inside them. Everything here is lane-scoped by construction — the
- * cross-lane surface (round/gender/match, Swap, the series, the false-start
- * advisory) is the recording rail's, `RaceRecorderControls`.
+ * The recording controls sit IN the lane: the operator reads a stop and its
+ * save as one event. Everything here is lane-scoped — the cross-lane surface
+ * (round/gender/match, Swap, the series, the false-start advisory) is the
+ * recording rail's, `RaceRecorderControls`.
  *
- * The order is a fold contract (`speedline-lane-post-stop-layout-shift`):
- * everything down to and including the race pair (False start / Lane n DNF) is
+ * The order is a fold contract: everything down to and including the race pair (False start / Lane n DNF) is
  * always present or height-reserved, so a stop cannot move the pair under a
  * hand already reaching for it. What the run PRODUCES — the 2nd-FS caption, a
  * failed save's Retry, the correction field, the re-attribution — sits below
@@ -163,15 +158,14 @@ export const RaceLaneColumn = ({
   const athleteName = (id?: string): string =>
     (id && athletes.find((a) => a.athleteId === id)?.name) || 'TBD';
 
-  // The cascading option pool (ADR 0042): the
-  // selected match narrows the lane to its two athletes, else gender narrows.
+  // The cascading option pool (ADR 0042): the selected match narrows the lane
+  // to its two athletes, else gender narrows.
   const selectedMatch = matches.data?.find((m) => m.matchId === selectedMatchId);
 
   const feedback = laneFeedback[lane];
   const saved = feedback?.saved;
   // A save still bound to the athlete it was POSTed under after the lane was
-  // re-picked (`speedline-wrong-athlete-reattribute`). The chip then names that
-  // athlete rather than implying the time belongs to whoever is on the lane now.
+  // re-picked: the chip names that athlete, not whoever is on the lane now.
   const boundElsewhere =
     saved !== undefined &&
     Boolean(laneAthletes[lane]) &&
@@ -198,14 +192,11 @@ export const RaceLaneColumn = ({
         name={laneName(laneAthletes[lane], athletes)}
       />
 
-      {/* The undo of the Stop directly under it — the operator reads the
-          mis-press and its recovery as one event. Neutral, not a race tone: it
-          un-does, it does not drive the race. Standing in every state (per the
-          fold contract above), it carries its reason instead of vanishing:
-          "Lane n is not stopped" before, "run has resolved" after — printed in
-          a slot reserved while Resume is live, so the picker and the race pair
-          hold still as the window opens and closes. No handset key reaches it
-          — see the pad handler on the ControlPage. */}
+      {/* The Stop's undo, directly under it. Neutral tone: it un-does, it does
+          not drive the race. Standing in every state (the fold contract), it
+          carries its reason instead of vanishing, in a slot reserved while
+          Resume is live, so the picker and the race pair hold still as the
+          window opens and closes. No handset key reaches it (ControlPage). */}
       <LockedControl reason={resumeLock}>
         <RaceButton tone="neutral" disabled={resumeLock !== null} onClick={onResume}>
           Resume Lane {lane}
@@ -225,17 +216,15 @@ export const RaceLaneColumn = ({
       />
 
       {/* The lane's state in one strip — attempts left, jumps flagged, whether
-          the result reached the server. Three chips on their own rows cost
-          ~60 px of a 720 px desk's fold budget to say three short things that
-          belong together, and the operator reads them as one answer anyway. */}
+          the result reached the server: three rows would cost ~60 px of the
+          720 px fold. */}
       <Stack
         data-testid={`lane-${lane}-status`}
         direction="row"
         spacing={0.5}
         useFlexGap
-        // One small chip tall whether or not a chip stands in it — the Saved
-        // chip lands mid-run, and a row that grew to receive it would move the
-        // race pair below.
+        // One chip tall even when empty: the Saved chip lands mid-run, and a
+        // row that grew to receive it would move the race pair below.
         sx={{ flexWrap: 'wrap', justifyContent: 'center', minHeight: space.unit * 3 }}
       >
         {/* Rule S5: qualification is two attempts per athlete. Badge the
@@ -260,10 +249,9 @@ export const RaceLaneColumn = ({
         {statusChip()}
       </Stack>
       {/* Per-lane false-start flag (rules S2–S4) — always armed: a jump can be
-          reviewed on video after the run, so unlike Abort Start it is not
-          phase-gated. A mis-tap undoes via the chip's clear. The label is spelt
-          out: "FS" is the app's Freestyle shorthand everywhere else, and the
-          abbreviated pair wrapped its row in the lane column besides. */}
+          reviewed on video after the run, so it is not phase-gated. A mis-tap
+          undoes via the chip's clear. Spelt out: "FS" is the app's Freestyle
+          shorthand everywhere else. */}
       <RaceButton tone="dnf" onClick={onFlagFs} sx={{ whiteSpace: 'nowrap' }}>
         False start · Lane {lane}
       </RaceButton>
@@ -310,9 +298,8 @@ export const RaceLaneColumn = ({
           onCommit={(ms) => editLaneTime(lane, ms)}
         />
       )}
-      {/* The recovery for a result recorded against the wrong person: one tap,
-          and explicit — a re-pick may be exploratory, so nothing moves until
-          the operator says to (rejected: auto-move on pick, silent clear). */}
+      {/* Re-attribution of a result recorded against the wrong person: one
+          explicit tap — a re-pick may be exploratory, so nothing moves on pick. */}
       {boundElsewhere && (
         <RaceButton tone="save" onClick={() => moveTime(lane)}>
           Move time to {athleteName(laneAthletes[lane])}

@@ -98,10 +98,10 @@ describe('SpeedlineTimerDisplay relay session', () => {
 });
 
 describe('SpeedlineTimerDisplay state recovery', () => {
-  // Regression (preview-falsestart-text-recovery): a projector that joins AFTER a
-  // false start fires misses the live `updateText`, so its only route to the
-  // "FALSE START" callout is the `request_state` → `state_snapshot` reply. Assert
-  // the snapshot's persisted `text` is repainted, not just the timer lanes.
+  // Regression: a projector that joins AFTER a false start fires misses the
+  // live `updateText`, so its only route to the "FALSE START" callout is the
+  // `request_state` → `state_snapshot` reply. Assert the snapshot's persisted
+  // `text` is repainted, not just the timer lanes.
   it('repaints the persisted text from a state_snapshot on late join', () => {
     readyState.current = 1; // OPEN — the OPEN effect clears liveSinceOpen + requests state
     renderDisplay('projector', '?sessionId=worlds-2026');
@@ -430,8 +430,8 @@ describe('SpeedlineTimerDisplay solo run (one lane assigned)', () => {
 });
 
 describe('SpeedlineTimerDisplay idle clock', () => {
-  // Part (b): the broadcast overlay paints the idle 0:00.00 numeral on OPEN,
-  // without waiting for a first relay message (isPreviewEnabled defaults true).
+  // The broadcast overlay paints the idle 0:00.00 numeral on OPEN, without
+  // waiting for a first relay message (isPreviewEnabled defaults true).
   it('paints the idle 0:00.00 clock on OPEN before any message', () => {
     readyState.current = 1; // OPEN
     renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
@@ -458,10 +458,10 @@ describe('SpeedlineTimerDisplay corner geometry', () => {
     };
   };
 
-  // The whole point of the frame-relative pass: at the 1920x1080 capture the
-  // lower-third keeps the exact px the LAAX art was measured at, and every other
-  // 16:9 capture scales it — a 4K browser source doubles instead of shrinking the
-  // plate relative to the SVO/VS/rankings plates it shares a corner with.
+  // At the 1920x1080 capture the lower-third keeps the exact px the LAAX art
+  // was measured at, and every other 16:9 capture scales it — a 4K browser
+  // source doubles instead of shrinking the plate relative to the
+  // SVO/VS/rankings plates it shares a corner with.
   it('keeps the authored 1080p geometry at the 1920x1080 capture', () => {
     restoreViewport = pinViewport(1920, 1080);
     const { left, bottom, plateWidth, numeral } = laneGeometry();

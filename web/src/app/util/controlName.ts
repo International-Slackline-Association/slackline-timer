@@ -1,5 +1,5 @@
 /**
- * How the Freestyle board names a per-athlete control (FREESTYLE_BOARD_UX §10).
+ * How the Freestyle board names a per-athlete control (freestyle-board-ux §10).
  *
  * The board renders two of nearly everything, so every per-athlete control
  * answers to `<verb> Athlete <n>` — a screen reader needs it, and a test that

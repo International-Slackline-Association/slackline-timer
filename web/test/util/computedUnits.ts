@@ -1,13 +1,9 @@
 /**
  * Resolving authored CSS units the way `getComputedStyle` now reports them.
  *
- * jsdom 30 made `getComputedStyle` spec-correct: relative units resolve to
- * absolute px. jsdom 29 echoed the authored string back, so overlay-geometry
- * assertions used to read `toBe('43.15vw')` and broke wholesale on the bump.
- *
- * Rather than hard-code jsdom's px output (which says nothing about the art
- * metric it encodes), tests keep asserting the authored value and resolve it
- * here. The authored strings stay independent of `app/util/overlayScale` — they
+ * jsdom's `getComputedStyle` is spec-correct: relative units resolve to
+ * absolute px. jsdom's px output says nothing about the art metric it encodes,
+ * so tests assert the authored value and resolve it here. The authored strings stay independent of `app/util/overlayScale` — they
  * are the expected output of `refVw`/`refVh`, not a re-derivation of them.
  *
  * Resolving against `window.innerWidth/innerHeight` rather than a hard-coded

@@ -4,10 +4,10 @@ import type { CountdownWSMessage, DistributiveOmit } from 'app/hooks/useWebSocke
 import type { RaceSound } from 'app/util/raceSound';
 
 /**
- * Drain a Freestyle machine's queued effects at the edge (HSM rule 4: effects
+ * Drain a Freestyle machine's queued effects at the edge (ADR 0032: effects
  * run because state changed, never inside the pure transition). Broadcasts each
- * `ws` effect over the relay (the unchanged contract — the session hook stamps
- * `sessionId`) and plays each `audio` beep on the control surface, then
+ * `ws` effect over the relay (the session hook stamps `sessionId`) and plays
+ * each `audio` beep on the control surface, then
  * dispatches `DRAIN` to clear the queue.
  *
  * Both Freestyle reducers (the battle lanes and the best-trick series) share

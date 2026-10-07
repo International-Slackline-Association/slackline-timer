@@ -5,8 +5,8 @@ import type { WheelEvent } from 'react';
 import { controlTargets } from 'app/theme/tokens';
 
 /**
- * A wheel over a FOCUSED number input scrubs its value (FREESTYLE_BOARD_UX §9):
- * a stray scroll past the rail must not rewrite a judged score or a live
+ * A wheel over a FOCUSED number input scrubs its value (freestyle-board-ux.md
+ * §9): a stray scroll past the rail must not rewrite a judged score or a live
  * budget, so the field lets go of the focus first.
  *
  * Exported because the score rail's judged components are number inputs that

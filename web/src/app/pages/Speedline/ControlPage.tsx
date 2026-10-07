@@ -43,16 +43,14 @@ import { advanceOverlay, overlayOwnsBoard } from 'app/hooks/useAdvanceInput';
 import { boardGeometry, deskColumns, deskMedia } from 'app/theme/tokens';
 
 /**
- * The desk (`speedline-desk-layout`, after FREESTYLE_BOARD_UX §2): setup chrome
- * left, the live path centre, the recording rail right, so a lane's athlete and
- * its Saved chip stand beside that lane's clock instead of in a panel below the
- * whole board.
+ * The desk (after freestyle-board-ux §2): setup chrome left, the live path
+ * centre, the recording rail right, so a lane's athlete and its Saved chip stand
+ * beside that lane's clock.
  *
- * The gate is width only, unlike the Freestyle desk's width-AND-height one.
- * That desk is three stacked steps deep and genuinely does not fit 720 px; this
- * one is a start strip and two lane columns, and stacking it at 1280×720 is
- * what would put the transport under the fold — the exact failure the height
- * gate exists to prevent over there.
+ * Width-only gate, unlike the Freestyle desk's width-AND-height one: that desk
+ * is three stacked steps deep and does not fit 720 px; this one is a start strip
+ * and two lane columns, and stacking it at 1280×720 would put the transport
+ * under the fold.
  */
 const DESK_SX = {
   width: '100%',
@@ -66,16 +64,14 @@ const DESK_SX = {
 } as const;
 
 /**
- * The live deck: the start strip between the two lane columns rather than above
- * them. Both lanes' clocks, pickers and Saved chips have to share one fold with
- * Start and Abort at 1280×720 (the item's acceptance), and stacked they do not
- * — the same reason the Freestyle run deck puts the changeover clock in a
- * middle column instead of a row of its own.
+ * The live deck: the start strip between the two lane columns, not above them —
+ * both lanes' clocks, pickers and Saved chips must share one fold with Start and
+ * Abort at 1280×720 (the Freestyle run deck's middle-column changeover clock,
+ * same reason).
  *
- * The width ceiling is the Freestyle deck's rule (`RUN_MAX_WIDTH`) with a start
- * strip added: past it the two lanes stop reading as one board and become a
- * scan across the desk, which at 1920 put ~450 px of empty column between a
- * clock and the Start that fires it.
+ * The width ceiling is the Freestyle deck's rule (`RUN_MAX_WIDTH`) plus a start
+ * strip: past it the two lanes stop reading as one board (at 1920, ~450 px of
+ * empty column between a clock and the Start that fires it).
  */
 const LIVE_DECK_SX = {
   width: '100%',
@@ -100,12 +96,11 @@ const startLaneTimers = (startTime: number, lanes: number[]) => {
 };
 
 export const SpeedlineControlPage = () => {
-  // The desk gate, asked once (`speedline-compact-setup-strip`). Below it the
-  // three columns stack and the setup column goes FIRST — the order the manual
-  // promises — as a one-line strip in the header's free column beside the
-  // health block, not a column or a row of its own: either put `Lane n DNF` on
-  // a 768 px fold. One reading, not a CSS toggle: the handset card owns a pad
-  // listener and a per-second ticker, and the strip changes parent with it.
+  // The desk gate. Below it the columns stack and setup goes FIRST (the order
+  // the manual promises) as a one-line strip in the header beside the health
+  // block — a column or row of its own would push `Lane n DNF` off a 768 px
+  // fold. A JS reading, not a CSS toggle: the handset card owns a pad listener
+  // and a per-second ticker, and the strip changes parent with it.
   const wideDesk = useMediaQuery(deskMedia.speedline);
   const sessionId = useSessionId();
 
@@ -135,12 +130,11 @@ export const SpeedlineControlPage = () => {
 
   const [resetConfirmOpen, setResetConfirmOpen] = useState<boolean>(false);
 
-  // The control page owns lane timer state (ADR 0027, revised by 0038): per-lane
-  // start/stop epochs + the displayed text are the single source of truth,
-  // written by local operator actions AND by mirrored peer-panel messages. The
-  // presentational Stopwatch columns render from this (no relay echo), the
-  // gamepad/reset guards read the live value, and `request_state` answers
-  // straight from it. `runningTimerCount` is derived, not tracked separately.
+  // The control page owns lane timer state (ADR 0027, revised by ADR 0038):
+  // per-lane start/stop epochs + the displayed text are the single source of
+  // truth, written by local operator actions AND by mirrored peer-panel
+  // messages. The Stopwatch columns render from it, the gamepad/reset guards
+  // read it, and `request_state` answers from it.
   const [laneTimers, setLaneTimers] = useState<{
     1: { startTime: number | null; stopTime: number | null };
     2: { startTime: number | null; stopTime: number | null };
@@ -270,17 +264,16 @@ export const SpeedlineControlPage = () => {
       onPeerMessage: (message) => applyPeerMessage(message),
     });
 
-  // The console's interlock table (`app/util/speedlineLocks`): which controls
-  // are inert and, in the operator's words, why — one map read by the buttons,
-  // the why-lines under them, their accessible descriptions and the handset
-  // guard, so a screen press and a buzzer press can never be live at different
+  // The console's interlock table (`app/util/speedlineLocks`): one map read by
+  // the buttons, their why-lines and accessible descriptions, and the handset
+  // guard, so a screen press and a buzzer press are never live at different
   // instants. Derived off the EFFECTIVE phase (ADR 0038): a peer panel's light
   // sequence gates this panel exactly like a local one.
-  // The clock the time-bounded half of the map is graded against (the resume
-  // grace). It advances on ONE timer, fired at the window's close, rather than
-  // a ticker: a live race board must not re-render every second to expire a
-  // button. Starting at 0 keeps a just-opened window open; a board that mounts
-  // with an already-stale stop closes it in the same effect.
+  // `resumeClock` grades the time-bounded half (the resume grace). It advances
+  // on ONE timer fired at the window's close, not a ticker: a live race board
+  // must not re-render every second to expire a button. Starting at 0 keeps a
+  // just-opened window open; a mount with an already-stale stop closes it in
+  // the same effect.
   const [resumeClock, setResumeClock] = useState<number>(0);
   useEffect(() => {
     const deadline = resumeWindowDeadline(laneState);
@@ -326,11 +319,11 @@ export const SpeedlineControlPage = () => {
     setTimeout(startSignal, 300);
   };
 
-  // Apply a peer panel's timer messages into local state (ADR 0038 — the stream
-  // is peer-only; the relay never echoes own sends). Mirror only: a peer-applied event
-  // NEVER writes to the data plane — `onRaceStart`/`notePeerFinish` are local
-  // bookkeeping (they arm a later LOCAL stop / record the result for the tally
-  // derivation), and the Time POST stays on the panel whose operator stopped.
+  // Apply a peer panel's timer messages into local state (ADR 0038). Mirror
+  // only: a peer-applied event NEVER writes to the data plane —
+  // `onRaceStart`/`notePeerFinish` are local bookkeeping (arm a later LOCAL
+  // stop / feed the tally), and the Time POST stays on the panel whose operator
+  // stopped.
   const applyPeerMessage = (peerMessage: StopwatchWSMessage) => {
     switch (peerMessage.type) {
       case 'start': {
@@ -445,11 +438,9 @@ export const SpeedlineControlPage = () => {
   );
 
   /**
-   * Mark a lane DNF (`speedline-dnf-corrects-and-freezes-the-lane`). A fall
-   * ends that lane's race, so the press freezes its clock as well as recording
-   * the result — one press for one event, whether or not the operator already
-   * stopped the lane (rejected: a "stop the lane first" toast, i.e. two presses
-   * for a fall on a live board).
+   * Mark a lane DNF (ADR 0028 amendment). A fall ends that lane's race, so the
+   * press freezes its clock as well as recording the result — one press for one
+   * event, whether or not the operator already stopped the lane.
    *
    * Order is load-bearing: `recordDnf` locks the lane's result first, so the
    * stop that follows records nothing over it (`recordFinish`'s hard lock) and
@@ -466,13 +457,13 @@ export const SpeedlineControlPage = () => {
   );
 
   /**
-   * Undo a mis-pressed Stop (`speedline-resume-stopped-lane`): the athlete is
-   * still crossing, so the lane's stop is dropped and its clock continues off
-   * the ORIGINAL start epoch — no re-`start`, which would re-ignite both lanes
-   * and move the GO epoch the lights, beeps and every overlay anchor on. The
-   * recorder deletes what the stop recorded; the peers and the preview un-freeze
-   * on the relayed frame. Screen-only, deliberately: the board's interlock table
-   * gates it, and no handset key reaches it (a buzzer must never un-stop a lane).
+   * Undo a mis-pressed Stop: the athlete is still crossing, so the lane's stop
+   * is dropped and its clock continues off the ORIGINAL start epoch — no
+   * re-`start`, which would re-ignite both lanes and move the GO epoch the
+   * lights, beeps and every overlay anchor on. The recorder deletes what the
+   * stop recorded; the peers and the preview un-freeze on the relayed frame.
+   * Screen-only: the interlock table gates it, and no handset key reaches it (a
+   * buzzer must never un-stop a lane).
    */
   const resumeLane = useCallback(
     (lane: 1 | 2) => {
@@ -562,7 +553,7 @@ export const SpeedlineControlPage = () => {
   // Called inside the poll's flushSync, once per press in button order, so a
   // dead heat's second red reads the board the first one committed.
   useGamepads(({ button, at }) => {
-    // A question owns the board while it stands (FREESTYLE_BOARD_UX §4.8): the
+    // A question owns the board while it stands (freestyle-board-ux §4.8): the
     // on-screen twins already sit behind the modal backdrop, so the handset is
     // the one path that would still reach the transport — from a board the
     // operator cannot see. Read at press time, before the confirm this press
@@ -716,15 +707,12 @@ export const SpeedlineControlPage = () => {
             <Stack spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
               <RaceStartSignal currentPhase={effectiveSignalPhase} size="small" />
 
-              {/* One control dialect across both boards (FREESTYLE_BOARD_UX §6):
-                Start and Abort Start are the race pair — the two are never live
-                at the same time, so exactly one loud press exists per state —
-                and Reset is neutral behind a dashed divider rather than flush
-                under Abort (finding S03: it is the one press with no undo).
-                RaceButton also blurs after a mouse press, so a clicked control
-                never swallows the next handset press. Each press carries its
-                lock reason as its accessible description (§4.7), so the words
-                the why-line prints reach a screen reader on the button itself. */}
+              {/* One control dialect across both boards (freestyle-board-ux.md
+                §6): Start and Abort Start are the race pair — never live at the
+                same time, so exactly one loud press exists per state — and Reset
+                is neutral behind a dashed divider, never flush under Abort
+                (finding S03, §9: it is the one press with no undo). Each press
+                carries its lock reason as its accessible description (§4.7). */}
               <LockedControl reason={locks.start}>
                 <RaceButton
                   tone="go"

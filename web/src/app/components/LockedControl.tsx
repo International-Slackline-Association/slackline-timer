@@ -4,7 +4,7 @@ import { cloneElement, type ReactElement } from 'react';
 import { lockReason, type Lock } from 'app/util/lockReason';
 
 /**
- * A race control and the reason it is inert (FREESTYLE_BOARD_UX §4.7). A
+ * A race control and the reason it is inert (freestyle-board-ux §4.7). A
  * disabled MUI button fires no pointer events, so the hover target is a wrapper
  * span — rendered whether or not there is a lock, so nothing moves under the
  * operator's hand when one comes and goes. `describeChild` puts the words on
@@ -15,8 +15,7 @@ import { lockReason, type Lock } from 'app/util/lockReason';
  * have to be to reach a reader: the span is only the mouse's target, and a
  * description hung on it is never announced for the button the operator is
  * focused on. The control's name comes from its content, so `title` lands as
- * its description and nothing else. The reserved on-card why-line lands with
- * the lane card (`fsux-lane-card`).
+ * its description and nothing else.
  *
  * Two ways in, exactly as `WhyLine` takes them: a control with its own
  * interlock entry passes its `Lock`, while the Speedline board passes the

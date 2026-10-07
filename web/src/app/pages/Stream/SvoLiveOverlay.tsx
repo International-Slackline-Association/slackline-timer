@@ -14,15 +14,11 @@ import { refVh } from 'app/util/overlayScale';
  * photo card as SVO-A (`Competitor` → `AthleteCard`) but board-driven. `:side` ∈
  * {1,2} picks which lane/player the card tracks; the athlete is the board's live
  * `selection.athlete{side}Id`. Unlike SVO-A it also shows the discipline result
- * for the board's current round (freestyle → judged `Score.overall` to one
- * decimal / DNF; speed → best time).
- * The result plane follows `selection.discipline`, which `StreamLayout` now
- * guarantees equals this overlay's URL `&discipline=` — it drops the other
- * board's selection (useStreamRefresh), so a freestyle card never shows the
- * speed board's athlete when both disciplines run on one comp.
+ * for the board's current round (`useLiveSideAthlete`). The selection is the
+ * URL `&discipline=`'s board only — `useStreamRefresh` drops the other board's.
  *
- * Fail-safe: a null selection or an empty side renders nothing (transparent) —
- * a freshly-opened card simply waits for the board's first push.
+ * Fail-safe: a null selection or an empty side renders nothing — a
+ * freshly-opened card waits for the board's first push.
  */
 export const SvoLiveOverlay = () => {
   const { side } = useParams();

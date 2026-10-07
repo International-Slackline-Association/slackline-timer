@@ -3,9 +3,8 @@
  *
  * The enums are ported 1:1 from timertimer's Ecto schemas and must stay
  * exactly in sync with `web/src/app/types.ts` — they end up inside DynamoDB
- * sort keys, so silent drift corrupts data permanently. The repo has no npm
- * workspaces, so the duplication is conscious; a parity test on the web side
- * (`web/test/app/types.parity.test.ts`) asserts both copies match.
+ * sort keys, so silent drift corrupts data permanently. No npm workspaces, so
+ * the copy is guarded by `web/test/app/types.parity.test.ts`.
  *
  * This file must stay free of imports: it is compiled by the web package's
  * test runner for the parity check. Server-only request validators live in

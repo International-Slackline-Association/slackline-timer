@@ -58,12 +58,7 @@ import type {
   TimeRound,
 } from './types';
 
-/**
- * Data access for the competition table (single-table; see core/keys.ts).
- * Mirrors the style of core/db.ts (the connections table) — thin wrappers
- * around the document client; all interesting logic lives in the tested pure
- * modules (keys, mappers, rankings, validators).
- */
+/** Data access for the competition table (single-table; key layout in core/keys.ts). */
 
 const COMPETITION_TABLE = (): string => process.env.COMPETITION_TABLE!;
 
@@ -334,12 +329,8 @@ const deleteAthlete = async (compId: string, athleteId: string): Promise<void> =
 
 /**
  * Does the partition hold at least one item matching `filter` under `prefix`?
- * A server-side `FilterExpression` keeps only matching items off the wire, and
- * we stop at the first page that yields one — so a referenced athlete short-
- * circuits cheaply instead of materializing the whole entity list. (`Limit`
- * bounds items *scanned* per page, not returned after the filter, so we still
- * page to the end to prove a *negative*; the win is the early exit + no
- * mapper/array churn.)
+ * Exits on the first page that yields one. `Limit` bounds items *scanned* per
+ * page, so a negative still pages to the end.
  */
 const anyMatch = async (
   compId: string,
@@ -411,8 +402,7 @@ const listTimes = async (compId: string, round?: TimeRound): Promise<Time[]> => 
 
 /**
  * The API addresses a Time by id alone; the full SK is recovered by listing the
- * partition. Accepted at current scale (one competition's worth of rows); a GSI
- * on the id is deferred until partitions are large enough to feel it.
+ * partition — no GSI by decision (ADR 0030; reopens only past a ~1 MB partition).
  */
 const findTimeById = async (compId: string, timeId: string): Promise<Time | null> => {
   const times = await listTimes(compId);
@@ -476,7 +466,7 @@ const listMatches = async (
   return items.map(itemToMatch).sort((a, b) => a.position - b.position);
 };
 
-/** Same trade-off as findTimeById: by-id lookup scans this competition partition (GSI deferred). */
+/** By-id lookup lists the partition, like findTimeById (ADR 0030). */
 const findMatchById = async (compId: string, matchId: string): Promise<Match | null> => {
   const matches = await listMatches(compId);
   return matches.find((m) => m.matchId === matchId) ?? null;
@@ -517,7 +507,7 @@ const deleteMatch = async (match: Match): Promise<void> => {
  * The handler decides create-vs-overwrite and enforces the conflict/force
  * semantics in code (it must read existing slots to compare athletes), so the
  * Puts here are unconditional — either all the bracket rows land or none do.
- * Well within the 25-item TransactWriteItems cap (seed 4, advance ≤ 3).
+ * Well within the TransactWriteItems item cap (seed ≤ 4, advance 2).
  */
 const writeBracketMatches = async (matches: Match[]): Promise<void> => {
   if (matches.length === 0) return;
@@ -548,7 +538,7 @@ const listScores = async (compId: string, round?: MatchRound): Promise<Score[]> 
   return items.map(itemToScore);
 };
 
-/** Same trade-off as findTimeById: by-id lookup scans this competition partition (GSI deferred). */
+/** By-id lookup lists the partition, like findTimeById (ADR 0030). */
 const findScoreById = async (compId: string, scoreId: string): Promise<Score | null> => {
   const scores = await listScores(compId);
   return scores.find((s) => s.scoreId === scoreId) ?? null;
