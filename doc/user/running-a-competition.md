@@ -79,6 +79,10 @@ For the first step you can also choose the **entry stage**:
 - **Quarter-finals (top 8)** or **Semi-finals (top 4)** — force the entry stage
   when the field is being handled differently on the day.
 
+Seeds are drawn so the top two qualifiers can only meet in the final:
+quarter-finals pair **1v8, 4v5** (top half) and **2v7, 3v6** (bottom half);
+semi-finals seeded directly pair **1v4, 2v3**.
+
 If a step would overwrite matches that already exist, the app stops and asks you
 to confirm before replacing them. That guard exists so a stray click cannot wipe
 a bracket mid-event — read the dialog before confirming.
@@ -112,6 +116,46 @@ broadcast graphics update themselves.
   it is noted in grey, e.g. _Final (result: Qualification)_.
 - **Combined** averages an athlete's two overall placements across the
   disciplines. The discipline toggle is not used there.
+
+### How positions are decided
+
+**Ties within a round.**
+
+- **Speed** — equal best times go to the faster **second-best** run of that
+  round; an athlete with only one run loses that comparison. Then by name.
+- **Freestyle** — equal overalls go to the higher **Difficulty**, then
+  **Combo**, then **Style**, then **Best trick**. Then by name.
+
+On the rankings and score-card overlays, athletes showing the same result share
+a rank — `=1, =1, 3` — even when a tiebreak decided their order in the list.
+
+**Final standings** are built the same way in both disciplines, from that
+discipline's bracket and qualification:
+
+| Places | Who                   | Order                                |
+| ------ | --------------------- | ------------------------------------ |
+| 1–2    | Final                 | Winner, then loser                   |
+| 3–4    | Small final           | Winner, then loser                   |
+| 5–8    | Quarter-final losers  | Their **qualification** rank         |
+| 9+     | Rest of qualification | Qualification rank, numbering from 9 |
+
+- Places 5–8 do not use the quarter-final result: a loser with the faster
+  quarter time (or higher quarter score) can still place below another loser.
+- With a semi-final bracket (top 4) there are no quarter losers, and the
+  qualification tail numbers from 5.
+- While a band is undecided (dimmed), its athletes are shown in qualification
+  order. A seeded athlete with no qualification result goes last in their band.
+- The result shown is the athlete's best in the round that placed them; with
+  none there it falls back to qualification (grey), and with none at all it
+  shows _—_.
+
+**Combined** uses the two final-standings places, not the qualification ranks:
+first in speed and fifth in freestyle averages 3.0.
+
+- Only athletes placed in **both** disciplines appear — a one-discipline athlete
+  is left out, not given a last place.
+- Equal averages share a rank (`=2, =2, 4`); the athlete with the better single
+  placement is listed first.
 
 ## Grant access to other operators
 
