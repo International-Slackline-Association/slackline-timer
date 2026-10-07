@@ -121,7 +121,14 @@ test(web): cover DNF sentinel formatting
   (`feat/athlete-crud`, `fix/preview-clock-skew`); maintainers work in this
   repository, outside contributors from a fork.
 - **Every change lands through a pull request, squash-merged.** `main` is
-  protected: no direct pushes, no force-pushes, and CI must be green.
+  protected by a repository ruleset ("Branch protection rule main", default
+  branch): no direct pushes, force-pushes or deletion; one approving review,
+  review threads resolved, an extra approval for unattributed changes; squash
+  the only merge method; and the three CI checks below required and strict
+  (branch up to date). The repo itself allows squash only and deletes head
+  branches on merge. The live ruleset is the record —
+  `gh api repos/International-Slackline-Association/slackline-timer/rulesets/<id>`
+  dumps it as a re-postable payload.
 
   ```bash
   git switch -c feat/athlete-crud main
@@ -140,7 +147,11 @@ test(web): cover DNF sentinel formatting
 - Keep branches small and single-purpose; rebase on `main` before merging.
 - CI (`.github/workflows/ci.yml`) runs on every PR targeting `main` and every
   push to it: repo-wide lint + format and per-package typecheck/test/build. The
-  three jobs are required checks — a red PR cannot merge.
+  three jobs are required checks — a red PR cannot merge. The ruleset matches
+  them by job name, em dashes included (`Lint & format (repo-wide)`,
+  `web — typecheck, test, build`, `server — typecheck, test, synth`): renaming a
+  job in `ci.yml` means updating the ruleset in the same change, or every PR
+  waits on a check that never reports.
 - Delete the branch after the merge (GitHub does it automatically).
 
 The contributor-facing version of this section — fork, review expectations,

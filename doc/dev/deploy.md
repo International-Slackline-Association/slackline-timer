@@ -378,7 +378,8 @@ landed once a Service Quotas increase raised the pool to the standard 1000.
 There is **no WAF in front of the APIs.** A regional WAF ACL attaches to API
 Gateway REST APIs only, not to HTTP or WebSocket APIs, so the backend carries none.
 API-level WAF arrives with the CloudFront edge layer in front of the HTTP API
-(security plan P11, a future ADR). Until then, in order of reach:
+(backlog `api-edge-layer` in `@work/status.md`, blocked on a custom API domain;
+a future ADR). Until then, in order of reach:
 
 1. **Leaked overlay link → revoke.** `/admin/overlays` → revoke (`POST
 /competitions/{compId}/revoke-read-tokens`) bumps the competition's
@@ -388,7 +389,10 @@ API-level WAF arrives with the CloudFront edge layer in front of the HTTP API
 2. **Flood on the web app → the CloudFront WAF.** The only ACL that can attach today
    is the CLOUDFRONT-scope one on the web distribution (default-OFF; per-IP rate
    limit 2000 req / 5 min, `infra/waf.ts`). It covers the SPA's static assets, not
-   the APIs or the photo CDN.
+   the APIs or the photo CDN. **At a venue every client shares one NAT address**
+   (241 connections at HWC 2026), so a mass reload can exceed 2000 / 5 min and block
+   the venue itself: raise `RATE_LIMIT_PER_5MIN` (≈ 10 000) before enabling it
+   during an event.
 
    ```bash
    cd server
@@ -554,6 +558,9 @@ deploy's `create-invalidation --paths /*` reaches AWS **literally, un-mangled**
 - **Auto-mode classifier gates destructive/Cognito/secret ops.** `cdk destroy`, the
   decommission scripts, and the Cognito harden step touch delete/identity/secret
   APIs a restricted session may block — run them in an interactive/approved session.
+- **Deploy outside live heats.** A Lambda-only deploy keeps open WS sockets, but
+  the first frames after it hit cold starts (300–600 ms) on the relay and the
+  authorizers; a stop landing then is late on every display.
 - **RETAIN + deletionProtection orphans.** Both DynamoDB tables and the photos
   bucket are `RemovalPolicy.RETAIN` + deletion-protected; `cdk destroy` leaves them
   behind by design (the decommission ledger `server/scripts/decommission/stacks.json`
