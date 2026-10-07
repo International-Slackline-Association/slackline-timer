@@ -7,12 +7,12 @@
 // and (with --delete) removes those isolated past the rollback buffer.
 //
 // Each region has its own CDKToolkit bootstrap bucket; REGIONS covers the
-// backend (eu-central-2) and web (eu-central-1) environments, not the billing
-// stack's us-east-1. cdk gc is still experimental, hence --unstable=gc.
+// backend (eu-central-2), web (eu-central-1) and billing (us-east-1) stacks.
+// cdk gc is still experimental, hence --unstable=gc.
 //
 // DEFAULT IS DRY-RUN (cdk gc --action print); --delete reclaims.
 //
-// Flags: --delete, --region (eu-central-2|eu-central-1), --rollback-buffer-days N
+// Flags: --delete, --region (eu-central-2|eu-central-1|us-east-1), --rollback-buffer-days N
 // (default 30), --created-buffer-days N (default 7), --profile, --account
 // (defaults to AWS_ACCOUNT_ID from the repo-root `.env.deploy`).
 
@@ -25,7 +25,7 @@ const HELP = `cdk gc the bootstrap staging bucket (dry-run unless --delete)
   node scripts/maintenance/gcBootstrapAssets.mjs [--delete] [--region r]
     [--rollback-buffer-days N] [--created-buffer-days N] [--profile p] [--account id]`;
 
-const REGIONS = ['eu-central-2', 'eu-central-1'];
+const REGIONS = ['eu-central-2', 'eu-central-1', 'us-east-1'];
 
 // server/ is the CDK app root (cdk.json defines `app`); gc needs that context.
 // ...\server\scripts\maintenance -> ...\server
