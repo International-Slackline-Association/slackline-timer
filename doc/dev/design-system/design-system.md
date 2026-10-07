@@ -845,7 +845,7 @@ frame and the tiny profile-bracket quarter boxes alike.
 | Divider rule above the flag | y = 234.67, ~2px on the 250-tall card                                             | 93.9%, `0.8cqh`                                               |
 | Name block foot clearance   | not in the masters (they carry no caption under the name)                         | `1.5cqh` above the divider rule                               |
 | White plate top edge        | concave-upward arc — ~54% of the card at the sides, sagging to ~58% at the centre | radial-gradient mask, rx = 50%, ry = 10% of the 40%-tall band |
-| Name strip (lower third)    | 720 × 92                                                                          | `STRIP_HEIGHT = 92`                                           |
+| Name strip (lower third)    | 720 × 92                                                                          | `OVERLAY_NAME_STRIP` (`tokens.ts`), 720 × 92                  |
 | Name caps in the strip      | ≈ 0.63 of the strip height (caps do **not** fill the plate)                       | `0.63 / 0.72` cap-height factor                               |
 
 The plate ink is the masters' near-black **`#231f20`** (`overlay.nameInk`, also

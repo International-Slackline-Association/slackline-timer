@@ -143,6 +143,17 @@ hold — most "the overlay is wrong" reports are one of these, not a render bug.
    `finished` while the display still runs is **a stop this display missed**
    (freeze it), and older/idle never rolls a lane back. That merge is what heals
    a stuck on-air timer within seconds of the next control re-broadcast.
+   The Freestyle feed (`useFreestyleTimerFeed`) applies the live-beats-snapshot
+   rule **per countdown channel**, not board-wide: one lane's `reset_countdown`
+   must not discard the snapshot's warm-up row, the only thing between the
+   projector and a fabricated hero. Its warm-up-vs-lanes **surface** is seeded
+   once per socket OPEN by the first evidence to arrive, and only live messages
+   move it after that: `request_state` answers go to the whole room, so most
+   snapshots a long-lived projector receives answer somebody else's join, and
+   re-deriving off one between matches (lanes pristine) would put the warm-up
+   hero back over the lane clocks on every screen until the next message. Across
+   a reconnect the on-air surface stands (no mid-outage blanking) while the seed
+   flag resets, so each OPEN takes exactly one fresh seed.
 4. **Who is live.** Round, gender, match, lane athletes, the best-of-3 tally and
    the false-start counts all ride the relay-only `updateSelection` (ADR 0014),
    re-pushed on every change **and** every socket OPEN so late joiners recover
