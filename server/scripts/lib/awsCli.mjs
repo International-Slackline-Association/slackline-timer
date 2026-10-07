@@ -71,10 +71,12 @@ export function runAws(args, { profile, region } = {}) {
     });
   } catch (err) {
     if (err.code === 'ENOENT') {
-      throw new Error('`aws` CLI not found on PATH — install AWS CLI v2 (see README.md).');
+      throw new Error('`aws` CLI not found on PATH — install AWS CLI v2 (see README.md).', {
+        cause: err,
+      });
     }
     const stderr = err.stderr?.toString?.().trim();
-    throw new Error(stderr || err.message);
+    throw new Error(stderr || err.message, { cause: err });
   }
 }
 
@@ -99,7 +101,9 @@ export function tryAws(args, { profile, region } = {}) {
     return { ok: true, stdout };
   } catch (err) {
     if (err.code === 'ENOENT') {
-      throw new Error('`aws` CLI not found on PATH — install AWS CLI v2 (see README.md).');
+      throw new Error('`aws` CLI not found on PATH — install AWS CLI v2 (see README.md).', {
+        cause: err,
+      });
     }
     return { ok: false, stdout: err.stdout?.toString?.() ?? '' };
   }

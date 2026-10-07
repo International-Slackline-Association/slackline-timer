@@ -12,7 +12,7 @@ export default [
       '**/node_modules',
       '**/build',
       '**/dist',
-      '**/lib',
+      'server/lib',
       '**/public',
       '**/cdk.out',
       // Claude Code tooling (skills/driver scripts), not application source —
