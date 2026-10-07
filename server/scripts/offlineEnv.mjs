@@ -27,10 +27,9 @@ export const OFFLINE_ENV = {
   // Photos run against LocalStack S3 (ADR 0023 §2): the S3 client points here
   // (core/aws/clients.ts), PHOTOS_BUCKET clears photoUpload's 503 guard, and
   // reads emit the direct unsigned object URL via S3_PUBLIC_URL (core/photoUrl.ts,
-  // path-style: {S3_PUBLIC_URL}/{bucket}/{key}). The CloudFront keys stay empty
-  // so the offline signer branch wins.
+  // path-style: {S3_PUBLIC_URL}/{bucket}/{key}). The CloudFront private key stays
+  // empty so the offline signer branch wins.
   PHOTO_PRIVATE_KEY: '',
-  PHOTO_PUBLIC_KEY: '',
   PHOTOS_BUCKET: 'slackline-timer-v1-photos-local',
   // LocalStack exposes every service on the single edge port :4566.
   S3_ENDPOINT: 'http://127.0.0.1:4566',
