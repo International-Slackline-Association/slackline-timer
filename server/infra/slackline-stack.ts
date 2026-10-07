@@ -574,8 +574,7 @@ function defineWsRelay(stack: Stack, stage: string, fns: Fns): WebSocketStage {
 
 // Per-route HTTP throttles (M1), one rate (rps) / burst bucket per route key, so
 // an overlay-read flood cannot drain the budget of the time/score writes. Sized
-// against today's traffic shape; re-size from the HWC 2026 HttpApi 429 counts
-// (HUMAN_TASKS `http-route-throttle-resize`).
+// against today's traffic shape; re-size from the HWC 2026 HttpApi 429 counts.
 //   write  — a time/score/match write per run or judged heat; seedRemote replays
 //            them back-to-back (backing off on 429, scripts/lib/seedClient.mjs).
 //   read   — every console + overlay refetches its queries on each db_update.

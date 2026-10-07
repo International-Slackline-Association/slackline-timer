@@ -338,8 +338,7 @@ the stage default above now meters only requests that match no route:
 `roster` sits above `admin` because `seedRemote.mjs` enters a whole roster back-to-back
 (photo presign + athlete `POST` per athlete); the seed client backs off on `429`. The
 sizes are first estimates: **re-size them from the HWC 2026 `HttpApi` 429 counts**
-(CloudWatch `AWS/ApiGateway` `4xx`) — HUMAN_TASKS §"Live-AWS / operational"
-`http-route-throttle-resize`. The first deploy adds `RouteSettings` + a stage→route
+(CloudWatch `AWS/ApiGateway` `4xx`). The first deploy adds `RouteSettings` + a stage→route
 `DependsOn` to the existing stage (an in-place update, no replacement).
 
 ✅ **Reserved-concurrency caps deployed 2026-07-21** — authorizers 50, the five entity
@@ -378,8 +377,7 @@ landed once a Service Quotas increase raised the pool to the standard 1000.
 There is **no WAF in front of the APIs.** A regional WAF ACL attaches to API
 Gateway REST APIs only, not to HTTP or WebSocket APIs, so the backend carries none.
 API-level WAF arrives with the CloudFront edge layer in front of the HTTP API
-(backlog `api-edge-layer` in `@work/status.md`, blocked on a custom API domain;
-a future ADR). Until then, in order of reach:
+(blocked on a custom API domain; a future ADR). Until then, in order of reach:
 
 1. **Leaked overlay link → revoke.** `/admin/overlays` → revoke (`POST
 /competitions/{compId}/revoke-read-tokens`) bumps the competition's
