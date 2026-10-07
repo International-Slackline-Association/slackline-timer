@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
+import { compPath } from 'app/api/paths';
 import { crudResource } from 'app/api/crudResource';
 import type { MatchRound, Score, ScoreInput } from 'app/types';
 
@@ -26,8 +27,8 @@ export const useScores = (
     queryKey: scoreKeys.list(compId ?? '', round),
     enabled: compId != null,
     queryFn: ({ signal }) => {
-      const query = round ? `?round=${round}` : '';
-      return apiFetch<Score[]>(`/competitions/${compId}/scores${query}`, {
+      const query = round ? `?${new URLSearchParams({ round })}` : '';
+      return apiFetch<Score[]>(`${compPath(compId!, 'scores')}${query}`, {
         signal,
         readToken: opts.readToken,
       });

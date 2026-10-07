@@ -61,8 +61,13 @@ Read by `StreamLayout` (data overlays) and the timer display pages
 | `green`                    | `#00B140` (`chromaKeyGreen`)                | Operator's keyer only has a green preset **and** no green is on-screen.                                                    |
 | `blue`                     | `#0047BB` (`chromaKeyBlue`)                 | Blue-screen rigs where no blue/teal is on-screen.                                                                          |
 | `h2r`                      | none (alpha) + **colour adaptation**        | **Keyed composite chains**: the transparent overlay is flattened onto a chroma ground _before_ the keyer (see §h2r below). |
-| any CSS color              | that color (e.g. `%23123456`, `rgb(0,0,0)`) | Escape hatch — exotic keyers / solid backers.                                                                              |
+| a plain colour             | that color (e.g. `%23123456`, `rgb(0,0,0)`) | Escape hatch — exotic keyers / solid backers.                                                                              |
 
+- A plain colour is `#hex` (3/4/6/8 digits), a numeric `rgb[a]()`/`hsl[a]()`
+  (digits, `.`, `,`, `%`, `/`, signs), or a named colour (letters only).
+  Anything else (`url(`, `var(`, `image-set(`, gradients, `calc(`) paints the
+  surface's default ground instead: a shared link must not make the overlay
+  fetch a third-party URL.
 - Transparent is the default and preserves the §7 "fail-safe blank" rule: an
   empty overlay paints nothing and composites away invisibly.
 - The chroma fill is an opaque full-viewport ground behind the graphic layers.
@@ -233,7 +238,15 @@ maintain). It is **not** an OBS source — it is a tab the operator keeps open o
 the machine running H2R; it paints a small visible status panel (not the
 overlays' fail-safe blank) so the operator can confirm it is connected. It reuses
 the comp-scoped read token verbatim (no new auth), follows `updateSelection`, and
-adds no persisted data and no protocol change.
+adds no persisted data and no protocol change. The `?h2r=` target must be on
+the bridge's own machine (owner decision 2026-10-06): `resolveH2rTarget` accepts
+only a bare `http:` origin on `127.0.0.1` or `localhost` (any port; no
+credentials, path or query) and shows any other target as an error in the
+bridge panel without sending a request. That is exactly what the build-time
+CSP's `connect-src` admits (`http://127.0.0.1:*` / `http://localhost:*`, ADR
+0054); `h2rClient.test.ts` pins the two against each other. Pushes go through `createH2rPusher`:
+one push in flight, only the newest waiting set follows it (a slow H2R can
+otherwise land a stale athlete last), and each push aborts after 3 s.
 
 The per-side WS-selection → athlete → result join is `useLiveSideAthlete`,
 factored out of `SvoLiveOverlay` and shared with the bridge.

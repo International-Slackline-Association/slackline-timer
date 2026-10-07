@@ -111,6 +111,22 @@ describe('httpAuthorizer role classification', () => {
     expect((await invoke(token)).isAuthorized).toBe(false);
   });
 
+  it('denies every read token when the secret is unavailable or too short', async () => {
+    verifyMock.mockRejectedValue(new Error('not a cognito token'));
+    getReadTokenSecretMock.mockResolvedValue(undefined);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { token } = mintReadToken({
+      compId: 'worlds-2026',
+      tokenVersion: 3,
+      expiresAt: Date.now() + 60_000,
+      secret: SECRET,
+    });
+
+    expect((await invoke(token)).isAuthorized).toBe(false);
+    expect(getCompetitionMock).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   it('denies a token that is neither a Cognito IdToken nor a valid read token', async () => {
     verifyMock.mockRejectedValue(new Error('not a cognito token'));
     getReadTokenSecretMock.mockResolvedValue(SECRET);

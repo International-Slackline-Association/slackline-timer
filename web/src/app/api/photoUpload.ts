@@ -1,4 +1,5 @@
 import { ApiError, apiFetch } from 'app/api/client';
+import { compPath } from 'app/api/paths';
 import { ImageTooLargeError, browserCodec, resizeImage } from 'app/util/resizeImage';
 
 /**
@@ -76,7 +77,7 @@ export const uploadAthletePhoto = async (compId: string, file: File): Promise<st
   const jpeg = await toJpeg(file);
   const sha256 = await sha256Hex(jpeg);
   const { url, fields, photoKey } = await apiFetch<PresignedUpload>(
-    `/competitions/${compId}/photo-uploads`,
+    compPath(compId, 'photo-uploads'),
     { method: 'POST', body: { contentType: 'image/jpeg', sha256 } },
   );
 

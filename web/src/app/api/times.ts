@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
+import { compPath } from 'app/api/paths';
 import { crudResource } from 'app/api/crudResource';
 import type { Time, TimeRound } from 'app/types';
 
@@ -34,8 +35,8 @@ export const useTimes = (
     queryKey: timeKeys.list(compId ?? '', round),
     enabled: compId != null,
     queryFn: ({ signal }) => {
-      const query = round ? `?round=${round}` : '';
-      return apiFetch<Time[]>(`/competitions/${compId}/times${query}`, {
+      const query = round ? `?${new URLSearchParams({ round })}` : '';
+      return apiFetch<Time[]>(`${compPath(compId!, 'times')}${query}`, {
         signal,
         readToken: opts.readToken,
       });

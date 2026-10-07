@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
+import { compPath } from 'app/api/paths';
 import {
   clearCachedReadToken,
   readCachedReadToken,
@@ -25,13 +26,13 @@ export interface ReadTokenResponse {
 export const useCreateReadToken = (compId: string) =>
   useMutation({
     mutationFn: () =>
-      apiFetch<ReadTokenResponse>(`/competitions/${compId}/read-tokens`, { method: 'POST' }),
+      apiFetch<ReadTokenResponse>(compPath(compId, 'read-tokens'), { method: 'POST' }),
   });
 
 export const useRevokeReadTokens = (compId: string) =>
   useMutation({
     mutationFn: () =>
-      apiFetch<{ revoked: boolean }>(`/competitions/${compId}/revoke-read-tokens`, {
+      apiFetch<{ revoked: boolean }>(compPath(compId, 'revoke-read-tokens'), {
         method: 'POST',
       }),
   });

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
+import { compPath } from 'app/api/paths';
 import type { Competition } from 'app/types';
 
 export const competitionKeys = {
@@ -35,8 +36,7 @@ export const useCompetitions = (options?: { refetchInterval?: number }) =>
 export const useCompetition = (compId: string | undefined) =>
   useQuery({
     queryKey: competitionKeys.detail(compId ?? ''),
-    queryFn: ({ signal }) =>
-      apiFetch<Competition>(`/competitions/${encodeURIComponent(compId!)}`, { signal }),
+    queryFn: ({ signal }) => apiFetch<Competition>(compPath(compId!), { signal }),
     enabled: Boolean(compId),
   });
 
@@ -53,7 +53,7 @@ export const useUpdateCompetition = (compId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CompetitionUpdateInput) =>
-      apiFetch<Competition>(`/competitions/${encodeURIComponent(compId)}`, {
+      apiFetch<Competition>(compPath(compId), {
         method: 'PUT',
         body: input,
       }),

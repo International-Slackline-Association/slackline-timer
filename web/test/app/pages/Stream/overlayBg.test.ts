@@ -50,6 +50,44 @@ describe('resolveOverlayBackground', () => {
     expect(resolveOverlayBackground('?bg=%23123456')).toBe('#123456');
   });
 
+  it.each([
+    '%23abc',
+    '%23abcd',
+    '%23A1B2C3',
+    '%23a1b2c3d4',
+    'rgb(0, 0, 0)',
+    'rgba(0,0,0,0.5)',
+    'rgb(0%2010%25%2020%25%20%2F%2050%25)',
+    'hsl(120,50%25,50%25)',
+    'hsla(120, 50%25, 50%25, .4)',
+    'black',
+    'RebeccaPurple',
+  ])('accepts the plain colour %s', (raw) => {
+    expect(resolveOverlayBackground(`?bg=${raw}`)).toBe(decodeURIComponent(raw));
+  });
+
+  it.each([
+    'url(https://tracker.example/x)',
+    'url("https://tracker.example/x")',
+    'image-set(url(x.png) 1x)',
+    'var(--tl-chroma-key)',
+    'rgb(var(--x))',
+    'rgb(0,0,0) url(x)',
+    'linear-gradient(red,blue)',
+    'red;color:blue',
+    'red blue',
+    'expression(alert(1))',
+    'calc(1px)',
+    '%23ggg',
+    '%2312345',
+    'deeppink1',
+  ])('falls back to the default ground for the non-colour %s', (raw) => {
+    expect(resolveOverlayBackground(`?bg=${encodeURIComponent(raw)}`)).toBe('transparent');
+    expect(resolveOverlayBackground(`?bg=${encodeURIComponent(raw)}`, colors.chromaKey)).toBe(
+      colors.chromaKey,
+    );
+  });
+
   it('is case-insensitive for aliases', () => {
     expect(resolveOverlayBackground('?bg=KEY')).toBe('var(--tl-chroma-key)');
     expect(resolveOverlayBackground('?bg=Transparent')).toBe('transparent');

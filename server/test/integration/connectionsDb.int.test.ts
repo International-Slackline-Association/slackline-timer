@@ -197,12 +197,12 @@ describe.skipIf(!reachable)('connectionHandler integration (real event shapes)',
       statusCode: number;
     };
 
-  const connect = (sessionId: string, connectionId: string, readOnly = false) =>
+  const connect = (sessionId: string, connectionId: string, readOnly = false, principal?: string) =>
     invoke({
       requestContext: {
         routeKey: '$connect',
         connectionId,
-        authorizer: { readOnly: String(readOnly) },
+        authorizer: { readOnly: String(readOnly), ...(principal ? { principal } : {}) },
       },
       queryStringParameters: { sessionId, Authorization: 'token' },
     });
@@ -220,6 +220,18 @@ describe.skipIf(!reachable)('connectionHandler integration (real event shapes)',
     expect((await disconnect(connectionId)).statusCode).toBe(200);
     expect(await db.getAllConnections(sessionId)).toEqual([]);
     expect(await db.getConnectionSession(connectionId)).toBeNull();
+  });
+
+  it('round-trips the authorizer principal so a grant revoke can find the socket', async () => {
+    const sessionId = newSession();
+    const connectionId = `conn-${randomUUID()}`;
+    expect((await connect(sessionId, connectionId, false, 'mgr-sub')).statusCode).toBe(200);
+
+    expect(await db.getAllConnections(sessionId)).toEqual([
+      { sessionId, connectionId, readOnly: false, principal: 'mgr-sub' },
+    ]);
+
+    expect((await disconnect(connectionId)).statusCode).toBe(200);
   });
 
   it('is idempotent on a repeated $disconnect (no mapping left to resolve)', async () => {

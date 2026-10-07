@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from 'app/api/client';
+import { compPath } from 'app/api/paths';
 import { crudResource } from 'app/api/crudResource';
 import { PHOTO_URL_REFETCH } from 'app/api/photoUrlRefresh';
 import type { Athlete } from 'app/types';
@@ -21,7 +22,7 @@ export const useAthletes = (compId: string | null, opts: { readToken?: string } 
     enabled: compId != null,
     ...PHOTO_URL_REFETCH,
     queryFn: ({ signal }) =>
-      apiFetch<Athlete[]>(`/competitions/${compId}/athletes`, {
+      apiFetch<Athlete[]>(compPath(compId!, 'athletes'), {
         signal,
         readToken: opts.readToken,
       }),

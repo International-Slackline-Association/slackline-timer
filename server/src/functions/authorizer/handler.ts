@@ -37,7 +37,7 @@ export const main: APIGatewayRequestAuthorizerHandler = async (event) => {
 
     // Offline: accept the web's `local-dev` dummy as an operator (no Cognito locally).
     if (isOffline() && token === 'local-dev') {
-      return allowPolicy(event.methodArn, 'local-dev-operator', { readOnly: 'false' });
+      return allowPolicy(event.methodArn, 'local-dev-operator', false);
     }
 
     let payload: Awaited<ReturnType<typeof verifier.verify>> | null = null;
@@ -73,7 +73,7 @@ export const main: APIGatewayRequestAuthorizerHandler = async (event) => {
         }
       }
 
-      return allowPolicy(event.methodArn, sub, { readOnly: 'false' });
+      return allowPolicy(event.methodArn, sub, false);
     }
 
     const secret = await getReadTokenSecret();
@@ -95,7 +95,7 @@ export const main: APIGatewayRequestAuthorizerHandler = async (event) => {
       throw new Error(`read token revoked or competition missing (${result.claims.compId})`);
     }
 
-    return allowPolicy(event.methodArn, `reader:${comp.compId}`, { readOnly: 'true' });
+    return allowPolicy(event.methodArn, `reader:${comp.compId}`, true);
   } catch (error: any) {
     console.log(error.message);
     return denyAllPolicy();
@@ -121,7 +121,7 @@ const denyAllPolicy = (): APIGatewayAuthorizerResult => {
 const allowPolicy = (
   methodArn: string,
   principalId: string,
-  context: Record<string, string>,
+  readOnly: boolean,
 ): APIGatewayAuthorizerResult => {
   return {
     principalId,
@@ -135,7 +135,10 @@ const allowPolicy = (
         },
       ],
     },
-    // WS authorizer context surfaces on $connect as string values.
-    context,
+    // WS authorizer context surfaces on $connect as string values. `principal`
+    // repeats principalId because the local WS harness forwards only the
+    // context; connectionHandler persists it so a grant revoke can find the
+    // sockets (ADR 0053).
+    context: { readOnly: String(readOnly), principal: principalId },
   };
 };

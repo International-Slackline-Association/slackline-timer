@@ -29,6 +29,17 @@ describe('db.addConnection', () => {
     expect(items[1].Put.Item).toMatchObject({ ...CONN_MAP_KEY, sessionId: 's1' });
     expect(items[1].Put.Item.ddb_ttl).toBe(items[0].Put.Item.ddb_ttl);
   });
+
+  it('persists the principal on the forward row in the same write', async () => {
+    sendMock.mockResolvedValueOnce({});
+
+    await db.addConnection({ sessionId: 's1', connectionId: 'conn-1', principal: 'mgr-sub' });
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const items = sendMock.mock.calls[0][0].input.TransactItems;
+    expect(items[0].Put.Item).toMatchObject({ PK: 's1', SK: 'conn-1', principal: 'mgr-sub' });
+    expect(items[1].Put.Item).not.toHaveProperty('principal');
+  });
 });
 
 describe('db.getConnectionSession', () => {
@@ -96,19 +107,21 @@ describe('db.refreshConnectionTtl', () => {
 });
 
 describe('db.getAllConnections', () => {
-  it('returns a single page in one query, surfacing the readOnly flag', async () => {
+  it('returns a single page in one query, surfacing readOnly and principal', async () => {
     sendMock.mockResolvedValueOnce({
       Items: [
-        { PK: 's1', SK: 'conn-1' },
-        { PK: 's1', SK: 'conn-2', readOnly: true },
+        { PK: 's1', SK: 'conn-1', principal: 'mgr-sub' },
+        { PK: 's1', SK: 'conn-2', readOnly: true, principal: 'reader:s1' },
+        { PK: 's1', SK: 'conn-3' },
       ],
     });
 
     const all = await db.getAllConnections('s1');
 
-    expect(all).toEqual([
-      { sessionId: 's1', connectionId: 'conn-1', readOnly: false },
-      { sessionId: 's1', connectionId: 'conn-2', readOnly: true },
+    expect(all).toStrictEqual([
+      { sessionId: 's1', connectionId: 'conn-1', readOnly: false, principal: 'mgr-sub' },
+      { sessionId: 's1', connectionId: 'conn-2', readOnly: true, principal: 'reader:s1' },
+      { sessionId: 's1', connectionId: 'conn-3', readOnly: false, principal: undefined },
     ]);
     expect(sendMock).toHaveBeenCalledTimes(1);
   });

@@ -70,6 +70,17 @@ describe('connectionHandler $connect', () => {
     );
   });
 
+  it('persists the authorizer principal on the connection row', async () => {
+    await invoke(connectEvent({ sessionId: 's1' }, { readOnly: 'false', principal: 'mgr-sub' }));
+
+    expect(addConnectionMock).toHaveBeenCalledWith({
+      connectionId: 'conn-1',
+      sessionId: 's1',
+      readOnly: false,
+      principal: 'mgr-sub',
+    });
+  });
+
   it('400s without a sessionId and writes nothing', async () => {
     const res = await invoke(connectEvent(null));
 

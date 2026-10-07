@@ -17,6 +17,10 @@ import { getPhotoPrivateKey, getReadTokenSecret } from 'core/secrets';
 // name — no cross-test bleed without resetting modules (blocked by the tsconfig
 // module target: no dynamic import()).
 
+const DIRECT_SECRET = 'direct-read-token-secret-0123456789';
+const SSM_SECRET = 'ssm-read-token-secret-0123456789abc';
+const RECOVERED_SECRET = 'recovered-read-token-secret-012345';
+
 beforeEach(() => {
   sendMock.mockReset();
 });
@@ -30,15 +34,15 @@ afterEach(() => {
 
 describe('getReadTokenSecret / getPhotoPrivateKey', () => {
   it('returns the direct env value without touching SSM (offline harnesses, tests)', async () => {
-    process.env.READ_TOKEN_SECRET = 'direct-secret';
-    await expect(getReadTokenSecret()).resolves.toBe('direct-secret');
+    process.env.READ_TOKEN_SECRET = DIRECT_SECRET;
+    await expect(getReadTokenSecret()).resolves.toBe(DIRECT_SECRET);
     expect(sendMock).not.toHaveBeenCalled();
   });
 
   it('fetches the SecureString by parameter name WithDecryption when only *_PARAM is set', async () => {
     process.env.READ_TOKEN_SECRET_PARAM = '/test/fetch/read-token-secret';
-    sendMock.mockResolvedValue({ Parameter: { Value: 'from-ssm' } });
-    await expect(getReadTokenSecret()).resolves.toBe('from-ssm');
+    sendMock.mockResolvedValue({ Parameter: { Value: SSM_SECRET } });
+    await expect(getReadTokenSecret()).resolves.toBe(SSM_SECRET);
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(sendMock.mock.calls[0][0].input).toEqual({
       Name: '/test/fetch/read-token-secret',
@@ -68,9 +72,9 @@ describe('getReadTokenSecret / getPhotoPrivateKey', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     sendMock
       .mockRejectedValueOnce(new Error('ssm down'))
-      .mockResolvedValueOnce({ Parameter: { Value: 'recovered' } });
+      .mockResolvedValueOnce({ Parameter: { Value: RECOVERED_SECRET } });
     await expect(getReadTokenSecret()).resolves.toBeUndefined();
-    await expect(getReadTokenSecret()).resolves.toBe('recovered');
+    await expect(getReadTokenSecret()).resolves.toBe(RECOVERED_SECRET);
     expect(sendMock).toHaveBeenCalledTimes(2);
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
@@ -82,5 +86,42 @@ describe('getReadTokenSecret / getPhotoPrivateKey', () => {
     sendMock.mockResolvedValue({ Parameter: { Value: '' } });
     await expect(getReadTokenSecret()).resolves.toBeUndefined();
     errorSpy.mockRestore();
+  });
+});
+
+describe('getReadTokenSecret minimum length', () => {
+  it('rejects a secret under 32 UTF-8 bytes, logging once per container without the value', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    process.env.READ_TOKEN_SECRET = 'short-secret';
+    await expect(getReadTokenSecret()).resolves.toBeUndefined();
+    process.env.READ_TOKEN_SECRET = 'x'.repeat(31);
+    await expect(getReadTokenSecret()).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const logged = errorSpy.mock.calls.flat().map(String).join(' ');
+    expect(logged).toContain('too short');
+    expect(logged).not.toContain('short-secret');
+    errorSpy.mockRestore();
+  });
+
+  it('measures bytes, not characters', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    process.env.READ_TOKEN_SECRET = 'é'.repeat(16);
+    await expect(getReadTokenSecret()).resolves.toBe('é'.repeat(16));
+    process.env.READ_TOKEN_SECRET = 'é'.repeat(15);
+    await expect(getReadTokenSecret()).resolves.toBeUndefined();
+    errorSpy.mockRestore();
+  });
+
+  it('rejects a short SSM value too', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    process.env.READ_TOKEN_SECRET_PARAM = '/test/short/read-token-secret';
+    sendMock.mockResolvedValue({ Parameter: { Value: 'too-short' } });
+    await expect(getReadTokenSecret()).resolves.toBeUndefined();
+    errorSpy.mockRestore();
+  });
+
+  it('does not apply to the photo private key', async () => {
+    process.env.PHOTO_PRIVATE_KEY = 'pem';
+    await expect(getPhotoPrivateKey()).resolves.toBe('pem');
   });
 });

@@ -1140,7 +1140,9 @@ revisit.
 
 **Accepted · 2026-07-06 · Landed** — Budgets + billing alarm, gateway throttling, and the authored-but-off WAF shipped 2026-07-07; the reserved-concurrency caps shipped 2026-07-21 (once the account Lambda-concurrency quota was raised — see §3).
 
-**Status note (2026-10-05):** §5's regional half is retired. AWS WAF attaches to API Gateway REST APIs only, not HTTP or WebSocket APIs, so enabling the `REGIONAL` ACL + stage associations would have failed and rolled back mid-incident; the ACL, both associations and the backend `WafEnabled` parameter are deleted, and the backend stack is pinned to carry no `AWS::WAFv2::*` resource. The CLOUDFRONT ACL for the web distribution stands. API-level WAF needs a CloudFront edge in front of the HTTP API (security plan P11, future ADR 0054). Abuse runbook as it works today: [`deploy.md`](./deploy.md) §6.3.
+**Status note (2026-10-05):** §5's regional half is retired. AWS WAF attaches to API Gateway REST APIs only, not HTTP or WebSocket APIs, so enabling the `REGIONAL` ACL + stage associations would have failed and rolled back mid-incident; the ACL, both associations and the backend `WafEnabled` parameter are deleted, and the backend stack is pinned to carry no `AWS::WAFv2::*` resource. The CLOUDFRONT ACL for the web distribution stands. API-level WAF needs a CloudFront edge in front of the HTTP API (a future ADR). Abuse runbook as it works today: [`deploy.md`](./deploy.md) §6.3.
+
+**Status note (2026-10-06):** §2 gains per-route HTTP throttles (security review M1): every HTTP route carries its own `RouteSettings` bucket by class — writes 10/20, overlay/admin reads 30/60, roster entry 5/10, one-click admin actions 2/5 — so a flood on one route no longer drains the time/score writes; the 20/40 stage default stays and meters only unmatched requests. Sizes are first estimates, to be re-sized from the HWC 2026 HttpApi 429 counts ([`deploy.md`](./deploy.md) §6.2). §1 gains operational alarms (security review L10): five CloudWatch alarms in the backend stack — messageHandler throttles and errors, summed authorizer throttles, HTTP API 5xx, and relay + authorizer log ingest > 1 GiB/h as the log-cost early warning — on an eu-central-2 SNS topic subscribed by the billing address; the `EstimatedCharges` alarm drops to $25 so it warns before the $55 Budget. WAF on the APIs still waits for the CloudFront edge (backlog `api-edge-layer`, deferred until a custom API domain exists).
 
 **Context.** The deployed backend (`slackline-timer-v1`, eu-central-2) and web stack (`slackline-timer-v1-web`, eu-central-1) are publicly reachable on one paying AWS account, and had **no** cost or abuse guardrails: no AWS Budgets/billing alarm, no API Gateway throttling on either the HTTP API or the WS `$connect`/`$default` stages, no Lambda `reservedConcurrentExecutions`, and no WAF (verified — `throttl|WAF|Budget|reservedConcurrent` match nothing in `infra/`). Both APIs front a custom Lambda authorizer (`authorizer`, `httpAuthorizer`) that does real work (DynamoDB `getCompetition`, JWKS/HMAC verify) on _every_ unauthenticated request, so a flood bills authorizer Lambda + DynamoDB reads before the deny. Three surfaces were already bounded: the presigned-POST photo path (`content-length-range` 0–8 MB + `eq $Content-Type`, operator-only (an admin or a granted manager, ADR 0045), 300 s TTL — its bounds ARE the abuse ceiling), Lambda memory (floored at 128 MB), and log retention (30 days, `DESTROY`). The app is small, single-operator, event-shaped (≤10-day windows), so the target is a hard cost ceiling + early warning, not enterprise DDoS defence.
 
@@ -1850,7 +1852,8 @@ truth.
 
 ## 0045 — Per-competition manager ACL: a third scoped role, grants keyed by Cognito sub
 
-**Accepted · 2026-07-26**
+**Accepted · 2026-07-26 · WS revocation amended by 0053** (a grant delete now
+closes the manager's open sockets; the managers Lambda reaches the relay)
 
 **Context.** Authorization was binary and identity-blind: any member of the
 shared ISA Cognito `timeradmin` group became a **global** admin
@@ -2502,3 +2505,114 @@ data, and its fallback is a plain length ≤ 8. A bound change is three edits �
 both `FIELD_LIMITS` copies and the audit copy — and the parity tests fail until
 all three agree. A legacy foreign `photoKey` keeps working until replaced, and
 replacing it moves the athlete onto its own prefix.
+
+## 0053 — Revoking a manager grant closes their sockets
+
+**Accepted · 2026-10-06** (extends 0026 from readers to managers; amends 0045's
+"an already-open WS socket survives" and its managers Lambda that never touched
+the relay)
+
+**Context.** The WS authorizer checks a manager's grant once, at `$connect`.
+`DELETE …/managers/{sub}` deleted the grant and closed nothing, and the
+connection row stored no principal to find the sockets by. A revoked manager
+kept a read-write socket up to API Gateway's 2 h cap (the keepalive defeats the
+idle timeout) and could still send `start`/`stop`/`state_snapshot` and win the
+`updateSelection` last-writer-wins into the live room. The same holds for an
+IdToken that expires, or a Cognito user disabled, while the socket is open.
+Any fix must leave the `messageHandler` hot path alone (no extra DynamoDB call
+per relayed frame).
+
+**Decision.**
+
+1. **The principal rides the connection row.** The `$connect` authorizer puts
+   `principal` in its context — the Cognito `sub` for an admin or manager,
+   `reader:<compId>` for a read token, `local-dev-operator` for the offline
+   dummy. It repeats `principalId` because the local WS harness forwards only
+   the context. `connectionHandler` stores it on the forward row in the write it
+   already makes, and `db.getAllConnections` returns it.
+2. **One close primitive.** `core/broadcast.ts` `disconnectSession({ endpoint,
+sessionId, match })` closes the session's connections that `match` selects,
+   with the fan-out's concurrency cap, 429/5xx retry and 410 prune.
+   `disconnectSessionReaders` (ADR 0026) is `match: c => c.readOnly` over it.
+3. **The grant delete closes that sub's sockets.** After `revokeManager`, the
+   managers Lambda calls `disconnectSession` with
+   `match: c => c.principal === sub` on that competition. Best-effort in the
+   0026 shape: the grant delete persists first, a close failure only logs and
+   the route still answers 204, and a missing `WS_API_ENDPOINT` warns. A closed
+   page reconnects and the authorizer's grant check denies it. The managers
+   Lambda gets `execute-api:ManageConnections` and relay-table `Query` +
+   `DeleteItem`, the writers' exact grant.
+
+**Rejected.** Enforcing token `exp` mid-socket (store it on the row, close on
+the first frame past it): an IdToken lives ~1 h, so the relay would close
+operator sockets at arbitrary moments, and a close between the two lane stops
+of a heat loses a stop. It would also add a check to every relayed frame. The
+2 h connection cap already bounds an expired token or a disabled user.
+Closing on competition delete: no delete route exists.
+
+**Consequences.** A grant revoke takes effect on HTTP and WS within the call.
+Residuals, recorded in `architecture.md` "Accepted risks": a reconnect racing
+the revoke (~100 ms between the authorizer's grant read and the close query)
+can be admitted and lives to the 2 h cap; rows written before this change carry
+no principal and are not matched until they age out (≤ 2 h after deploy); an
+expired token or a disabled Cognito user keeps an open socket up to the 2 h cap.
+
+## 0054 — The enforcing CSP is built from the resolved deploy config
+
+**Accepted · 2026-10-06** (builds on 0048; security review M6, slice 2)
+
+**Context.** Amplify keeps the Cognito tokens in `localStorage` and read tokens
+are cached there too, so one XSS takes every credential the browser holds. The
+web distribution's response header (M6 slice 1, `server/infra/web-stack.ts`)
+can enforce only directives that need no deployment origins (`frame-ancestors`,
+`base-uri`, `object-src`, `form-action`); its full policy is Report-Only with
+generic `https:`/`wss:` sources. The exact origins — API, WS, Cognito, photo
+CDN, photo upload bucket — are known only once ADR 0048's deploy tooling has
+resolved them, and four of them are backend outputs in `eu-central-2` while the
+web stack lives in `eu-central-1`.
+
+**Decision.**
+
+1. **The build writes the policy.** A Vite plugin (`web/internals/csp.mjs`,
+   `apply: 'build'`) injects an enforcing `<meta http-equiv="Content-Security-Policy">`
+   right after `<meta charset>`, built from the same env the bundle is built
+   with: the `VITE_APP_*` API/WS/Cognito values plus two non-bundle inputs,
+   `WEB_CSP_PHOTO_CDN_DOMAIN` and `WEB_CSP_PHOTO_UPLOAD_ORIGIN`, which
+   `deployConfig.mjs` resolves from the backend outputs `PhotoCdnDomain` and
+   `PhotoUploadOrigin` (`https://<bucket regional domain>`, the host
+   `createPresignedPost` returns). The policy: `default-src 'self'`,
+   `script-src 'self'`, `style-src 'self' 'unsafe-inline'`,
+   `img-src 'self' data: blob: <photo CDN>`, `font-src`/`media-src 'self' data:`,
+   `connect-src 'self' <API> <WS> <Cognito domain> cognito-idp.<pool region>
+<upload origin> http://127.0.0.1:* http://localhost:*`, `worker-src 'none'`,
+   `base-uri 'self'`, `form-action 'self'`, `object-src 'none'`.
+   Sources are origins only: a path-bearing source matches that one path; a
+   source two inputs share is listed once.
+2. **No fallbacks.** A missing or malformed input stops `vite build` (the
+   ADR 0048 rule); `vite dev` and vitest never run the plugin. CI passes
+   unreachable `ci.invalid` placeholders, as it does for the bundle's URLs.
+3. **Meta and header split by what each can carry.** A `<meta>` CSP ignores
+   `frame-ancestors`, so that stays in the header; the origins stay in the
+   meta. `base-uri`, `form-action` and `object-src` sit in both, so neither
+   policy depends on the other being served. Browsers enforce both policies; a
+   request must pass each.
+4. **A new runtime origin is a CSP change.** Any new `fetch`, socket, image or
+   media host needs its own input here, or the browser blocks it. The H2R
+   bridge reaches loopback only.
+
+**Rejected.** A CDK-built full CSP in the header: the web stack would need the
+backend's outputs across regions (`eu-central-2` → `eu-central-1`), a
+cross-stack, cross-region dependency for a value the web deploy already has.
+Wildcards (`https://*.execute-api.<region>.amazonaws.com`,
+`https://*.s3.amazonaws.com`): an attacker's own API or bucket matches them, so
+they leave the exfiltration path open. Nonces or hashes for styles: the SPA is
+a static S3 object with no per-response rewrite, and emotion generates its
+`<style>` rules at runtime.
+
+**Consequences.** Injected script and exfiltration to any host outside the list
+are blocked; this closes the browser half of L5 (the H2R target) and L15
+(`?bg=url(…)` fetches). With `'unsafe-inline'` styles an injected rule can
+still restyle a page, but its `url()` fetches stay inside `img-src`/`font-src`. An H2R instance on another machine is unreachable
+from the bridge. Each web deploy owes the CSP smoke in `deploy.md` §5; rollback
+is a web redeploy from the previous commit. The slice-1 Report-Only header
+becomes redundant once this is deployed and observed.

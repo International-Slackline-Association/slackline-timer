@@ -82,7 +82,7 @@ All from the repo root:
 | command             | what it does                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm run dev`       | deps/Docker/env check, `db:up`, then the backend (`:3001` + `:3002`) + web                                                                                                                                                                                                                                                                                                            |
-| `npm run dev:web`   | just the Vite dev server                                                                                                                                                                                                                                                                                                                                                              |
+| `npm run dev:web`   | just the Vite dev server, on `127.0.0.1` (`npm --prefix web run start:lan` for all interfaces)                                                                                                                                                                                                                                                                                        |
 | `npm run dev:api`   | just the backend: ensure tables + bucket, then the HTTP harness + the WS harness (needs `db:up`)                                                                                                                                                                                                                                                                                      |
 | `npm run dev:check` | pre-flight: deps, Docker reachable, web env points at the local backends                                                                                                                                                                                                                                                                                                              |
 | `npm run db:up`     | start the LocalStack container (`:4566`, DynamoDB + S3)                                                                                                                                                                                                                                                                                                                               |
@@ -113,11 +113,47 @@ runs the **real** esbuild-bundled handlers in-process. Per request it matches
 method + path to the `routeKey` the handlers dispatch on (one entry per
 `src/functions/*` route, mirroring the CDK HTTP routes in
 `infra/slackline-stack.ts`), captures path params, and builds a minimal
-`APIGatewayProxyEventV2` with an injected admin authorizer context (the same
-operator identity the offline authorizers grant the `local-dev` dummy). Same
-drift posture as the WS harness: one route table to keep in sync, guarded by a
-`GET /competitions → 200` boot smoke in
-`test/integration/localHttpHarness.int.test.ts`.
+`APIGatewayProxyEventV2` whose authorizer context comes from running the real
+`httpAuthorizer` on the request's `Authorization` header. A request without one
+is a `401`, as in prod — scripts and `curl` send the `local-dev` dummy
+(`-H 'Authorization: Bearer local-dev'`). Same drift posture as the WS harness:
+one route table to keep in sync, guarded by a `GET /competitions → 200` boot
+smoke in `test/integration/localHttpHarness.int.test.ts`.
+
+### Network lockdown: loopback, Host and Origin
+
+The offline authorizers accept `local-dev` as a full operator, so anything that
+can reach the harnesses can read and write local data. Both harnesses
+(`server/scripts/lib/harnessGuard.mjs`) therefore:
+
+- **bind `127.0.0.1`** — nothing on the LAN reaches them;
+- **check `Host`** against `127.0.0.1:<port>` / `localhost:<port>` and answer
+  `421` otherwise, which defeats DNS rebinding (a hostile page whose domain
+  re-resolves to `127.0.0.1` still sends its own name as `Host`);
+- **check `Origin`** against an allowlist — `http://localhost:5173`,
+  `http://127.0.0.1:5173`, plus `HARNESS_ALLOWED_ORIGINS`. A foreign origin gets
+  a `403` with no CORS headers on the HTTP API, and a refused handshake on the
+  WebSocket upgrade (browsers apply no CORS to WebSockets, so without this any
+  website could open `ws://127.0.0.1:3001?Authorization=local-dev` as an
+  operator). Requests with no `Origin` (Node scripts, tests, `curl`) pass.
+
+The WS harness also refuses the handshake when `connectionHandler` answers
+`$connect` with anything but `200` (e.g. a missing `sessionId` → `400`), as API
+Gateway does. `npm run dev:web` serves Vite on `127.0.0.1` too.
+
+**Testing from another device on the LAN** (a phone, a second laptop) is an
+explicit opt-in. With your machine's LAN IP (say `192.168.1.20`):
+
+```bash
+HARNESS_HOST=192.168.1.20 HARNESS_ALLOWED_ORIGINS=http://192.168.1.20:5173   npm run dev:api
+npm --prefix web run start:lan   # vite dev --host (all interfaces)
+```
+
+and point `VITE_APP_WS_URL` / `VITE_APP_API_URL` at `192.168.1.20`.
+`HARNESS_HOST` is the bind address and is added to the `Host` allowlist, so give
+the concrete IP rather than `0.0.0.0`. `HARNESS_ALLOWED_ORIGINS` is
+comma-separated. Anyone on that network can then act as an operator — use it on
+a network you trust.
 
 ## Env reference
 

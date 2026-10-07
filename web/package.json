@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "checkTs": "tsc --noEmit",
-    "start": "vite dev --host",
+    "start": "vite dev --host 127.0.0.1",
+    "start:lan": "vite dev --host",
     "build": "eslint . && vite build",
     "preview": "vite preview",
     "test": "vitest run",

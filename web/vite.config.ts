@@ -2,6 +2,8 @@ import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 import checker from 'vite-plugin-checker';
 
+import { cspMetaPlugin } from './internals/csp.mjs';
+
 // src/app/constants.ts reads exactly these and has no fallbacks (ADR 0048), so
 // a build missing one only fails once a browser has been served the bundle.
 // Refuse to emit it instead.
@@ -17,8 +19,9 @@ const REQUIRED_ENV = [
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
   // loadEnv merges the prefixed vars from process.env, which is how the deploy
-  // tooling's resolved values reach both this guard and the bundle.
-  const env = loadEnv(mode, process.cwd(), 'VITE_APP');
+  // tooling's resolved values reach this guard, the CSP and the bundle. Only
+  // VITE_* reach the bundle; WEB_CSP_* are build inputs.
+  const env = loadEnv(mode, process.cwd(), ['VITE_APP', 'WEB_CSP_']);
   if (command === 'build') {
     // LOCAL_DEV disables the UI auth gate and sends a dummy Authorization token.
     // `vite build` doesn't read .env.development, but a stray shell export or
@@ -53,6 +56,7 @@ export default defineConfig(({ command, mode }) => {
     },
     plugins: [
       react(),
+      cspMetaPlugin(env),
       checker({
         overlay: true,
         typescript: true,

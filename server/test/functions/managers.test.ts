@@ -9,12 +9,14 @@ const {
   revokeManagerMock,
   listManagersMock,
   resolveUserByEmailMock,
+  disconnectSessionMock,
 } = vi.hoisted(() => ({
   getCompetitionMock: vi.fn(),
   grantManagerMock: vi.fn(),
   revokeManagerMock: vi.fn(),
   listManagersMock: vi.fn(),
   resolveUserByEmailMock: vi.fn(),
+  disconnectSessionMock: vi.fn(),
 }));
 
 vi.mock('core/competitionDb', () => ({
@@ -26,6 +28,7 @@ vi.mock('core/competitionDb', () => ({
   },
 }));
 vi.mock('core/cognitoUsers', () => ({ resolveUserByEmail: resolveUserByEmailMock }));
+vi.mock('core/broadcast', () => ({ disconnectSession: disconnectSessionMock }));
 
 import { main } from '@functions/managers/handler';
 
@@ -45,10 +48,13 @@ const invoke = async (e: APIGatewayProxyEventV2WithLambdaAuthorizer<AuthContext>
 
 beforeEach(() => {
   process.env.COGNITO_USER_POOL_ID = 'eu-central-1_test';
+  process.env.WS_API_ENDPOINT = 'https://ws.example.com/prod';
   getCompetitionMock.mockResolvedValue({ compId: COMP, name: 'Worlds' });
+  disconnectSessionMock.mockResolvedValue({ disconnected: 1 });
 });
 
 afterEach(() => {
+  delete process.env.WS_API_ENDPOINT;
   vi.clearAllMocks();
 });
 
@@ -109,6 +115,52 @@ describe('managers handler', () => {
 
     expect(res.statusCode).toBe(204);
     expect(revokeManagerMock).toHaveBeenCalledWith(COMP, 'sub-42');
+  });
+
+  it("closes the revoked manager's open sockets on that competition, after the revoke", async () => {
+    const res = await invoke(
+      event('DELETE /competitions/{compId}/managers/{sub}', admin, { sub: 'sub-42' }),
+    );
+
+    expect(res.statusCode).toBe(204);
+    expect(disconnectSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'https://ws.example.com/prod', sessionId: COMP }),
+    );
+    const { match } = disconnectSessionMock.mock.calls[0][0];
+    expect(match({ principal: 'sub-42' })).toBe(true);
+    expect(match({ principal: 'other-sub' })).toBe(false);
+    expect(match({ principal: undefined })).toBe(false);
+    expect(revokeManagerMock.mock.invocationCallOrder[0]).toBeLessThan(
+      disconnectSessionMock.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('still 204s when closing the sockets fails (the revoke persisted)', async () => {
+    disconnectSessionMock.mockRejectedValue(new Error('ws down'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await invoke(
+      event('DELETE /competitions/{compId}/managers/{sub}', admin, { sub: 'sub-42' }),
+    );
+
+    expect(res.statusCode).toBe(204);
+    expect(revokeManagerMock).toHaveBeenCalledWith(COMP, 'sub-42');
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it('warns and skips the socket close when WS_API_ENDPOINT is unset', async () => {
+    delete process.env.WS_API_ENDPOINT;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const res = await invoke(
+      event('DELETE /competitions/{compId}/managers/{sub}', admin, { sub: 'sub-42' }),
+    );
+
+    expect(res.statusCode).toBe(204);
+    expect(disconnectSessionMock).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('WS_API_ENDPOINT'));
+    warn.mockRestore();
   });
 
   it('rejects a manager (non-admin) with 403 before any work', async () => {

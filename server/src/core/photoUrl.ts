@@ -20,6 +20,16 @@ export interface PhotoUrlSigner {
   (photoKey: string, expiresAtMs: number): string;
 }
 
+export const PHOTO_URL_MEMO_MAX_ENTRIES = 2000;
+
+/**
+ * Per-container memo of signed URLs: one RSA signature per athlete per read
+ * otherwise, and reader-triggerable via rankings. `computePhotoUrlExpiry`
+ * quantises expiries to 6 h windows, so a key repeats across reads within a
+ * window. Cleared wholesale past the cap rather than LRU-evicted.
+ */
+const signedUrlMemo = new Map<string, string>();
+
 /** The private key is a SecureString fetched at runtime (core/secrets.ts, ADR 0025). */
 export const createPhotoUrlSigner = (config: {
   /** CloudFront distribution domain, e.g. dxxxxxxxx.cloudfront.net */
@@ -29,13 +39,21 @@ export const createPhotoUrlSigner = (config: {
   /** RSA private key (PEM) matching that public key. */
   privateKeyPem: string;
 }): PhotoUrlSigner => {
-  return (photoKey, expiresAtMs) =>
-    getSignedUrl({
-      url: `https://${config.cdnDomain}/${photoKey}`,
+  return (photoKey, expiresAtMs) => {
+    const url = `https://${config.cdnDomain}/${photoKey}`;
+    const memoKey = `${config.keyPairId}|${url}|${expiresAtMs}`;
+    const memoised = signedUrlMemo.get(memoKey);
+    if (memoised) return memoised;
+    const signed = getSignedUrl({
+      url,
       keyPairId: config.keyPairId,
       privateKey: config.privateKeyPem,
       dateLessThan: new Date(expiresAtMs).toISOString(),
     });
+    if (signedUrlMemo.size >= PHOTO_URL_MEMO_MAX_ENTRIES) signedUrlMemo.clear();
+    signedUrlMemo.set(memoKey, signed);
+    return signed;
+  };
 };
 
 /**

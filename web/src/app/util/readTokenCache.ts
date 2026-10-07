@@ -20,7 +20,8 @@ interface CachedReadToken extends ReadTokenResponse {
   storedAt: number;
 }
 
-const storageKey = (compId: string) => `speedline.overlayReadToken.${compId}`;
+const KEY_PREFIX = 'speedline.overlayReadToken.';
+const storageKey = (compId: string) => `${KEY_PREFIX}${compId}`;
 
 /** localStorage can throw (privacy mode / disabled storage) — degrade to no cache. */
 const store = (): Storage | null => {
@@ -44,14 +45,33 @@ export const readCachedReadToken = (compId: string, now: number): ReadTokenRespo
   }
 };
 
+/** A full quota throws inside the mint mutation's `onSuccess` — degrade to no cache. */
 export const writeCachedReadToken = (
   compId: string,
   response: ReadTokenResponse,
   now: number,
 ): void => {
-  store()?.setItem(storageKey(compId), JSON.stringify({ ...response, storedAt: now }));
+  try {
+    store()?.setItem(storageKey(compId), JSON.stringify({ ...response, storedAt: now }));
+  } catch {
+    // Not cached: the next visit mints a fresh token.
+  }
 };
 
 export const clearCachedReadToken = (compId: string): void => {
   store()?.removeItem(storageKey(compId));
+};
+
+/**
+ * Every cached token is a live overlay credential for its competition, so
+ * sign-out drops them all — a shared venue laptop must not hand them on.
+ */
+export const clearAllCachedReadTokens = (): void => {
+  const storage = store();
+  if (!storage) return;
+  // Collected first: removing while indexing shifts `key(i)`.
+  const keys = Array.from({ length: storage.length }, (_, i) => storage.key(i)).filter(
+    (key): key is string => key?.startsWith(KEY_PREFIX) ?? false,
+  );
+  for (const key of keys) storage.removeItem(key);
 };

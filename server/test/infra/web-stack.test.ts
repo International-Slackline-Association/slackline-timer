@@ -1,6 +1,6 @@
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { SlacklineTimerV1WebStack } from '../../infra/web-stack';
 
@@ -64,6 +64,63 @@ describe('web frontend stack', () => {
           'Fn::If': ['WafWebAclProvided', { Ref: 'WafWebAclArn' }, { Ref: 'AWS::NoValue' }],
         },
       }),
+    });
+  });
+});
+
+// M6 slice 1: security headers on every web response. The enforced CSP is
+// deployment-free; the full policy is Report-Only until the build-time CSP lands.
+describe('web security headers', () => {
+  const policy = () => {
+    const policies = template.findResources('AWS::CloudFront::ResponseHeadersPolicy');
+    const entries = Object.entries(policies);
+    expect(entries).toHaveLength(1);
+    const [id, res] = entries[0];
+    return { id, config: res.Properties.ResponseHeadersPolicyConfig as Record<string, unknown> };
+  };
+
+  it('attaches the custom policy to the default behavior', () => {
+    template.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        DefaultCacheBehavior: Match.objectLike({
+          ResponseHeadersPolicyId: { Ref: policy().id },
+        }),
+      }),
+    });
+  });
+
+  it('sends HSTS 1 y, nosniff, DENY framing, same-origin referrer and the enforced CSP', () => {
+    expect(policy().config.SecurityHeadersConfig).toEqual({
+      StrictTransportSecurity: {
+        AccessControlMaxAgeSec: 31536000,
+        IncludeSubdomains: false,
+        Preload: false,
+        Override: true,
+      },
+      ContentTypeOptions: { Override: true },
+      FrameOptions: { FrameOption: 'DENY', Override: true },
+      ReferrerPolicy: { ReferrerPolicy: 'same-origin', Override: true },
+      ContentSecurityPolicy: {
+        ContentSecurityPolicy:
+          "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
+        Override: true,
+      },
+    });
+  });
+
+  it('sends the generic CSP as Report-Only', () => {
+    expect(policy().config.CustomHeadersConfig).toEqual({
+      Items: [
+        {
+          Header: 'Content-Security-Policy-Report-Only',
+          Value:
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+            "img-src 'self' data: blob: https:; " +
+            "connect-src 'self' https: wss: http://127.0.0.1:* http://localhost:*; " +
+            "font-src 'self' data:; media-src 'self' data:; worker-src 'none'",
+          Override: true,
+        },
+      ],
     });
   });
 });

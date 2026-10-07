@@ -17,16 +17,22 @@
 // The three handlers are TypeScript with path-alias imports, so they are
 // bundled once with esbuild at startup and dynamic-imported — the same bundler
 // CDK's NodejsFunction uses, so what runs here is what ships.
+//
+// Bind address, Host and Origin checks: lib/harnessGuard.mjs. The Origin check
+// is what stops any website from opening ws://127.0.0.1:3001?Authorization=local-dev
+// as an operator; Node clients (tests, the SDK's management-API posts) send no
+// Origin and pass.
 
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
-import { createServer } from 'node:http';
+import { createServer, STATUS_CODES } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { build } from 'esbuild';
 import { WebSocketServer } from 'ws';
 
+import { harnessGuard } from './lib/harnessGuard.mjs';
 import { handleHealthRequest, WS_HARNESS_ID } from './lib/harnessHealth.mjs';
 import { applyOfflineEnv } from './offlineEnv.mjs';
 
@@ -37,6 +43,7 @@ import { applyOfflineEnv } from './offlineEnv.mjs';
 applyOfflineEnv();
 
 const WS_PORT = Number(process.env.WS_PORT ?? 3001);
+const guard = harnessGuard(WS_PORT);
 const require = createRequire(import.meta.url);
 
 /** Bundle a handler entry to a temp CJS file and load its `main` export.
@@ -61,6 +68,19 @@ const loadHandler = async (entry, name) => {
   return require(outfile).main;
 };
 
+/** Host + Origin gate shared by the management API and the upgrade path. */
+const rejectionStatus = (req) => {
+  if (!guard.isAllowedHost(req.headers.host)) return 421;
+  const { origin } = req.headers;
+  if (origin !== undefined && !guard.isAllowedOrigin(origin)) return 403;
+  return null;
+};
+
+const refuseUpgrade = (socket, status) => {
+  socket.write(`HTTP/1.1 ${status} ${STATUS_CODES[status] ?? ''}\r\nConnection: close\r\n\r\n`);
+  socket.destroy();
+};
+
 const requestContext = (connectionId, routeKey) => ({
   connectionId,
   routeKey,
@@ -83,7 +103,12 @@ const run = async () => {
 
   // Management API (:3001): the relay/db_update fan-out posts here.
   const server = createServer((req, res) => {
-    // Harness-identifying readiness probe (lib/harnessHealth.mjs).
+    const rejected = rejectionStatus(req);
+    if (rejected) {
+      res.writeHead(rejected).end();
+      return;
+    }
+
     if (handleHealthRequest(req, res, WS_HARNESS_ID)) return;
 
     const match = /^\/@connections\/(.+)$/.exec(req.url ?? '');
@@ -91,7 +116,13 @@ const run = async () => {
       res.writeHead(404).end();
       return;
     }
-    const connectionId = decodeURIComponent(match[1]);
+    let connectionId;
+    try {
+      connectionId = decodeURIComponent(match[1]);
+    } catch {
+      res.writeHead(400).end();
+      return;
+    }
     const socket = sockets.get(connectionId);
 
     if (req.method === 'DELETE') {
@@ -120,13 +151,20 @@ const run = async () => {
 
   // Authorize + register BEFORE completing the WS handshake, matching API
   // Gateway's ordering: the $connect authorizer and connectionHandler finish
-  // before the client's socket ever reaches OPEN. Accepting first (the old
-  // `wss.on('connection')` flow) let a message sent the instant the client
-  // opened — the preview's `request_state` — race the membership row and the
-  // message listener, silently dropping it (a race prod cannot have). A denied
-  // $connect now also rejects the handshake outright (close-before-open),
-  // which is what the web's auth-denied detection expects (useWebSocket.tsx).
-  server.on('upgrade', async (req, socket, head) => {
+  // before the client's socket ever reaches OPEN. Accepting first lets a
+  // message sent the instant the client opens — the preview's `request_state` —
+  // race the membership row and the message listener and get dropped (a race
+  // prod cannot have). A denied
+  // $connect, or a non-200 from connectionHandler, rejects the handshake
+  // outright (close-before-open) as API Gateway does, which is what the web's
+  // auth-denied detection expects (useWebSocket.tsx).
+  const upgrade = async (req, socket, head) => {
+    const rejected = rejectionStatus(req);
+    if (rejected) {
+      refuseUpgrade(socket, rejected);
+      return;
+    }
+
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${WS_PORT}`);
     const queryStringParameters = Object.fromEntries(url.searchParams.entries());
     const connectionId = randomUUID();
@@ -136,43 +174,54 @@ const run = async () => {
     const decision = await authorize({ queryStringParameters, methodArn }).catch(() => undefined);
     const allowed = decision?.policyDocument?.Statement?.[0]?.Effect === 'Allow';
     if (!allowed) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
-      socket.destroy();
+      refuseUpgrade(socket, 401);
       return;
     }
 
-    await onConnection({
+    const connected = await onConnection({
       requestContext: { ...requestContext(connectionId, '$connect'), authorizer: decision.context },
       queryStringParameters,
     });
+    if (connected?.statusCode !== 200) {
+      refuseUpgrade(socket, connected?.statusCode ?? 500);
+      return;
+    }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       sockets.set(connectionId, ws);
 
-      ws.on('message', async (data) => {
-        await onMessage({
+      ws.on('message', (data) => {
+        onMessage({
           requestContext: requestContext(connectionId, '$default'),
           queryStringParameters,
           body: data.toString('utf8'),
-        });
+        }).catch((err) => console.error(`harness: $default for ${connectionId} threw:`, err));
       });
 
-      ws.on('close', async () => {
+      ws.on('close', () => {
         sockets.delete(connectionId);
-        // Deliberately NO queryStringParameters: API Gateway attaches them to
-        // $connect only, so a real $disconnect knows just its connectionId and the
-        // handler must resolve the session from the reverse map item (core/db.ts).
-        // Passing them faked a capability prod lacks — which is why the
-        // never-reaped-connection bug could not be reproduced locally.
-        await onConnection({
+        // No queryStringParameters: API Gateway attaches them to $connect only,
+        // so a real $disconnect knows just its connectionId and the handler must
+        // resolve the session from the reverse map item (core/db.ts). Passing
+        // them here would hide a never-reaped-connection bug locally.
+        onConnection({
           requestContext: requestContext(connectionId, '$disconnect'),
-        });
+        }).catch((err) => console.error(`harness: $disconnect for ${connectionId} threw:`, err));
       });
+    });
+  };
+
+  server.on('upgrade', (req, socket, head) => {
+    upgrade(req, socket, head).catch((err) => {
+      console.error('harness: $connect threw:', err);
+      if (!socket.destroyed) refuseUpgrade(socket, 500);
     });
   });
 
-  server.listen(WS_PORT, '0.0.0.0', () => {
-    console.log(`🔌 local WS relay on ws://127.0.0.1:${WS_PORT} (management API on the same port)`);
+  server.listen(WS_PORT, guard.bindHost, () => {
+    console.log(
+      `🔌 local WS relay on ws://${guard.bindHost}:${WS_PORT} (management API on the same port)`,
+    );
   });
 };
 

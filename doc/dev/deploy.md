@@ -33,7 +33,8 @@ differ by resource accordingly.
 >
 > **Deployment config lives in an ignored `.env.deploy` at the repo root** — copy
 > [`.env.deploy.example`](../../.env.deploy.example) and fill in `AWS_PROFILE`,
-> `AWS_ACCOUNT_ID` and `BILLING_ALERT_EMAIL`. It is loaded automatically by
+> `AWS_ACCOUNT_ID` and `BILLING_ALERT_EMAIL` (the billing stack and the backend's
+> ops alarms both subscribe it). It is loaded automatically by
 > every piece of deploy/ops tooling — the CDK entrypoint (`server/infra/app.ts`),
 > the web deploy (`web/internals/deployToS3.mjs`), and the two shared script
 > modules `server/scripts/lib/awsCli.mjs` (commission / decommission /
@@ -88,7 +89,7 @@ The Lambdas receive only parameter **names** and fetch + decrypt at runtime
 (`server/src/core/secrets.ts`). Create these before `cdk deploy`:
 
 ```bash
-# HMAC secret for event read tokens — any long random string
+# HMAC secret for event read tokens — at least 32 bytes (48 random bytes here)
 aws ssm put-parameter --region eu-central-2 --type SecureString \
   --name /slackline-timer-v1/read-token-secret \
   --value "$(openssl rand -base64 48)"
@@ -107,6 +108,21 @@ aws ssm put-parameter --region eu-central-2 --type String \
 
 `SecureString` uses the default `aws/ssm` KMS key. Delete the local `.pem`
 files afterward.
+
+The read-token secret must be **at least 32 bytes** (UTF-8): read tokens are
+public, so a short secret is brute-forceable offline. A shorter value is refused
+at runtime as if it were missing — after the deploy every overlay link fails
+(both authorizers deny, minting answers 503). Check an existing secret before
+deploying:
+
+```bash
+aws ssm get-parameter --region eu-central-2 --with-decryption   --name /slackline-timer-v1/read-token-secret   --query Parameter.Value --output text | tr -d '
+' | wc -c
+```
+
+If it is short, overwrite it (`--overwrite` on the `put-parameter` above) and
+re-mint the overlay links on `/admin/overlays`: a new secret invalidates every
+outstanding read token.
 
 ### 0.3 CDK bootstrap
 
@@ -150,6 +166,8 @@ copied anywhere by hand (ADR 0048):
 - `HttpApiUrl` — the competition-data HTTP API base URL
 - `WebsocketUrl` — the relay WS endpoint
 - `PhotoCdnDomain` — the photo CloudFront domain
+- `PhotoUploadOrigin` — the photo bucket's upload origin (the web CSP's
+  `connect-src` entry for presigned POSTs, ADR 0054)
 
 Replacing an API changes these values; step 3 picks the new ones up on its next
 run. There is no source edit to forget.
@@ -162,8 +180,9 @@ For fast code-only iteration on a **dev** stack (never prod):
 ## 3. Deploy the web (second)
 
 The bundle carries no endpoints of its own — `vite build` refuses to produce
-one unless all six `VITE_APP_*` values are supplied, and the deploy resolves
-them for you (ADR 0048). Run step 2 first: the URLs baked into the bundle come
+one unless all six `VITE_APP_*` values and the two `WEB_CSP_*` inputs of the
+build-time CSP are supplied, and the deploy resolves them for you (ADR 0048,
+ADR 0054). Run step 2 first: the URLs baked into the bundle come
 from the backend stack's outputs, so a web deploy against a stale backend is
 not possible.
 
@@ -178,14 +197,16 @@ builds**:
 1. Reads `.env.deploy` and the live stack per role from the decommission ledger
    — so the two regions (`eu-central-2` backend, `eu-central-1` web) are not
    restated here either.
-2. `describe-stacks` on each: `WebsocketUrl` + `HttpApiUrl` from the backend,
-   `WebBucketName` + `WebDistributionId` from the web stack. A missing output
+2. `describe-stacks` on each: `WebsocketUrl`, `HttpApiUrl`, `PhotoCdnDomain` +
+   `PhotoUploadOrigin` from the backend, `WebBucketName` + `WebDistributionId`
+   from the web stack. A missing output
    names the stack, the region and what it _does_ publish.
 3. Confirms the resolved bucket is owned by `AWS_ACCOUNT_ID`
    (`s3api head-bucket --expected-bucket-owner`) — before the build, not just
    before the upload. The sync runs with `--delete`, so "this bucket name exists
    and my credentials can reach it" is not good enough.
-4. Runs `npm run build` with the resolved `VITE_APP_*` env.
+4. Runs `npm run build` with the resolved `VITE_APP_*` + `WEB_CSP_*` env; the
+   build writes the enforcing CSP `<meta>` into `index.html` (ADR 0054).
 5. Syncs `dist/` to the resolved bucket with `--delete` and a 1-day cache,
    forces `index.html` to `no-cache`, and invalidates the resolved distribution.
 
@@ -227,16 +248,36 @@ first go-live pass is closed — the app then ran the 2026 championships live
   honours a typed override; Speed/Freestyle toggle scopes Matches + bracket;
   a `/stream/rankings/…?discipline=freestyle&token=…` overlay renders read-only
   and refreshes live on `db_update`.
-- **Overlays / CloudFront (X-Frame-Options)** — answered at the 2026 event (the
-  overlays ran as browser sources) and expected **no-op** anyway: the web
-  distribution has no `ResponseHeadersPolicy` (`web-stack.ts`) and S3 origins
-  don't emit `X-Frame-Options`, so CloudFront sends none and `/stream/*` iframes
-  fine in a browser source. Confirm:
+- **Web security headers (§6.6)** — the web distribution sends
+  `X-Frame-Options: DENY` and `frame-ancestors 'none'`. Browser sources (OBS, vMix)
+  load `/stream/*` top-level, so they are unaffected; only a page that _iframes_ the
+  app breaks, and nothing should. Confirm the headers, then that one overlay still
+  renders in a browser source and that Hosted-UI sign-in completes:
   ```bash
-  curl -sI "<WebUrl output>/stream/rankings/final/female" | grep -i x-frame-options
+  curl -sI "<WebUrl output>/stream/rankings/final/female" | grep -iE     'x-frame-options|content-security-policy|strict-transport|x-content-type|referrer-policy'
   ```
-  The grep should print **nothing**. Only if a header _is_ present (it shouldn't
-  be) add a `ResponseHeadersPolicy` to `web-stack.ts` and redeploy the web stack.
+- **Build-time CSP (ADR 0054)** — after every web deploy. The `<meta>` policy
+  allows only the origins resolved at build time, so a missed origin shows up
+  as a blocked request, not a failed build. Keep the DevTools console open
+  (filter `Content-Security-Policy`) through each step; any violation is a
+  failure:
+  1. `curl -s "<WebUrl output>/" | grep -o 'Content-Security-Policy" content="[^"]*'`
+     names the deployed API, WS, Cognito, photo CDN and upload origins.
+  2. Hosted-UI sign-in from a fresh private window (the code exchange on the
+     Cognito domain).
+  3. A token refresh: leave a signed-in control page open for more than 1 h,
+     then act (an admin save, a WS reconnect) — Amplify refreshes against
+     `cognito-idp.<region>`. Sign out once (token revoke).
+  4. WS connect on a control + preview pair.
+  5. Photo upload on `/admin/athletes` (the local preview is a `blob:`, the
+     POST goes to the upload origin), then the photo renders from the CDN.
+  6. A `/stream/*?token=…` overlay renders, photos included.
+  7. The H2R bridge pushes to `http://127.0.0.1:4001` (or H2R's local port).
+
+  **Rollback:** redeploy the web from the previous commit
+  (`git switch --detach <previous>` → `cd web && npm run deploy`). The backend
+  and the header policy need no change; the extra `PhotoUploadOrigin` output is
+  inert.
 
 ---
 
@@ -244,8 +285,9 @@ first go-live pass is closed — the app then ran the 2026 championships live
 
 The controls: a us-east-1 billing stack (✅ deployed 2026-07-07), API-Gateway
 throttling (✅ deployed 2026-07-07, rides the `eu-central-2` backend deploy in §2),
-Lambda reserved-concurrency (✅ deployed 2026-07-21, §6.2), and a default-OFF
-CloudFront WAF on the web distribution (§6.3; the APIs have none).
+Lambda reserved-concurrency (✅ deployed 2026-07-21, §6.2), a default-OFF
+CloudFront WAF on the web distribution (§6.3; the APIs have none), and the
+operational alarms in the backend stack (§6.5).
 Sizes + rationale live in `server/infra/{billing-stack,waf,slackline-stack}.ts` and
 ADR 0031. The one open item is the post-deploy burst smoke (§6.2 / HUMAN_TASKS §"Live-AWS / operational"
 `guardrail-deploy-smoke`).
@@ -260,8 +302,9 @@ AWS_PROFILE=… npx cdk bootstrap aws://<ACCOUNT_ID>/us-east-1   # one-time, new
 AWS_PROFILE=… npx cdk deploy slackline-timer-v1-billing
 ```
 
-**Verify (both required):** stack `CREATE_COMPLETE` with the `CfnBudget` (€50) +
-`EstimatedCharges` alarm; then **click the SNS confirmation link** emailed to
+**Verify (both required):** stack `CREATE_COMPLETE` with the `CfnBudget` ($55 ≈ €50) +
+`EstimatedCharges` alarm (fires above $25 — an earlier warning than the Budget's
+100%); then **click the SNS confirmation link** emailed to
 the address in `BILLING_ALERT_EMAIL` (`aws sns list-subscriptions-by-topic --region us-east-1
 --topic-arn <arn>` → a real ARN, not `PendingConfirmation` — an unconfirmed
 subscription silently drops every alarm). The Budget's own 50/80/100% emails come
@@ -275,11 +318,28 @@ from Budgets directly and need no confirmation.
 
 Both ride `npm run deploy` in `server/` (§2) — no separate command.
 
-✅ **Throttling** — HTTP-stage **20 rps / 40 burst**; WS-stage `$connect`/`$default`
-**2000 rps / 2000 burst**. The WS bucket also meters the outbound `PostToConnection`
-fan-out (every relayed message spends fan-out-N posts through it), so it was raised from
+✅ **Throttling** — HTTP-stage default **20 rps / 40 burst**; WS-stage `$connect`/`$default`
+**2000 rps / 2000 burst**. The WS bucket also meters the outbound `PostToConnection` fan-out (every relayed message spends fan-out-N posts through it), so it was raised from
 the initial inbound-only sizing (10/20) to just under the 2500 rps account cap on
 2026-07-23 (ADR 0031 §2).
+
+**Per-route HTTP throttles (security review M1)** — every HTTP route carries its own
+rate / burst bucket (`RouteSettings` on the stage, `HTTP_ROUTE_THROTTLE` in
+`server/infra/slackline-stack.ts`), so a flood on one route no longer 429s the others;
+the stage default above now meters only requests that match no route:
+
+| Class  | rps / burst | Routes                                                                                                                          |
+| ------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| write  | 10 / 20     | `POST` times, scores, matches; `PUT`/`DELETE` `times/{id}`, `scores/{id}`, `matches/{id}`                                       |
+| read   | 30 / 60     | `GET` competitions, `competitions/{compId}`, athletes, `athletes/{id}`, times, scores, matches, `rankings/{round}`              |
+| roster | 5 / 10      | `POST` athletes, `PUT`/`DELETE` `athletes/{id}`, `POST` photo-uploads                                                           |
+| admin  | 2 / 5       | `POST`/`PUT` competitions, read-tokens, revoke-read-tokens, `matches/seed`, `matches/advance`, managers (`GET`/`POST`/`DELETE`) |
+
+`roster` sits above `admin` because `seedRemote.mjs` enters a whole roster back-to-back
+(photo presign + athlete `POST` per athlete); the seed client backs off on `429`. The
+sizes are first estimates: **re-size them from the HWC 2026 `HttpApi` 429 counts**
+(CloudWatch `AWS/ApiGateway` `4xx`). The first deploy adds `RouteSettings` + a stage→route
+`DependsOn` to the existing stage (an in-place update, no replacement).
 
 ✅ **Reserved-concurrency caps deployed 2026-07-21** — authorizers 50, the five entity
 writers 25, the relay `messageHandler` 100 (its own larger fan-out cap, ADR 0031 §3). The
@@ -290,9 +350,11 @@ landed once a Service Quotas increase raised the pool to the standard 1000.
 
 1. **Normal traffic unthrottled.** Operator login + an admin page + a `/stream/*`
    overlay + a driven round → no `429`, WS stays open.
-2. **HTTP burst is rate-limited.** Point a load tool at a cheap authorized GET
-   above 40 rps (keep it to seconds — each hit bills the authorizer + a DynamoDB
-   `getCompetition`), confirm a share of `429`s:
+2. **HTTP burst is rate-limited per route.** Point a load tool at a cheap authorized
+   GET above its `read` bucket (30 rps / 60 burst; keep it to seconds — each hit bills
+   the authorizer + a DynamoDB `getCompetition`), confirm a share of `429`s, and that a
+   time saved from the admin UI during the burst still lands (its `write` bucket is
+   separate):
    ```bash
    oha -z 20s -q 100 -c 20 -H "Authorization: <IdToken-or-read-token>" \
      "<HttpApiUrl output>/competitions/<compId>/rankings/final?gender=men"
@@ -315,7 +377,7 @@ landed once a Service Quotas increase raised the pool to the standard 1000.
 There is **no WAF in front of the APIs.** A regional WAF ACL attaches to API
 Gateway REST APIs only, not to HTTP or WebSocket APIs, so the backend carries none.
 API-level WAF arrives with the CloudFront edge layer in front of the HTTP API
-(security plan P11, future ADR 0054). Until then, in order of reach:
+(blocked on a custom API domain; a future ADR). Until then, in order of reach:
 
 1. **Leaked overlay link → revoke.** `/admin/overlays` → revoke (`POST
 /competitions/{compId}/revoke-read-tokens`) bumps the competition's
@@ -325,7 +387,10 @@ API-level WAF arrives with the CloudFront edge layer in front of the HTTP API
 2. **Flood on the web app → the CloudFront WAF.** The only ACL that can attach today
    is the CLOUDFRONT-scope one on the web distribution (default-OFF; per-IP rate
    limit 2000 req / 5 min, `infra/waf.ts`). It covers the SPA's static assets, not
-   the APIs or the photo CDN.
+   the APIs or the photo CDN. **At a venue every client shares one NAT address**
+   (241 connections at HWC 2026), so a mass reload can exceed 2000 / 5 min and block
+   the venue itself: raise `RATE_LIMIT_PER_5MIN` (≈ 10 000) before enabling it
+   during an event.
 
    ```bash
    cd server
@@ -341,15 +406,15 @@ API-level WAF arrives with the CloudFront edge layer in front of the HTTP API
    AWS_PROFILE=… npx cdk deploy slackline-timer-v1-web --parameters WafWebAclArn=""
    ```
 
-3. **Flood on the APIs → the throttles are the ceiling.** The HTTP stage (20 rps /
-   40 burst) and WS stage (2000/2000) throttles plus the reserved-concurrency caps
-   (§6.2) bound Lambda and DynamoDB spend; a flood that fills the HTTP bucket also
-   429s legitimate operators until it stops. A missing `Authorization` (HTTP) or
+3. **Flood on the APIs → the throttles are the ceiling.** The per-route HTTP
+   throttles and the WS stage (2000/2000) throttle plus the reserved-concurrency caps
+   (§6.2) bound Lambda and DynamoDB spend; a flood that fills one route's bucket also
+   429s legitimate operators on that route until it stops. A missing `Authorization` (HTTP) or
    missing `Authorization`/`sessionId` (WS `$connect`) is 401'd by API Gateway
    before any Lambda runs. Budgets + the billing alarm (§6.1) are the early warning.
    A sustained targeted flood has no per-IP block at the API today; lowering the
-   stage throttle (`server/infra/slackline-stack.ts`) and redeploying is the
-   remaining lever.
+   hit route's class in `HTTP_ROUTE_THROTTLE` (`server/infra/slackline-stack.ts`)
+   and redeploying is the remaining lever.
 
 ### 6.4 Restoring the competition table (PITR)
 
@@ -383,6 +448,62 @@ either:
 --import-existing-resources`).
 
 ---
+
+### 6.5 Operational alarms (security review L10)
+
+Rides the §2 backend deploy. Five CloudWatch alarms in `eu-central-2` notify the SNS
+topic `slackline-timer-v1-ops-<stage>`, subscribed by the same `BILLING_ALERT_EMAIL`
+address (a separate topic: alarm actions must target a topic in the alarm's region,
+and the billing topic is us-east-1). All treat missing data as not breaching — an idle
+stage publishes nothing.
+
+| Alarm (`slackline-timer-v1-…-<stage>`) | Fires when                                                                 |
+| -------------------------------------- | -------------------------------------------------------------------------- |
+| `message-handler-throttles`            | ≥ 1 `messageHandler` throttle in 1 min (a dropped relay frame)             |
+| `authorizer-throttles`                 | ≥ 1 WS + HTTP authorizer throttle (summed) in 5 min                        |
+| `message-handler-errors`               | ≥ 1 `messageHandler` error in 5 min                                        |
+| `http-api-5xx`                         | ≥ 5 HTTP API `5xx` in 5 min                                                |
+| `log-ingest`                           | > 1 GiB `IncomingBytes` in 1 h across the messageHandler + authorizer logs |
+
+`log-ingest` is the log-cost early warning: it fires within the hour, where
+`EstimatedCharges` lags 6–24 h. Standing cost ≈ $0.80/month (8 alarm metrics).
+
+**After the first deploy, click the SNS confirmation link** emailed to
+`BILLING_ALERT_EMAIL` — an unconfirmed subscription silently drops every alarm:
+
+```bash
+aws sns list-subscriptions-by-topic --region eu-central-2   --topic-arn arn:aws:sns:eu-central-2:<ACCOUNT_ID>:slackline-timer-v1-ops-prod
+```
+
+(`SubscriptionArn` must be a real ARN, not `PendingConfirmation`.) Cost Anomaly
+Detection is not in CDK: AWS creates a default services monitor on most accounts and
+allows one per account, so a stack-owned monitor would collide — subscribe the email
+to the existing monitor in the Billing console instead, if wanted.
+
+### 6.6 Web security headers (security review M6, slice 1)
+
+Rides the web-stack deploy (`npx cdk deploy slackline-timer-v1-web` from `server/`).
+A custom `ResponseHeadersPolicy` on the web distribution (`server/infra/web-stack.ts`)
+adds to every response, the SPA's 403/404 → `index.html` rewrites included:
+
+- `Strict-Transport-Security: max-age=31536000` (no `includeSubDomains`, no `preload`:
+  the host is a `*.cloudfront.net` name);
+- `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`;
+- an **enforcing** `Content-Security-Policy` of the deployment-free directives only:
+  `frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'`
+  (`form-action` does not touch sign-in: Amplify's `signInWithRedirect` navigates via
+  `window.location`, and the admin forms submit through `fetch`);
+- `Content-Security-Policy-Report-Only` with a generic full policy (`default-src 'self'`,
+  `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data: blob: https:`,
+  `connect-src 'self' https: wss: http://127.0.0.1:* http://localhost:*`, `font-src`/
+  `media-src 'self' data:`, `worker-src 'none'`). It blocks nothing and has no report
+  endpoint — violations show in the browser console only.
+
+The first deploy creates the policy and updates the distribution in place (no
+replacement; edge propagation takes minutes). After it, run the §5 header check and
+open the console on a control page, an overlay and `/admin/athletes` (photo preview):
+any `Report-Only` violation listed there is input for slice 2, the build-time
+enforcing CSP with exact origins (ADR 0054, smoke in §5).
 
 ## 7. Ported Node scripts — live-AWS verification (`scripts-nodejs-live-aws-verification`)
 
@@ -435,6 +556,9 @@ deploy's `create-invalidation --paths /*` reaches AWS **literally, un-mangled**
 - **Auto-mode classifier gates destructive/Cognito/secret ops.** `cdk destroy`, the
   decommission scripts, and the Cognito harden step touch delete/identity/secret
   APIs a restricted session may block — run them in an interactive/approved session.
+- **Deploy outside live heats.** A Lambda-only deploy keeps open WS sockets, but
+  the first frames after it hit cold starts (300–600 ms) on the relay and the
+  authorizers; a stop landing then is late on every display.
 - **RETAIN + deletionProtection orphans.** Both DynamoDB tables and the photos
   bucket are `RemovalPolicy.RETAIN` + deletion-protected; `cdk destroy` leaves them
   behind by design (the decommission ledger `server/scripts/decommission/stacks.json`
@@ -455,7 +579,7 @@ deploy's `create-invalidation --paths /*` reaches AWS **literally, un-mangled**
    SNS subscription confirmed).
 6. **Seed a competition + real operator URLs** (§4) — ✅ **done**; the 2026
    championships ran on a seeded comp whose `compId` was the relay `sessionId`.
-7. **Smoke tests** (§5, X-Frame-Options) — ✅ **closed by the live event**
+7. **Smoke tests** (§5) — ✅ **closed by the live event**
    (STATUS §1). §5 is now the re-deploy checklist.
 8. **Guardrail burst smoke + WAF enable rehearsal** (§6.2, §6.3) — ⬜ **still
    open** (`guardrail-deploy-smoke`, HUMAN_TASKS §"Live-AWS / operational"); the WS half was answered in

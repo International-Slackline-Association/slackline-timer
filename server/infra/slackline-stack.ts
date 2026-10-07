@@ -5,7 +5,10 @@ import {
   CorsHttpMethod,
   HttpApi,
   HttpMethod,
+  CfnRoute,
+  CfnStage,
   HttpStage,
+  type ThrottleSettings,
   WebSocketApi,
   WebSocketStage,
 } from 'aws-cdk-lib/aws-apigatewayv2';
@@ -30,12 +33,24 @@ import {
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import {
+  Alarm,
+  ComparisonOperator,
+  type IMetric,
+  MathExpression,
+  Metric,
+  Stats,
+  TreatMissingData,
+} from 'aws-cdk-lib/aws-cloudwatch';
+import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { BlockPublicAccess, Bucket, HttpMethods } from 'aws-cdk-lib/aws-s3';
+import { Topic } from 'aws-cdk-lib/aws-sns';
+import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 
@@ -83,6 +98,8 @@ const cognitoPoolArn = (scope: Construct, cognito: CognitoConfig): string =>
 export interface SlacklineTimerV1StackProps extends StackProps {
   stage: string;
   cognito: CognitoConfig;
+  /** Subscribed to the ops alarm topic (defineAlarms); the billing stack's address. */
+  alertEmail: string;
 }
 
 /**
@@ -96,13 +113,14 @@ export interface SlacklineTimerV1StackProps extends StackProps {
 export class SlacklineTimerV1Stack extends Stack {
   constructor(scope: Construct, id: string, props: SlacklineTimerV1StackProps) {
     super(scope, id, props);
-    const { stage, cognito } = props;
+    const { stage, cognito, alertEmail } = props;
 
     const tables = defineTables(this, stage);
     const photoCdn = definePhotoCdn(this, stage);
     const fns = defineFunctions(this, stage, tables, photoCdn, cognito);
     const wsStage = defineWsRelay(this, stage, fns);
     const httpApi = defineHttpApi(this, stage, fns);
+    defineAlarms(this, stage, fns, httpApi, alertEmail);
 
     new CfnOutput(this, 'HttpApiUrl', {
       description: 'Competition data-plane HTTP API base URL.',
@@ -115,6 +133,12 @@ export class SlacklineTimerV1Stack extends Stack {
     new CfnOutput(this, 'PhotoCdnDomain', {
       description: 'CloudFront domain serving signed photo URLs.',
       value: photoCdn.distribution.distributionDomainName,
+    });
+    // The web build's CSP connect-src (ADR 0054): the host createPresignedPost
+    // returns as the upload `url`.
+    new CfnOutput(this, 'PhotoUploadOrigin', {
+      description: 'Origin the browser POSTs presigned photo uploads to.',
+      value: `https://${photoCdn.bucket.bucketRegionalDomainName}`,
     });
   }
 }
@@ -256,8 +280,8 @@ interface Fns {
   createReadToken: NodejsFunction;
   managers: NodejsFunction;
   all: NodejsFunction[];
-  /** messageHandler + the five entity writers — everything that posts to WS connections. */
-  broadcasters: NodejsFunction[];
+  /** Everything that posts to or closes WS connections: messageHandler, the writers, managers. */
+  connectionManagers: NodejsFunction[];
 }
 
 function defineFunctions(
@@ -422,26 +446,30 @@ function defineFunctions(
   ];
 
   // Grants are per need, not per role. The relay table reaches beyond the relay
-  // handlers only to the five entity writers, whose core/broadcast.ts fan-out
-  // (db_update, revoke's reader disconnect) only Queries a session's rows and
-  // Deletes stale ones (their ManageConnections grant follows in defineWsRelay).
+  // handlers only to the five entity writers and managers, whose core/broadcast.ts
+  // calls (db_update, the revoke socket closes of ADR 0026/0053) only Query a
+  // session's rows and Delete stale ones (their ManageConnections grant follows
+  // in defineWsRelay).
   // The authorizers, rankings, photoUpload and createReadToken only ever read
   // the competition table (getCompetition / list*); connectionHandler writes its
   // own connection rows and reads back the reverse map item a $disconnect needs
   // to resolve its session (core/db.ts).
   const writers = [competitions, athletes, times, matches, scores];
+  const relayClients = [...writers, managers];
   tables.relay.grantReadWriteData(connection);
   tables.relay.grantReadWriteData(message);
-  for (const fn of writers) {
+  for (const fn of relayClients) {
     tables.relay.grant(fn, 'dynamodb:Query', 'dynamodb:DeleteItem');
+  }
+  for (const fn of writers) {
     tables.competition.grantReadWriteData(fn);
   }
   for (const fn of [authorizer, httpAuthorizer, rankings, photoUpload, createReadToken]) {
     tables.competition.grantReadData(fn);
   }
   // The managers Lambda reads + writes grant items on the competition table and
-  // resolves email→sub against the shared ISA Cognito pool. It does not touch
-  // the relay (no db_update broadcast), so it stays out of `writers`.
+  // resolves email→sub against the shared ISA Cognito pool. It publishes no
+  // db_update, so it stays out of `writers`.
   tables.competition.grantReadWriteData(managers);
   managers.addToRolePolicy(
     new PolicyStatement({
@@ -485,7 +513,7 @@ function defineFunctions(
     createReadToken,
     managers,
     all,
-    broadcasters: [message, ...writers],
+    connectionManagers: [message, ...relayClients],
   };
 }
 
@@ -531,18 +559,36 @@ function defineWsRelay(stack: Stack, stage: string, fns: Fns): WebSocketStage {
     throttle: { rateLimit: 2000, burstLimit: 2000 },
   });
 
-  // db_update broadcast endpoint (base env on every function) + fan-out
-  // permission for the functions that actually publish. This is the
+  // db_update broadcast endpoint (base env on every function) + ManageConnections
+  // for the functions that post to or close sockets. This is the
   // cross-wiring that keeps the backend one stack: the env var can only be
   // patched in after the stage exists.
   for (const fn of fns.all) {
     fn.addEnvironment('WS_API_ENDPOINT', wsStage.callbackUrl);
   }
-  for (const fn of fns.broadcasters) {
+  for (const fn of fns.connectionManagers) {
     wsApi.grantManageConnections(fn);
   }
   return wsStage;
 }
+
+// Per-route HTTP throttles (M1), one rate (rps) / burst bucket per route key, so
+// an overlay-read flood cannot drain the budget of the time/score writes. Sized
+// against today's traffic shape; re-size from the HWC 2026 HttpApi 429 counts.
+//   write  — a time/score/match write per run or judged heat; seedRemote replays
+//            them back-to-back (backing off on 429, scripts/lib/seedClient.mjs).
+//   read   — every console + overlay refetches its queries on each db_update.
+//   roster — athlete POST/PUT/DELETE and the photo presign before each one:
+//            seedRemote enters a whole roster sequentially (~2–5 req/s with
+//            photos), faster than the one-click admin bucket allows.
+//   admin  — one-click operator actions (competition create/edit, read-token
+//            mint/revoke, bracket seed/advance, manager grants).
+const HTTP_ROUTE_THROTTLE = {
+  write: { rateLimit: 10, burstLimit: 20 },
+  read: { rateLimit: 30, burstLimit: 60 },
+  roster: { rateLimit: 5, burstLimit: 10 },
+  admin: { rateLimit: 2, burstLimit: 5 },
+} as const satisfies Record<string, ThrottleSettings>;
 
 // ── HTTP data plane ───────────────────────────────────────────────────────────
 // Custom request authorizer: Cognito IdToken+timeradmin → admin, or an event
@@ -573,100 +619,242 @@ function defineHttpApi(stack: Stack, stage: string, fns: Fns): HttpApi {
       maxAge: Duration.hours(1),
     },
   });
-  new HttpStage(stack, 'HttpStage', {
+  const httpStage = new HttpStage(stack, 'HttpStage', {
     httpApi,
     stageName: stage,
     autoDeploy: true,
     // Default-stage throttling (ADR 0031 §2): the request authorizer does per-hit
     // DynamoDB getCompetition + JWKS/HMAC verify, so a flood bills that Lambda +
-    // DB before the deny. ~20 rps / 40 burst sits well above a live admin + ~15
-    // overlays refreshing on db_update, far below a flood. No usage plans / API
-    // keys (ADR 0022(c)). Behavioural smoke owed post-deploy.
+    // DB before the deny. No usage plans / API keys (ADR 0022(c)). Every route
+    // carries its own bucket (HTTP_ROUTE_THROTTLE, below), so this default meters
+    // only requests that match no route.
     throttle: { rateLimit: 20, burstLimit: 40 },
   });
 
   // The whole API surface as one table: one integration per function, reused
-  // across its routes. Guarded by test/infra/slackline-stack.test.ts, which
-  // asserts the exact synthesized route set.
+  // across its routes, and each route's throttle class. Guarded by
+  // test/infra/slackline-stack.test.ts, which asserts the exact synthesized route
+  // set and that every route key has a RouteSettings entry.
+  // An integration's logical id derives from the first route bound to it, so
+  // reordering a function's first route replaces its integration.
   const { GET, POST, PUT, DELETE } = HttpMethod;
+  const { read, write, roster, admin } = HTTP_ROUTE_THROTTLE;
   const C = '/competitions';
   const surface: {
     fn: NodejsFunction;
     integrationId: string;
-    routes: { path: string; methods: HttpMethod[] }[];
+    routes: { path: string; methods: HttpMethod[]; throttle: ThrottleSettings }[];
   }[] = [
     {
       fn: fns.competitions,
       integrationId: 'CompetitionsIntegration',
       routes: [
-        { path: C, methods: [POST, GET] },
-        { path: `${C}/{compId}`, methods: [GET, PUT] },
-        { path: `${C}/{compId}/revoke-read-tokens`, methods: [POST] },
+        { path: C, methods: [POST], throttle: admin },
+        { path: C, methods: [GET], throttle: read },
+        { path: `${C}/{compId}`, methods: [GET], throttle: read },
+        { path: `${C}/{compId}`, methods: [PUT], throttle: admin },
+        { path: `${C}/{compId}/revoke-read-tokens`, methods: [POST], throttle: admin },
       ],
     },
     {
       fn: fns.athletes,
       integrationId: 'AthletesIntegration',
       routes: [
-        { path: `${C}/{compId}/athletes`, methods: [GET, POST] },
-        { path: `${C}/{compId}/athletes/{athleteId}`, methods: [GET, PUT, DELETE] },
+        { path: `${C}/{compId}/athletes`, methods: [GET], throttle: read },
+        { path: `${C}/{compId}/athletes`, methods: [POST], throttle: roster },
+        { path: `${C}/{compId}/athletes/{athleteId}`, methods: [GET], throttle: read },
+        { path: `${C}/{compId}/athletes/{athleteId}`, methods: [PUT, DELETE], throttle: roster },
       ],
     },
     {
       fn: fns.times,
       integrationId: 'TimesIntegration',
       routes: [
-        { path: `${C}/{compId}/times`, methods: [GET, POST] },
-        { path: `${C}/{compId}/times/{timeId}`, methods: [PUT, DELETE] },
+        { path: `${C}/{compId}/times`, methods: [GET], throttle: read },
+        { path: `${C}/{compId}/times`, methods: [POST], throttle: write },
+        { path: `${C}/{compId}/times/{timeId}`, methods: [PUT, DELETE], throttle: write },
       ],
     },
     {
       fn: fns.matches,
       integrationId: 'MatchesIntegration',
       routes: [
-        { path: `${C}/{compId}/matches`, methods: [GET, POST] },
-        { path: `${C}/{compId}/matches/seed`, methods: [POST] },
-        { path: `${C}/{compId}/matches/advance`, methods: [POST] },
-        { path: `${C}/{compId}/matches/{matchId}`, methods: [PUT, DELETE] },
+        { path: `${C}/{compId}/matches`, methods: [GET], throttle: read },
+        { path: `${C}/{compId}/matches`, methods: [POST], throttle: write },
+        { path: `${C}/{compId}/matches/seed`, methods: [POST], throttle: admin },
+        { path: `${C}/{compId}/matches/advance`, methods: [POST], throttle: admin },
+        { path: `${C}/{compId}/matches/{matchId}`, methods: [PUT, DELETE], throttle: write },
       ],
     },
     {
       fn: fns.scores,
       integrationId: 'ScoresIntegration',
       routes: [
-        { path: `${C}/{compId}/scores`, methods: [GET, POST] },
-        { path: `${C}/{compId}/scores/{scoreId}`, methods: [PUT, DELETE] },
+        { path: `${C}/{compId}/scores`, methods: [GET], throttle: read },
+        { path: `${C}/{compId}/scores`, methods: [POST], throttle: write },
+        { path: `${C}/{compId}/scores/{scoreId}`, methods: [PUT, DELETE], throttle: write },
       ],
     },
     {
       fn: fns.rankings,
       integrationId: 'RankingsIntegration',
-      routes: [{ path: `${C}/{compId}/rankings/{round}`, methods: [GET] }],
+      routes: [{ path: `${C}/{compId}/rankings/{round}`, methods: [GET], throttle: read }],
     },
     {
       fn: fns.photoUpload,
       integrationId: 'PhotoUploadIntegration',
-      routes: [{ path: `${C}/{compId}/photo-uploads`, methods: [POST] }],
+      routes: [{ path: `${C}/{compId}/photo-uploads`, methods: [POST], throttle: roster }],
     },
     {
       fn: fns.createReadToken,
       integrationId: 'CreateReadTokenIntegration',
-      routes: [{ path: `${C}/{compId}/read-tokens`, methods: [POST] }],
+      routes: [{ path: `${C}/{compId}/read-tokens`, methods: [POST], throttle: admin }],
     },
     {
       fn: fns.managers,
       integrationId: 'ManagersIntegration',
       routes: [
-        { path: `${C}/{compId}/managers`, methods: [GET, POST] },
-        { path: `${C}/{compId}/managers/{sub}`, methods: [DELETE] },
+        { path: `${C}/{compId}/managers`, methods: [GET, POST], throttle: admin },
+        { path: `${C}/{compId}/managers/{sub}`, methods: [DELETE], throttle: admin },
       ],
     },
   ];
+  const cfnStage = httpStage.node.defaultChild as CfnStage;
+  const routeSettings: Record<
+    string,
+    { ThrottlingRateLimit?: number; ThrottlingBurstLimit?: number }
+  > = {};
   for (const { fn, integrationId, routes } of surface) {
     const integration = new HttpLambdaIntegration(integrationId, fn);
     for (const r of routes) {
-      httpApi.addRoutes({ path: r.path, methods: r.methods, integration });
+      const created = httpApi.addRoutes({ path: r.path, methods: r.methods, integration });
+      // RouteSettings naming a route that does not exist yet fails the deploy
+      // ("Unable to find Route by key"), and CDK infers no stage→route order.
+      for (const route of created)
+        cfnStage.addResourceDependency(route.node.defaultChild as CfnRoute);
+      for (const method of r.methods) {
+        routeSettings[`${method} ${r.path}`] = {
+          ThrottlingRateLimit: r.throttle.rateLimit,
+          ThrottlingBurstLimit: r.throttle.burstLimit,
+        };
+      }
     }
   }
+  // The L2 HttpStage exposes only the stage-wide `throttle`. RouteSettings is a
+  // JSON-typed L1 property, so the CFN key casing is passed through verbatim.
+  cfnStage.routeSettings = routeSettings;
   return httpApi;
+}
+
+// ── Operational alarms ────────────────────────────────────────────────────────
+// Early warning for the failure modes found only by log forensics after HWC 2026
+// (relay throttling, authorizer starvation) and for log-ingest cost, which the
+// billing alarm sees 6–24 h late. Alarm actions must target a topic in the
+// alarm's region, so this topic is separate from the us-east-1 billing topic;
+// both subscribe the same address. An unconfirmed email subscription drops
+// every notification (deploy.md §6.5).
+
+// Log ingest per hour across the relay + authorizer log groups. Ingest bills
+// ~$0.6/GB, so 1 GiB/h left running crosses the $55 budget in ~4 days, while the
+// billing alarm lags 6–24 h.
+const LOG_INGEST_ALARM_BYTES_PER_HOUR = 1024 ** 3;
+
+function defineAlarms(
+  stack: Stack,
+  stage: string,
+  fns: Fns,
+  httpApi: HttpApi,
+  alertEmail: string,
+): void {
+  const topic = new Topic(stack, 'OpsAlarmTopic', {
+    topicName: `slackline-timer-v1-ops-${stage}`,
+    displayName: 'slackline-timer-v1 ops alarms',
+  });
+  topic.addSubscription(new EmailSubscription(alertEmail));
+  const notify = new SnsAction(topic);
+
+  const alarm = (
+    id: string,
+    name: string,
+    description: string,
+    metric: IMetric,
+    threshold: number,
+    comparisonOperator = ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+  ): void => {
+    new Alarm(stack, id, {
+      alarmName: `slackline-timer-v1-${name}-${stage}`,
+      alarmDescription: description,
+      metric,
+      threshold,
+      comparisonOperator,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      // Idle stages publish nothing; no data is the healthy state.
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(notify);
+  };
+
+  // A throttled messageHandler invocation is a dropped relay frame (start/stop
+  // included), so one is worth a page.
+  alarm(
+    'MessageHandlerThrottlesAlarm',
+    'message-handler-throttles',
+    'messageHandler hit its reserved concurrency: relay frames are being dropped before fan-out.',
+    fns.message.metricThrottles({ period: Duration.minutes(1), statistic: Stats.SUM }),
+    1,
+  );
+  // FILL: a sum over a series with no datapoint at a timestamp is itself missing.
+  alarm(
+    'AuthorizerThrottlesAlarm',
+    'authorizer-throttles',
+    'A WS or HTTP authorizer hit its reserved concurrency: logins / API calls are being refused.',
+    new MathExpression({
+      expression: 'FILL(ws, 0) + FILL(http, 0)',
+      usingMetrics: {
+        ws: fns.authorizer.metricThrottles({ statistic: Stats.SUM }),
+        http: fns.httpAuthorizer.metricThrottles({ statistic: Stats.SUM }),
+      },
+      label: 'Authorizer throttles',
+      period: Duration.minutes(5),
+    }),
+    1,
+  );
+  alarm(
+    'MessageHandlerErrorsAlarm',
+    'message-handler-errors',
+    'messageHandler invocations failed (uncaught error or timeout).',
+    fns.message.metricErrors({ period: Duration.minutes(5), statistic: Stats.SUM }),
+    1,
+  );
+  alarm(
+    'HttpApi5xxAlarm',
+    'http-api-5xx',
+    'The HTTP data plane returned 5xx responses.',
+    httpApi.metricServerError({ period: Duration.minutes(5), statistic: Stats.SUM }),
+    5,
+  );
+  const incomingBytes = (fn: NodejsFunction): Metric =>
+    new Metric({
+      namespace: 'AWS/Logs',
+      metricName: 'IncomingBytes',
+      dimensionsMap: { LogGroupName: fn.logGroup.logGroupName },
+      statistic: Stats.SUM,
+    });
+  alarm(
+    'LogIngestAlarm',
+    'log-ingest',
+    'More than 1 GiB/h of logs ingested by messageHandler + the authorizers (log-cost runaway).',
+    new MathExpression({
+      expression: 'FILL(msg, 0) + FILL(wsAuth, 0) + FILL(httpAuth, 0)',
+      usingMetrics: {
+        msg: incomingBytes(fns.message),
+        wsAuth: incomingBytes(fns.authorizer),
+        httpAuth: incomingBytes(fns.httpAuthorizer),
+      },
+      label: 'Relay + authorizer log ingest (bytes)',
+      period: Duration.hours(1),
+    }),
+    LOG_INGEST_ALARM_BYTES_PER_HOUR,
+    ComparisonOperator.GREATER_THAN_THRESHOLD,
+  );
 }

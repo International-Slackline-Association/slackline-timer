@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,7 +14,8 @@ const { signInWithRedirect, getCurrentUser } = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
 }));
 vi.mock('aws-amplify/auth', () => ({ signInWithRedirect, getCurrentUser }));
-vi.mock('aws-amplify/utils', () => ({ Hub: { listen: vi.fn(() => vi.fn()) } }));
+const { hubListen } = vi.hoisted(() => ({ hubListen: vi.fn(() => vi.fn()) }));
+vi.mock('aws-amplify/utils', () => ({ Hub: { listen: hubListen } }));
 
 import { AuthGate } from 'app/auth/gate';
 
@@ -28,6 +29,8 @@ const renderAt = (path: string) =>
   );
 
 afterEach(() => {
+  window.localStorage.clear();
+  hubListen.mockClear();
   signInWithRedirect.mockReset();
   getCurrentUser.mockReset();
 });
@@ -54,5 +57,22 @@ describe('AuthGate', () => {
     renderAt('/admin/competitions');
 
     expect(await screen.findByRole('button', { name: /sign in with isa/i })).toBeInTheDocument();
+  });
+
+  it('drops the cached overlay read tokens on a Hosted-UI sign-out', async () => {
+    getCurrentUser.mockRejectedValue(new Error('no session'));
+    window.localStorage.setItem('speedline.overlayReadToken.comp-a', '{}');
+    window.localStorage.setItem('speedline.selectedCompetition', 'comp-a');
+    renderAt('/admin/competitions');
+    await screen.findByRole('button', { name: /sign in with isa/i });
+
+    const [, listener] = hubListen.mock.calls[0] as unknown as [
+      string,
+      (capsule: { payload: { event: string } }) => void,
+    ];
+    act(() => listener({ payload: { event: 'signedOut' } }));
+
+    expect(window.localStorage.getItem('speedline.overlayReadToken.comp-a')).toBeNull();
+    expect(window.localStorage.getItem('speedline.selectedCompetition')).toBe('comp-a');
   });
 });

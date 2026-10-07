@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  clearAllCachedReadTokens,
   clearCachedReadToken,
   readCachedReadToken,
   writeCachedReadToken,
@@ -8,7 +9,10 @@ import {
 
 const COMP = 'worlds-2026';
 
-afterEach(() => window.localStorage.clear());
+afterEach(() => {
+  vi.restoreAllMocks();
+  window.localStorage.clear();
+});
 
 describe('readTokenCache', () => {
   it('round-trips a token that is still inside the first half of its lifetime', () => {
@@ -51,5 +55,28 @@ describe('readTokenCache', () => {
   it('treats a malformed entry as no cache', () => {
     window.localStorage.setItem(`speedline.overlayReadToken.${COMP}`, 'not json');
     expect(readCachedReadToken(COMP, 1)).toBeNull();
+  });
+
+  it('degrades to no cache when the write hits the storage quota', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+
+    expect(() => writeCachedReadToken(COMP, { token: 'tok-1', expiresAt: 9e15 }, 0)).not.toThrow();
+    expect(readCachedReadToken(COMP, 1)).toBeNull();
+  });
+
+  it('clears every cached read token and nothing else', () => {
+    writeCachedReadToken('comp-a', { token: 'a', expiresAt: 9e15 }, 0);
+    writeCachedReadToken('comp-b', { token: 'b', expiresAt: 9e15 }, 0);
+    window.localStorage.setItem('speedline.selectedCompetition', 'comp-a');
+    window.localStorage.setItem('other.overlayReadToken.comp-a', 'x');
+
+    clearAllCachedReadTokens();
+
+    expect(readCachedReadToken('comp-a', 1)).toBeNull();
+    expect(readCachedReadToken('comp-b', 1)).toBeNull();
+    expect(window.localStorage.getItem('speedline.selectedCompetition')).toBe('comp-a');
+    expect(window.localStorage.getItem('other.overlayReadToken.comp-a')).toBe('x');
   });
 });

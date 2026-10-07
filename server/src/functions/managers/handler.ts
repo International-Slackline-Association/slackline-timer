@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2WithLambdaAuthorizer } from 'aws-lambda';
+import { disconnectSession } from 'core/broadcast';
 import { competitionDb } from 'core/competitionDb';
 import { resolveUserByEmail } from 'core/cognitoUsers';
 import {
@@ -67,11 +68,36 @@ export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = a
 
     if (routeKey === 'DELETE /competitions/{compId}/managers/{sub}') {
       await competitionDb.revokeManager(compId, sub);
+      await closeManagerSockets(compId, sub);
       return json(204, '');
     }
 
     throw new HttpError(404, `unsupported route ${routeKey}`);
   } catch (e) {
     return errorResponse(e);
+  }
+};
+
+/**
+ * The grant delete only gates the next `$connect`; close the sub's open sockets
+ * on this competition too (ADR 0053). Best-effort like the reader close on
+ * revoke-read-tokens (ADR 0026): the revoke already persisted, so a failure
+ * here never fails the request.
+ */
+const closeManagerSockets = async (compId: string, sub: string): Promise<void> => {
+  const endpoint = process.env.WS_API_ENDPOINT;
+  if (!endpoint) {
+    console.warn('WS_API_ENDPOINT not set — revoked manager sockets not force-closed');
+    return;
+  }
+  try {
+    const { disconnected } = await disconnectSession({
+      endpoint,
+      sessionId: compId,
+      match: (c) => c.principal === sub,
+    });
+    console.log(`closed ${disconnected} open connection(s) of revoked manager on ${compId}`);
+  } catch (e) {
+    console.error('failed to close revoked manager connections (grant delete persisted):', e);
   }
 };
