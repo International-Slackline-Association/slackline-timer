@@ -92,7 +92,7 @@ describe('DynamoDB tables', () => {
     }
   });
 
-  // M5: deletion protection does not undo a bad seed/advance or a bulk delete;
+  // Deletion protection does not undo a bad seed/advance or a bulk delete;
   // relay rows are 20-min ephemera and stay without PITR.
   it('enables 35-day PITR on the competition table only', () => {
     expect(
@@ -318,7 +318,7 @@ describe('Lambdas', () => {
     expect(fnPolicy('ManagersFunction')).toContain('execute-api:ManageConnections');
   });
 
-  // L3: core/offline.ts gates the offline branches (incl. the `local-dev`
+  // core/offline.ts gates the offline branches (incl. the `local-dev`
   // operator bypass) at runtime; this pins that no offline-only key reaches a
   // deployed function. Derived from scripts/offlineEnv.mjs so a new offline key
   // is covered automatically; the allowlist is the keys prod sets too.
@@ -654,7 +654,7 @@ describe('HTTP data plane', () => {
     expect(expected.filter((k) => !k.startsWith('$'))).toHaveLength(HTTP_ROUTE_COUNT);
   });
 
-  // L13: defaultAuthorizer covers every route today; this pins it so a route
+  // defaultAuthorizer covers every route today; this pins it so a route
   // added with HttpNoneAuthorizer (or an override) fails.
   it('authorizes every HTTP route with the custom request authorizer', () => {
     const authorizers = template.findResources('AWS::ApiGatewayV2::Authorizer', {
@@ -687,7 +687,7 @@ describe('HTTP data plane', () => {
   });
 });
 
-// H3: a regional WAF ACL cannot attach to HTTP or WebSocket APIs (REST only), so
+// A regional WAF ACL cannot attach to HTTP or WebSocket APIs (REST only), so
 // the backend carries none; the default-OFF CLOUDFRONT ACL for the web
 // distribution lives in the billing stack.
 describe('AWS WAF', () => {
