@@ -94,16 +94,7 @@ export const AthleteNameStrip = ({
             transformOrigin: 'left center',
           }}
         >
-          <AthleteName
-            athlete={athlete}
-            sx={{
-              color: colors.overlay.nameInk,
-              fontSize: nameFontSize,
-              // Em box (not a taller line box) drives placement, so the fitted caps
-              // centre inside the plate via the row's alignItems:center.
-              lineHeight: 1,
-            }}
-          />
+          <AthleteName athlete={athlete} fontSize={nameFontSize} />
         </Box>
       </Box>
       {result !== undefined && (

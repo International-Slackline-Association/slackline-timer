@@ -66,6 +66,16 @@ describe('AthleteName (the LAAX bold-first / light-last split)', () => {
     expect(window.getComputedStyle(screen.getByText('Montminy')).fontWeight).toBe('300');
   });
 
+  it('fixed sizing paints plate ink on a 1-line box and takes its size from fontSize', () => {
+    render(<AthleteName athlete={person} fontSize="40px" />);
+    const wrapper = window.getComputedStyle(
+      screen.getByText('Amanda').parentElement as HTMLElement,
+    );
+    expect(wrapper.color).toBe(rgb(colors.overlay.nameInk));
+    expect(wrapper.lineHeight).toBe('1');
+    expect(wrapper.fontSize).toBe('40px');
+  });
+
   it('fixed sizing (default) does not clamp the name to the body1 rem — it inherits the caller size', () => {
     render(<AthleteName athlete={person} />);
     // The spans declare `font-size: inherit` so the caller's fontSize + the

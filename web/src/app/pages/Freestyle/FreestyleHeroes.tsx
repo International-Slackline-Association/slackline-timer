@@ -106,7 +106,6 @@ export const BestTrickHero = ({
   countdownMessage,
   recovery,
   onExpire,
-  clockSize = 'heroSolo',
 }: {
   isReady: boolean;
   bestTrick: NonNullable<FreestyleSelection['bestTrick']>;
@@ -114,7 +113,6 @@ export const BestTrickHero = ({
   countdownMessage: CountdownWSMessage | undefined;
   recovery?: RecoveredLane;
   onExpire: () => void;
-  clockSize?: 'heroSolo' | 'plate';
 }) => (
   <Box
     sx={{
@@ -138,7 +136,7 @@ export const BestTrickHero = ({
       recovery={recovery}
       onExpire={onExpire}
       expiredLabel="OVER"
-      size={clockSize}
+      size="heroSolo"
       onDark
     />
   </Box>
@@ -156,17 +154,11 @@ export const WarmupHero = ({
   countdownMessage,
   recovery,
   onExpire,
-  clockSize = 'heroSolo',
 }: {
   isReady: boolean;
   countdownMessage: CountdownWSMessage | undefined;
   recovery?: RecoveredLane;
   onExpire: () => void;
-  /** The warm-up clock's Countdown variant: the broadcast band passes `plate`
-   * (the white-plate scoreboard clock); the athlete display gets the
-   * single-clock `heroSolo` hero — one clock fills the whole screen, so it runs
-   * far larger than the two-up `hero` scale (tuned to fill FHD). */
-  clockSize?: 'heroSolo' | 'plate';
 }) => (
   <Box
     sx={{
@@ -193,9 +185,8 @@ export const WarmupHero = ({
     >
       Warm-up
     </Typography>
-    {/* The heroSolo warm-up clock exists only on the athlete display's dark
-        ground (the band passes `plate`, whose white plate carries its own
-        contrast) — so the scale doubles as the ground signal. */}
+    {/* `heroSolo`: one clock fills the athlete display's dark ground, far
+        larger than the two-up `hero` scale (tuned to fill FHD). */}
     <Countdown
       isReady={isReady}
       timerId={WARMUP_TIMER_ID}
@@ -204,8 +195,8 @@ export const WarmupHero = ({
       recovery={recovery}
       onExpire={onExpire}
       expiredLabel="WARM-UP OVER"
-      size={clockSize}
-      onDark={clockSize === 'heroSolo'}
+      size="heroSolo"
+      onDark
     />
   </Box>
 );

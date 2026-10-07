@@ -11,8 +11,9 @@ import { colors, fonts, overlayArt } from 'app/theme/tokens';
  * `accent` recolours only the given name (e.g. a winner's `race.go`), so the
  * two-weight contrast survives; the family name stays on the base ink.
  *
- * - **`fixed`** (default) — an inline single-line span; the caller drives flow
- *   and font size via `sx`.
+ * - **`fixed`** (default) — an inline one-line span in plate ink at `fontSize`
+ *   (inherited when unset). No `sx`: leaf templates take variants, not
+ *   overrides (ADR 0034 item 3).
  * - **`cqh`** — the two names STACKED and centred, sized in container-query
  *   height at the card masters' cap ratio so one split serves every card box size.
  *
@@ -23,13 +24,13 @@ export const AthleteName = ({
   athlete,
   accent,
   sizing = 'fixed',
-  sx,
+  fontSize,
 }: {
   athlete: Pick<Athlete, 'firstName' | 'lastName'>;
   accent?: string;
   sizing?: 'fixed' | 'cqh';
-  /** `fixed`-mode escape hatch: the caller drives flow + font size. */
-  sx?: object;
+  /** `fixed` mode only; CSS length, inherited when unset. */
+  fontSize?: string;
 }) => {
   if (sizing === 'cqh') {
     return (
@@ -90,10 +91,12 @@ export const AthleteName = ({
         fontFamily: fonts.display,
         textTransform: 'uppercase',
         letterSpacing: overlayArt.nameTracking,
-        lineHeight: 0.95,
+        color: colors.overlay.nameInk,
+        fontSize,
+        // Em box, not a taller line box, so the caps centre in the plate row.
+        lineHeight: 1,
         whiteSpace: 'nowrap',
         textShadow: 'none',
-        ...sx,
       }}
     >
       {/* Inherit the wrapper's size + face: a default Typography is body1 (16px
