@@ -162,6 +162,37 @@ export interface Manager {
 /** Default freestyle break when `config.freestyle.breakMs` is unset (ADR 0019 §6). */
 export const DEFAULT_FREESTYLE_BREAK_MS = 30_000;
 
+/**
+ * Input bounds the server's validators 400 on (ADR 0052), mirrored here as the
+ * admin forms' `maxLength`/`min`/`max`. String lengths count UTF-16 code units,
+ * as both `String.length` and `maxLength` do. Mirrors server/src/core/types.ts,
+ * guarded by web/test/app/types.parity.test.ts.
+ */
+export const FIELD_LIMITS = {
+  /** Every id the API accepts in a body, and the compId. */
+  id: 64,
+  competitionName: 100,
+  breakMs: { min: 1, max: 600_000 },
+  firstName: 50,
+  lastName: 50,
+  /** A legacy `name`-only payload: two maximal halves plus the space. */
+  legacyName: 101,
+  shortName: 24,
+  birthYearMin: 1900,
+  /** Alpha-2, IOC/alpha-3 or numeric-3 — what `toAlpha2` reads. */
+  country: 3,
+  notes: 2000,
+  /** Covers `DNF_SENTINEL` and a lane left running for hours. */
+  timeMs: { min: 0, max: 86_400_000 },
+  /** How far past the server clock a Time's `startTime` may lie. */
+  startTimeSkewMs: 86_400_000,
+  roundName: 40,
+  /** 0 is the manual form's default; seeded brackets use 1..4. */
+  position: { min: 0, max: 64 },
+  controlPenaltyMax: 100,
+  overallMin: -1000,
+} as const;
+
 /** A Freestyle timing format: the run/warm-up budgets a board mode applies. */
 export interface FreestyleFormatPreset {
   /** Per-run active budget, seconds. */

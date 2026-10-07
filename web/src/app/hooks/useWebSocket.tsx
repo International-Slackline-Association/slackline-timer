@@ -1,8 +1,10 @@
 import { getBaseToken } from 'app/auth';
 import { setWsAuthDenied } from 'app/auth/wsAuthSignal';
 import { WS_URL } from 'app/constants';
+import { isRelayFrame } from 'app/hooks/wsFrameGuard';
 import { type Discipline, type Gender } from 'app/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import * as reactUseWebSocket from 'react-use-websocket';
 import { ReadyState } from 'react-use-websocket';
 
@@ -460,7 +462,7 @@ export type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T,
  * App-level keepalive (ADR 0024): API Gateway drops a WS connection after
  * 10 idle minutes, so every client pings inside that window. Not part of the
  * relayed unions above — `messageHandler` swallows it before the fan-out, so a
- * ping never appears in any peer's `lastJsonMessage`.
+ * ping never reaches a peer's `onMessage`.
  */
 export type KeepaliveWSMessage = { sessionId: string; type: 'ping' };
 
@@ -499,12 +501,30 @@ export const wsReconnectDelay = (attempt: number, random: () => number = Math.ra
   return cap / 2 + random() * (cap / 2);
 };
 
+/**
+ * The page's relay socket (ADR 0043: one per page, both directions).
+ *
+ * Inbound frames reach `onMessage` one at a time (ADR 0051): parsed, checked by
+ * `isRelayFrame` (a malformed or unknown frame is dropped here, never handed to
+ * a consumer), then delivered inside `flushSync`, so each frame's state updates
+ * commit before the next frame is handled — two frames landing in one task are
+ * two commits, never one batched render that keeps only the last. A throwing
+ * handler is logged and contained; the socket keeps delivering.
+ *
+ * `onMessage` is read through a ref, so it may close over the latest render
+ * without re-subscribing. The library never stores a message (`filter` below),
+ * so a frame re-renders only the components its handler actually updates.
+ */
 export const useWS = <T extends WSMessage>(params: {
   sessionId: string;
   /** Event read token for /stream/* overlays — used instead of a Cognito session. */
   readToken?: string;
+  /** Called once per valid inbound frame, synchronously and flushed. */
+  onMessage?: (frame: T) => void;
 }) => {
-  const { readToken, sessionId } = params;
+  const { readToken, sessionId, onMessage } = params;
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
 
   // Per-mount sender id, stamped on every outgoing message — the selection
   // LWW tiebreak (ADR 0038 §4; see the WSEnvelope doc).
@@ -540,9 +560,43 @@ export const useWS = <T extends WSMessage>(params: {
     everOpened.current = false;
   }, [getUrl]);
 
-  const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket<T>(
+  // Stable: the library reads its options through a ref, and the handler is
+  // reached through `onMessageRef`.
+  const receive = useCallback((event: MessageEvent) => {
+    let frame: unknown;
+    try {
+      frame = JSON.parse(event.data as string);
+    } catch {
+      console.warn('Dropped an unparsable relay frame');
+      return;
+    }
+    if (!isRelayFrame(frame)) {
+      // The payload only in dev, for the same reason as the wire trace below.
+      console.warn('Dropped an unrecognised relay frame', import.meta.env.DEV ? frame : '');
+      return;
+    }
+    // Dev-only wire trace: an event-long relay is chatty (a socket per page +
+    // every overlay), and the payloads would otherwise leak into screen captures.
+    if (import.meta.env.DEV) {
+      console.log('Received:', frame);
+    }
+    try {
+      // One commit per frame is the delivery contract (see the JSDoc).
+      // eslint-disable-next-line @eslint-react/dom-no-flush-sync
+      flushSync(() => onMessageRef.current?.(frame as T));
+    } catch (error) {
+      console.error('Relay frame handler failed', error);
+    }
+  }, []);
+
+  const { sendJsonMessage, readyState } = useWebSocket<T>(
     getUrl,
     {
+      onMessage: receive,
+      // Never let the library store the frame: its `lastMessage` state would
+      // re-render this whole page per frame for a value nothing reads, and a
+      // single-slot state is the batching hazard `receive` exists to avoid.
+      filter: () => false,
       // Reconnect on drops so the lazy `getUrl` above can supply a fresh token
       // (and so a transient network blip self-heals during a competition).
       shouldReconnect: () => true,
@@ -581,15 +635,6 @@ export const useWS = <T extends WSMessage>(params: {
     return () => window.clearInterval(intervalId);
   }, [readyState, sendJsonMessage, sessionId]);
 
-  // Dev-only wire trace. Gated behind import.meta.env.DEV so it never runs in a
-  // production build: an event-long relay is chatty (a socket per page + every
-  // overlay), and the payloads would otherwise leak into on-air screen captures.
-  useEffect(() => {
-    if (import.meta.env.DEV && lastJsonMessage !== null) {
-      console.log('Received:', lastJsonMessage);
-    }
-  }, [lastJsonMessage]);
-
   // Memoised so its identity is stable across renders: callers that send on a
   // readyState transition (e.g. the overlay's request_state-on-OPEN) can list it
   // as an effect dep without the effect re-firing on every render.
@@ -622,7 +667,6 @@ export const useWS = <T extends WSMessage>(params: {
     sendWSMessage,
     sendAck,
     readyState,
-    lastJsonMessage,
     senderId,
   };
 };

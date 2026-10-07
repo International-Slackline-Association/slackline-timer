@@ -138,6 +138,34 @@ export function resolveAccount(opts = {}) {
   return account;
 }
 
+/**
+ * Materialize concrete temporary credentials for `profile` into the env.
+ *
+ * The AWS SDK's default chain does NOT reliably resolve the SSO token cache on
+ * this box: `--profile` alone fails "security token included in the request is
+ * invalid" even right after `aws sso login` (the plain CLI refreshes SSO fine,
+ * which is why `aws sts get-caller-identity` can succeed while an SDK script
+ * can't). The CLI's `export-credentials` DOES refresh SSO, so we shell out to it
+ * and load the resulting keys into `process.env`, where the SDK's fromEnv
+ * provider — first in the chain — picks them up. Same workaround the CDK deploys
+ * use; see doc/dev/deploy.md §8.
+ *
+ * `env-no-export` emits bare `AWS_*=value` lines (no `export`, no quotes); values
+ * can contain `=` and `/` (the session token), so split on the FIRST `=` only.
+ * AWS_PROFILE is then cleared so the concrete env creds win outright and nothing
+ * re-triggers the failing SSO role-assume.
+ */
+export function loadProfileCreds(profile) {
+  const out = runAws(['configure', 'export-credentials', '--format', 'env-no-export'], { profile });
+  for (const line of out.split('\n')) {
+    const eq = line.indexOf('=');
+    if (eq > 0 && line.startsWith('AWS_')) {
+      process.env[line.slice(0, eq)] = line.slice(eq + 1).trim();
+    }
+  }
+  delete process.env.AWS_PROFILE;
+}
+
 /** Run a script's async main, printing an SSO hint on failure and exiting 1. */
 export function runMain(mainFn) {
   mainFn().catch((err) => {

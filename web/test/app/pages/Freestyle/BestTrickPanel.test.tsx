@@ -2,7 +2,7 @@ import { ThemeProvider } from '@mui/material';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { advanceBlocked, advanceOverlay } from 'app/hooks/useAdvanceInput';
 import { BEST_TRICK_PAD_INLINE, BestTrickPanel } from 'app/pages/Freestyle/BestTrickPanel';
@@ -11,23 +11,9 @@ import { colors } from 'app/theme/tokens';
 import { initialTrySeries, type TrySeriesState } from 'app/util/bestTrickSeries';
 
 import { px } from '../../../util/computedUnits';
+import { pressPad as pressButton } from '../../../util/gamepadMock';
 
-// Drive the gamepad button through a mock (the CountdownControl.test pattern) so
-// the pad path can be exercised without the real rAF/navigator polling.
-let lastPressedGamepadButton: { button: number; seq: number } | undefined;
-let pressSeq = 0;
-const pressButton = (button: number) => {
-  pressSeq += 1;
-  lastPressedGamepadButton = { button, seq: pressSeq };
-};
-vi.mock('app/hooks/useGamepads', () => ({
-  useGamepads: () => ({ lastPressedGamepadButton }),
-}));
-
-beforeEach(() => {
-  lastPressedGamepadButton = undefined;
-  pressSeq = 0;
-});
+vi.mock('app/hooks/useGamepads', () => import('../../../util/gamepadMock'));
 
 // Presentational panel: it owns no series state, so the tests assert it renders
 // the derived button/clock state from the `series` prop and dispatches the

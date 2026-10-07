@@ -87,6 +87,35 @@ overlay read-token links on `/admin/overlays` (old tokens are scoped to the old
 `compId`), and reload any open control/preview tabs with `?compId=<new-id>` (the
 relay `sessionId` changed).
 
+## `auditFieldBounds.mjs` — check stored data against new input bounds
+
+**Why.** Data-plane PUTs are full replacements, so tightening a validator makes
+every stored record already outside the new bound fail its next edit with a 400.
+Run this before a bounds change deploys and either fix the flagged records or
+grandfather them in the validator. The rules (lengths, id/country/photoKey
+formats, numeric ranges, winner-in-pair, athletes per competition) live in
+`lib/fieldBounds.mjs`.
+
+**Safety model.** Strictly read-only: one paginated `Scan`, no write call in the
+script, and any unknown or write-ish flag (`--yes`, `--delete`, …) is refused.
+Output names items by PK/SK and reports lengths/reasons only — never names,
+birthDates or notes; failing country codes and foreign `photos/<compId>/`
+prefixes are printed verbatim because they decide the regex.
+
+**Usage:**
+
+```bash
+# LocalStack (also the default when IS_OFFLINE is set):
+node scripts/maintenance/auditFieldBounds.mjs --local
+
+# A deployed table:
+node scripts/maintenance/auditFieldBounds.mjs --table slackline-timer-v1-competition-prod --profile <your-profile>
+```
+
+`--region` (default `eu-central-2`), `--examples <n>` (keys per rule, default 5),
+`--json`. Exit code: 0 clean, 1 violations, 2 error. `--profile` materializes
+SSO credentials the same way as `renameCompId.mjs`.
+
 ### Relationship to the stack ledger
 
 The bootstrap `CDKToolkit` stacks are **not** in `../decommission/stacks.json` —

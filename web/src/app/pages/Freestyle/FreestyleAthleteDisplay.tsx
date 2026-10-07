@@ -10,7 +10,7 @@ import { ConnectionLostBadge } from 'app/components/ConnectionLostBadge';
 import { useAthletes } from 'app/api/athletes';
 import { useLinkPhase } from 'app/hooks/useLinkPhase';
 import { colors, fonts, radii } from 'app/theme/tokens';
-import { applyOverlayBodyStyle } from 'app/pages/Stream/overlayBg';
+import { applyOverlayBodyStyle, SURFACE_GROUND } from 'app/pages/Stream/overlayBg';
 import { laneName } from 'app/util/raceNames';
 import { remainingFrom } from 'app/util/time';
 import { Countdown } from './Countdown';
@@ -93,7 +93,7 @@ export const FreestyleAthleteDisplay = ({ variant }: { variant: 'venue' | 'strea
   const athletes = useAthletes(sessionId, { readToken });
   const qualiNextUpName = laneName(qualiNextUp ?? '', athletes.data ?? []);
 
-  const defaultBg = variant === 'venue' ? colors.surface.void : 'transparent';
+  const defaultBg = SURFACE_GROUND[variant];
 
   useEffect(() => applyOverlayBodyStyle(location.search, defaultBg), [defaultBg, location.search]);
 

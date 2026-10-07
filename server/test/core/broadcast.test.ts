@@ -66,6 +66,26 @@ describe('broadcastToSession', () => {
     expect(posted).toEqual(['conn-1', 'conn-2', 'conn-3']);
   });
 
+  it('skips read-only connections when includeReadOnly is false', async () => {
+    getAllConnectionsMock.mockResolvedValue([
+      { sessionId: 's1', connectionId: 'sender', readOnly: true },
+      { sessionId: 's1', connectionId: 'panel', readOnly: false },
+      { sessionId: 's1', connectionId: 'overlay', readOnly: true },
+    ]);
+
+    const result = await broadcastToSession({
+      endpoint: 'https://ws.example.com/prod',
+      sessionId: 's1',
+      payload: { type: 'request_state' },
+      excludeConnectionId: 'sender',
+      includeReadOnly: false,
+    });
+
+    expect(result.delivered).toBe(1);
+    const posted = sendMock.mock.calls.map(([cmd]: PostCommand[]) => cmd.input.ConnectionId);
+    expect(posted).toEqual(['panel']);
+  });
+
   it('prunes a stale (410) connection and keeps delivering', async () => {
     sendMock.mockImplementation((cmd: PostCommand) =>
       cmd.input.ConnectionId === 'conn-2' ? Promise.reject(gone()) : Promise.resolve(undefined),

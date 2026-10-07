@@ -6,6 +6,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 
 import { useCreateCompetition, type CompetitionInput } from 'app/api/competitions';
 import { useSelectedCompetition } from 'app/state/selectedCompetition';
+import { FIELD_LIMITS } from 'app/types';
 import { apiErrorMessage } from 'app/util/apiError';
 
 const EMPTY_FORM: CompetitionInput = { compId: '', name: '', startDate: '', endDate: '' };
@@ -56,9 +57,16 @@ export const NewCompetitionPage = () => {
             helperText="Used in URLs and as the live-timer session id (letters, digits, _ or -)."
             value={form.compId}
             onChange={update('compId')}
+            slotProps={{ htmlInput: { maxLength: FIELD_LIMITS.id } }}
             required
           />
-          <TextField label="Name" value={form.name} onChange={update('name')} required />
+          <TextField
+            label="Name"
+            value={form.name}
+            onChange={update('name')}
+            slotProps={{ htmlInput: { maxLength: FIELD_LIMITS.competitionName } }}
+            required
+          />
           <TextField
             label="Start date"
             type="date"

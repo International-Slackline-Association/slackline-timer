@@ -9,6 +9,7 @@ import { GamepadSelectionProvider } from 'app/state/gamepadSelection';
 import type { Athlete } from 'app/types';
 
 import { px } from '../../../util/computedUnits';
+import { deliver as deliverFrames } from '../../../util/wsMock';
 import {
   COMPACT_HEIGHT_PX,
   COMPACT_PX,
@@ -32,35 +33,32 @@ vi.mock('app/api/client', async (importOriginal) => {
   return { ...actual, apiFetch: apiFetchMock };
 });
 
-// The page's single relay socket (ADR 0043). `receiverMessage` is the incoming
-// peer message a rerender delivers — the relay never fans a send back to its
-// own connection, so everything here is peer traffic by construction.
+// The page's single relay socket (ADR 0043). Peer frames arrive through the
+// captured `onMessage` (`deliverFrames`) — the relay never fans a send back to
+// its own connection, so everything here is peer traffic by construction.
 const { sockets } = vi.hoisted(() => ({
   sockets: {
     senderSend: vi.fn(),
-    receiverMessage: null as CountdownWSMessage | null,
     readyState: 1,
   },
 }));
 vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
   const actual = await importOriginal<typeof import('app/hooks/useWebSocket')>();
+  const { useCapturedSocket } = await import('../../../util/wsMock');
   return {
     ...actual,
-    useWS: () => ({
-      sendWSMessage: sockets.senderSend,
-      readyState: sockets.readyState,
-      lastJsonMessage: sockets.receiverMessage,
-      senderId: 'own-sender-id',
-    }),
+    useWS: (params: { onMessage?: (frame: never) => void }) => {
+      useCapturedSocket(params);
+      return {
+        sendWSMessage: sockets.senderSend,
+        readyState: sockets.readyState,
+        senderId: 'own-sender-id',
+      };
+    },
   };
 });
 
-const { gamepad } = vi.hoisted(() => ({
-  gamepad: { press: undefined as { button: number; seq: number } | undefined },
-}));
-vi.mock('app/hooks/useGamepads', () => ({
-  useGamepads: () => ({ lastPressedGamepadButton: gamepad.press }),
-}));
+vi.mock('app/hooks/useGamepads', () => import('../../../util/gamepadMock'));
 vi.mock('app/components/GamepadPicker', () => ({ GamepadPicker: () => null }));
 vi.mock('app/components/BuzzerMappingDialog', () => ({ BuzzerMappingDialog: () => null }));
 vi.mock('app/hooks/useSignalAudio', async () => {
@@ -95,9 +93,7 @@ const ATHLETES = [athlete('a1', 'Bianchi'), athlete('a2', 'Roe')];
 beforeEach(() => {
   window.localStorage.clear();
   sockets.readyState = 1;
-  sockets.receiverMessage = null;
   sockets.senderSend = vi.fn();
-  gamepad.press = undefined;
   // Reads resolve to the comp's pool (or empty); a write resolves as a
   // persisted Score, so a Save reaches the locked `saved` panel. Anything with
   // a method is a data-plane write, which `writeCalls()` counts.
@@ -127,12 +123,7 @@ const renderPage = () => {
   );
   const rendered = render(tree());
   /** Hand the page one peer frame, the way the socket would. */
-  const deliver = (message: CountdownWSMessage): void => {
-    act(() => {
-      sockets.receiverMessage = message;
-      rendered.rerender(tree());
-    });
-  };
+  const deliver = (message: CountdownWSMessage): void => deliverFrames(message);
   return { ...rendered, deliver };
 };
 

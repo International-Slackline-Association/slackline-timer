@@ -17,7 +17,7 @@ import { ACCEPTED_IMAGE_TYPES, acceptedFormatsHint, uploadAthletePhoto } from 'a
 import { CountryFlag } from 'app/components/CountryFlag';
 import { useElementWidth } from 'app/hooks/useElementWidth';
 import { EntityFormDialog, useEntityForm } from 'app/pages/Admin/entityForm';
-import { GENDERS, fullName, type Athlete, type Gender } from 'app/types';
+import { FIELD_LIMITS, GENDERS, fullName, type Athlete, type Gender } from 'app/types';
 import { apiErrorMessage } from 'app/util/apiError';
 import { genderLabel } from 'app/util/gender';
 import { AthleteCard } from 'app/pages/Stream/AthleteCard';
@@ -25,6 +25,9 @@ import { AthleteNameStrip } from 'app/pages/Stream/AthleteNameStrip';
 import { adminPreview, colors, OVERLAY_NAME_STRIP, space } from 'app/theme/tokens';
 
 /** URL.createObjectURL guarded for jsdom (which doesn't implement it). */
+const maxLength = (n: number) => ({ htmlInput: { maxLength: n } });
+const countryInput = maxLength(FIELD_LIMITS.country);
+
 const safeObjectUrl = (file: File): string | undefined => {
   try {
     return URL.createObjectURL(file);
@@ -122,6 +125,7 @@ export const AthleteForm = ({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<unknown>(null);
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(athlete?.photoUrl);
+  const [birthDateMax] = useState(() => `${new Date().getFullYear()}-12-31`);
 
   const previewAthlete = toPreviewAthlete(form, previewUrl);
 
@@ -187,6 +191,7 @@ export const AthleteForm = ({
           label="First name"
           value={form.firstName}
           onChange={updateField('firstName')}
+          slotProps={maxLength(FIELD_LIMITS.firstName)}
           required
           autoFocus
           sx={{ flex: 1 }}
@@ -195,6 +200,7 @@ export const AthleteForm = ({
           label="Last name"
           value={form.lastName}
           onChange={updateField('lastName')}
+          slotProps={maxLength(FIELD_LIMITS.lastName)}
           required
           sx={{ flex: 1 }}
         />
@@ -204,13 +210,20 @@ export const AthleteForm = ({
         helperText="Shown on overlays where space is tight; defaults to the last name."
         value={form.shortName}
         onChange={updateField('shortName')}
+        slotProps={maxLength(FIELD_LIMITS.shortName)}
       />
       <TextField
         label="Birth date"
         type="date"
         value={form.birthDate}
         onChange={updateField('birthDate')}
-        slotProps={{ inputLabel: { shrink: true } }}
+        slotProps={{
+          inputLabel: { shrink: true },
+          htmlInput: {
+            min: `${FIELD_LIMITS.birthYearMin}-01-01`,
+            max: birthDateMax,
+          },
+        }}
         required
       />
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
@@ -219,6 +232,7 @@ export const AthleteForm = ({
           helperText="ISO code, e.g. USA or DE."
           value={form.country}
           onChange={updateField('country')}
+          slotProps={countryInput}
           required
           sx={{ flex: 1 }}
         />
@@ -229,6 +243,7 @@ export const AthleteForm = ({
           label="Second country (optional)"
           value={form.country2}
           onChange={updateField('country2')}
+          slotProps={countryInput}
           sx={{ flex: 1 }}
         />
         <CountryFlag code={form.country2} height={24} />
@@ -250,6 +265,7 @@ export const AthleteForm = ({
         label="Notes (optional)"
         value={form.notes}
         onChange={updateField('notes')}
+        slotProps={maxLength(FIELD_LIMITS.notes)}
         multiline
         minRows={2}
       />

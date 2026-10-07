@@ -1,4 +1,5 @@
-import { renderHook } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
+import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import type { Options } from 'react-use-websocket';
@@ -37,10 +38,15 @@ const lastCall = (): Captured => {
   return { url, options };
 };
 
+/** One raw socket frame through the library's `onMessage` — the receive path. */
+const receiveRaw = (data: string): void => {
+  lastCall().options.onMessage?.({ data } as MessageEvent);
+};
+const receive = (frame: unknown): void => receiveRaw(JSON.stringify(frame));
+
 beforeEach(() => {
   useWebSocketMock.mockReturnValue({
     sendJsonMessage: vi.fn(),
-    lastJsonMessage: null,
     readyState: 0,
   });
 });
@@ -109,7 +115,7 @@ describe('useWS', () => {
     vi.useFakeTimers();
     try {
       const sendJsonMessage = vi.fn();
-      useWebSocketMock.mockReturnValue({ sendJsonMessage, lastJsonMessage: null, readyState: 1 });
+      useWebSocketMock.mockReturnValue({ sendJsonMessage, readyState: 1 });
       renderHook(() => useWS({ sessionId: 's1' }));
 
       vi.advanceTimersByTime(WS_KEEPALIVE_INTERVAL_MS - 1);
@@ -129,7 +135,7 @@ describe('useWS', () => {
     vi.useFakeTimers();
     try {
       const sendJsonMessage = vi.fn();
-      useWebSocketMock.mockReturnValue({ sendJsonMessage, lastJsonMessage: null, readyState: 0 });
+      useWebSocketMock.mockReturnValue({ sendJsonMessage, readyState: 0 });
       renderHook(() => useWS({ sessionId: 's1' }));
 
       vi.advanceTimersByTime(WS_KEEPALIVE_INTERVAL_MS * 2);
@@ -173,18 +179,15 @@ describe('useWS', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       const sendJsonMessage = vi.fn();
-      useWebSocketMock.mockReturnValue({
-        sendJsonMessage,
-        lastJsonMessage: { type: 'reset', sessionId: 's1', data: {} },
-        readyState: 1,
-      });
+      useWebSocketMock.mockReturnValue({ sendJsonMessage, readyState: 1 });
 
       const { result } = renderHook(() =>
         useWS<import('app/hooks/useWebSocket').StopwatchWSMessage>({ sessionId: 's1' }),
       );
+      receive({ type: 'reset', sessionId: 's1', data: {} });
       result.current.sendWSMessage({ type: 'reset', data: {} });
 
-      // Both the received-message effect and the send path stay silent in prod:
+      // Both the receive path and the send path stay silent in prod:
       // the payloads would otherwise leak into on-air screen captures.
       expect(logSpy).not.toHaveBeenCalled();
     } finally {
@@ -198,15 +201,12 @@ describe('useWS', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       const sendJsonMessage = vi.fn();
-      useWebSocketMock.mockReturnValue({
-        sendJsonMessage,
-        lastJsonMessage: { type: 'reset', sessionId: 's1', data: {} },
-        readyState: 1,
-      });
+      useWebSocketMock.mockReturnValue({ sendJsonMessage, readyState: 1 });
 
       const { result } = renderHook(() =>
         useWS<import('app/hooks/useWebSocket').StopwatchWSMessage>({ sessionId: 's1' }),
       );
+      receive({ type: 'reset', sessionId: 's1', data: {} });
       result.current.sendWSMessage({ type: 'reset', data: {} });
 
       expect(logSpy).toHaveBeenCalledWith('Received:', expect.objectContaining({ type: 'reset' }));
@@ -219,7 +219,7 @@ describe('useWS', () => {
 
   it('stamps the sessionId onto the new state-recovery message variants', () => {
     const sendJsonMessage = vi.fn();
-    useWebSocketMock.mockReturnValue({ sendJsonMessage, lastJsonMessage: null, readyState: 1 });
+    useWebSocketMock.mockReturnValue({ sendJsonMessage, readyState: 1 });
 
     const { result } = renderHook(() =>
       useWS<import('app/hooks/useWebSocket').StopwatchWSMessage>({ sessionId: 's1' }),
@@ -252,7 +252,7 @@ describe('useWS', () => {
     // equal-seq tiebreak of the selection last-writer-wins stamp — and the hook
     // exposes it so `useControlSession` can mint stamps under the same id.
     const sendJsonMessage = vi.fn();
-    useWebSocketMock.mockReturnValue({ sendJsonMessage, lastJsonMessage: null, readyState: 1 });
+    useWebSocketMock.mockReturnValue({ sendJsonMessage, readyState: 1 });
 
     const { result, rerender } = renderHook(() =>
       useWS<import('app/hooks/useWebSocket').StopwatchWSMessage>({ sessionId: 's1' }),
@@ -274,6 +274,120 @@ describe('useWS', () => {
       useWS<import('app/hooks/useWebSocket').StopwatchWSMessage>({ sessionId: 's1' }),
     );
     expect(second.result.current.senderId).not.toBe(senderId);
+  });
+});
+
+describe('useWS receive path (ADR 0051)', () => {
+  const stop = (timerId: number, stopTime: number) => ({
+    type: 'stop',
+    sessionId: 's1',
+    data: { timerId, stopTime },
+  });
+
+  beforeEach(() => {
+    useWebSocketMock.mockReturnValue({ sendJsonMessage: vi.fn(), readyState: 1 });
+  });
+
+  it('never lets the library store a frame', () => {
+    renderHook(() => useWS({ sessionId: 's1' }));
+    expect(lastCall().options.filter?.({} as MessageEvent)).toBe(false);
+  });
+
+  it('delivers back-to-back frames one commit each, down to a child effect', () => {
+    // The dead-heat shape: both lanes' stops land in one task. Each frame's
+    // state write must commit (and a child keyed on it must see it) before the
+    // next frame is handled — never batched into one render that keeps the last.
+    const handled: unknown[] = [];
+    const childSaw: unknown[] = [];
+    const Child = ({ frame }: { frame: unknown }) => {
+      useEffect(() => {
+        if (frame) childSaw.push(frame);
+      }, [frame]);
+      return null;
+    };
+    const Page = () => {
+      const [frame, setFrame] = useState<unknown>(null);
+      useWS({
+        sessionId: 's1',
+        onMessage: (message) => {
+          handled.push(message);
+          setFrame(message);
+        },
+      });
+      return <Child frame={frame} />;
+    };
+    render(<Page />);
+
+    act(() => {
+      receive(stop(1, 1_000));
+      receive(stop(2, 1_001));
+    });
+
+    expect(handled).toEqual([stop(1, 1_000), stop(2, 1_001)]);
+    expect(childSaw).toEqual([stop(1, 1_000), stop(2, 1_001)]);
+  });
+
+  it('drops unparsable and malformed frames before the handler', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const onMessage = vi.fn();
+      renderHook(() => useWS({ sessionId: 's1', onMessage }));
+
+      act(() => {
+        receiveRaw('{not json');
+        receiveRaw('null');
+        // The review's crash frame: a known type without the data it promises.
+        receive({ type: 'updatePreview', sessionId: 'x' });
+        receive({ type: 'no_such_type', sessionId: 's1', data: {} });
+      });
+
+      expect(onMessage).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledTimes(4);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('contains a throwing handler and keeps delivering', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const seen: unknown[] = [];
+      renderHook(() =>
+        useWS({
+          sessionId: 's1',
+          onMessage: (message) => {
+            seen.push(message);
+            if (seen.length === 1) throw new Error('consumer bug');
+          },
+        }),
+      );
+
+      expect(() =>
+        act(() => {
+          receive(stop(1, 1_000));
+          receive(stop(2, 1_001));
+        }),
+      ).not.toThrow();
+
+      expect(seen).toHaveLength(2);
+      expect(errorSpy).toHaveBeenCalledWith('Relay frame handler failed', expect.any(Error));
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('reaches the handler of the latest render', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = renderHook(({ onMessage }) => useWS({ sessionId: 's1', onMessage }), {
+      initialProps: { onMessage: first },
+    });
+    rerender({ onMessage: second });
+
+    act(() => receive(stop(1, 1_000)));
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith(stop(1, 1_000));
   });
 });
 

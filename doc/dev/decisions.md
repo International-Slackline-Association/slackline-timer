@@ -57,8 +57,9 @@ interactive Cognito sign-in, but the preview/data surfaces are gated.
 
 **Decision.** Overlays authenticate with a signed (HMAC, secret in SSM),
 **read-only, competition-scoped** JWT carried in the URL, `exp ≤ ~10 days`,
-accepted by both the HTTP API and the WS `$connect`. Minted by an admin-only
-`createReadToken` Lambda; revoked by bumping `tokenVersion` on the competition.
+accepted by both the HTTP API and the WS `$connect`. Minted by the
+`createReadToken` Lambda for an operator — an admin, or a manager granted the
+competition (ADR 0045); revoked by bumping `tokenVersion` on the competition.
 
 **Consequences.** A query-param token can leak (logs, screenshots) — accepted for
 a read-only, comp-scoped, short-lived, instantly-revocable credential; Lambdas
@@ -90,13 +91,16 @@ publicly enumerable, but overlays need to render them without a login.
 
 **Decision.** Store the blob in S3 under a content-hashed key; lock the bucket to
 CloudFront via Origin Access Control + trusted key group; read Lambdas embed a
-CloudFront-signed `photoUrl` expiring at `competition.endDate` (≤ ~10 days).
+CloudFront-signed `photoUrl` expiring with the event, at most 12–18 h out.
 
 **Consequences.** No public bucket, no cleanup job — URLs die at the edge after
 the event. Chosen over S3 presigned GETs (capped at the Lambda role-session
 lifetime) and a token-gated Lambda proxy. Mid-event revocation is coarse
 (key-group rotation kills all events' URLs); accepted — `tokenVersion` still
-covers data reads.
+covers data reads. A signed URL can't be revoked, so its lifetime is the leak
+window: reads re-mint URLs, which lets them stay short (12–18 h, quantised to
+6 h so they cache) instead of living to the event's end; photo-carrying
+queries re-fetch every 3 h to stay inside it.
 
 ## 0006 — Server-side `db_update` broadcast for live refresh
 
@@ -177,7 +181,8 @@ apply directly — the request/reply recovery itself is untouched) · single-own
 premise revised by 0038 (the request/reply flow stands; any control panel may now
 answer as an owner) · extended by 0047 for the **solo** panel, where no peer
 exists to answer (a browser-local copy of the panel's own snapshot; relay
-statelessness untouched)
+statelessness untouched) · the ask's routing amended by 0050 (relayed canonical,
+to read-write panels only, damped in memory; answers coalesced)
 
 **Context.** The relay persists nothing (the "server holds no timer
 logic" invariant — the former ADR 0008, now carried by 0023), so a preview/overlay that connects _after_ an operator
@@ -649,6 +654,12 @@ on both operands.
 **Accepted · 2026-06-28 · clause (c) superseded by 0031** (default-route gateway
 throttling was built; the "account defaults only, no throttle" acceptance no
 longer holds — (a) and (b) stand)
+
+**Status note (2026-10-05):** (a)'s cache rationale is moot — API Gateway has no
+result TTL for WebSocket authorizers (HTTP APIs only), so the `$connect` decision is
+never cached. The two identity sources stay: a `$connect` missing either query param
+is 401'd before the authorizer Lambda runs (pinned in
+`test/infra/slackline-stack.test.ts`).
 
 **Context.** The `overlay-security-hardening` backlog item raised three
 defense-in-depth measures, none presently exploitable, to weigh:
@@ -1129,7 +1140,9 @@ revisit.
 
 **Accepted · 2026-07-06 · Landed** — Budgets + billing alarm, gateway throttling, and the authored-but-off WAF shipped 2026-07-07; the reserved-concurrency caps shipped 2026-07-21 (once the account Lambda-concurrency quota was raised — see §3).
 
-**Context.** The deployed backend (`slackline-timer-v1`, eu-central-2) and web stack (`slackline-timer-v1-web`, eu-central-1) are publicly reachable on one paying AWS account, and had **no** cost or abuse guardrails: no AWS Budgets/billing alarm, no API Gateway throttling on either the HTTP API or the WS `$connect`/`$default` stages, no Lambda `reservedConcurrentExecutions`, and no WAF (verified — `throttl|WAF|Budget|reservedConcurrent` match nothing in `infra/`). Both APIs front a custom Lambda authorizer (`authorizer`, `httpAuthorizer`) that does real work (DynamoDB `getCompetition`, JWKS/HMAC verify) on _every_ unauthenticated request, so a flood bills authorizer Lambda + DynamoDB reads before the deny. Three surfaces were already bounded: the presigned-POST photo path (`content-length-range` 0–8 MB + `eq $Content-Type`, admin-only, 300 s TTL — its bounds ARE the abuse ceiling), Lambda memory (floored at 128 MB), and log retention (30 days, `DESTROY`). The app is small, single-operator, event-shaped (≤10-day windows), so the target is a hard cost ceiling + early warning, not enterprise DDoS defence.
+**Status note (2026-10-05):** §5's regional half is retired. AWS WAF attaches to API Gateway REST APIs only, not HTTP or WebSocket APIs, so enabling the `REGIONAL` ACL + stage associations would have failed and rolled back mid-incident; the ACL, both associations and the backend `WafEnabled` parameter are deleted, and the backend stack is pinned to carry no `AWS::WAFv2::*` resource. The CLOUDFRONT ACL for the web distribution stands. API-level WAF needs a CloudFront edge in front of the HTTP API (security plan P11, future ADR 0054). Abuse runbook as it works today: [`deploy.md`](./deploy.md) §6.3.
+
+**Context.** The deployed backend (`slackline-timer-v1`, eu-central-2) and web stack (`slackline-timer-v1-web`, eu-central-1) are publicly reachable on one paying AWS account, and had **no** cost or abuse guardrails: no AWS Budgets/billing alarm, no API Gateway throttling on either the HTTP API or the WS `$connect`/`$default` stages, no Lambda `reservedConcurrentExecutions`, and no WAF (verified — `throttl|WAF|Budget|reservedConcurrent` match nothing in `infra/`). Both APIs front a custom Lambda authorizer (`authorizer`, `httpAuthorizer`) that does real work (DynamoDB `getCompetition`, JWKS/HMAC verify) on _every_ unauthenticated request, so a flood bills authorizer Lambda + DynamoDB reads before the deny. Three surfaces were already bounded: the presigned-POST photo path (`content-length-range` 0–8 MB + `eq $Content-Type`, operator-only (an admin or a granted manager, ADR 0045), 300 s TTL — its bounds ARE the abuse ceiling), Lambda memory (floored at 128 MB), and log retention (30 days, `DESTROY`). The app is small, single-operator, event-shaped (≤10-day windows), so the target is a hard cost ceiling + early warning, not enterprise DDoS defence.
 
 **Decision.**
 
@@ -2236,3 +2249,256 @@ was not on the wire before). Accepted: a pre-rev peer is ignored by an armed
 post-rev panel until it reloads, and a re-arm on a panel whose clock trails the
 old cycle's anchor by more than the elapsed time can still sit below a mirror
 that missed the disarm. The relay stays opaque; no server change.
+
+## 0050 — Relay admission policy: bounded frames, and `request_state` canonical, panels-only, damped
+
+**Accepted · 2026-10-06** (amends the "raw message to every connection except
+the sender" relay invariant and 0011's routing of the ask; the request/reply
+recovery, 0038's mirroring and the relay's statelessness stand)
+
+**Context.** The relay admitted any frame an authorized socket sent: no size
+bound before `JSON.parse`, a `null` body threw outside the handler's `try`, and
+`ack` free text went to CloudWatch verbatim — ~128 KB frames at the stage rate
+were a log-ingest bill of hundreds of USD per hour, long before the Budget
+alarm's 6–24 h lag. `request_state` was the one frame a read-only socket could
+send, relayed raw (client `data` included) to the whole room, and every
+control panel answered each one with three room-wide frames: (N−1) + 3·P·(N−1)
+posts per ask, ~420 at N = 60, P = 2. A read token sits in OBS/H2R URLs for up
+to 10 days, so ~5 asks/s from one holder filled the 2000 rps WS stage bucket
+and 429'd live `start`/`stop` fan-out mid-race; a venue Wi-Fi blip reconnecting
+every overlay did the same with nobody attacking. The membership `GetItem` is
+already on every relayed frame, and every extra sequential DynamoDB call on
+`start`/`stop` adds ~3–8 ms p50 to a ~60–120 ms fan-out.
+
+**Decision.** Rate limits are free and stateless, and never touch
+`start`/`stop`: no rate-limit state is stored, and every relayed frame pays the
+same single membership `GetItem`.
+
+1. **Frame bounds before any DynamoDB call** (`messageHandler/frame.ts`): at
+   most 8192 chars (≈ 6× the largest legitimate frame), 2048 for
+   `ping`/`ack`/`request_state`, checked before the parse; a non-array object
+   with a `type` matching `^[A-Za-z_]{1,32}$` and a compId-shaped `sessionId`
+   or none. An `ack` must carry `of` ∈ `start`/`stop`/`reset` and a numeric or
+   absent `key`. A failing frame is a 200 drop, counted into at most one
+   `drop-summary` line per minute per container.
+2. **Sanitised telemetry**: every client-supplied log field goes through
+   `core/logSafe.ts` (printable ASCII, truncated; the relay trace ≤ 512 chars),
+   so no frame can forge a line or the `key=`/`delivered=` fields incident
+   queries join on. A `ping` refreshes the row TTL at most once per minute per
+   connection per container.
+3. **`request_state` is canonical**: the relay forwards exactly
+   `{ type, sessionId, senderId?, data: {} }` (`senderId` only as a string
+   ≤ 64), whoever sent it — no client payload rides the fan-out.
+4. **…routed to the panels**: it fans to read-write connections only
+   (`broadcastToSession({ includeReadOnly: false })`, filtered on the rows the
+   fan-out already queried). Only `useControlSession` answers it; no reader
+   ever acted on another page's ask.
+5. **…and damped in memory**: one per connection per 5 s per container (a page
+   sends one per socket OPEN), checked before the membership `GetItem`; a
+   damped ask is a `limited` drop. Best-effort by design, not an authority:
+   containers recycle and a flood spawns fresh empty ones. A stored limiter
+   would be authoritative but costs a billed DynamoDB write per **blocked**
+   frame (a failed conditional write is still billed) — about the work it
+   saves.
+6. **Panels coalesce answers, leading + trailing**: the first ask in a quiet
+   window is answered at once; further asks inside `REQUEST_STATE_ANSWER_MS`
+   (500 ms) set a pending flag and yield at most one trailing
+   selection/snapshot/names triple at the window's end, built from the state
+   then, after which the window restarts. This is the amplification bound, and
+   it holds whatever rate the askers reach. The wire format is unchanged.
+
+**Rejected / deferred.** A stored per-connection limiter (an `UpdateItem` on
+the connection row, or a separate item): rejected under the principle above.
+Unicast answers (the relay stamps the asker's connection id, the panel answers
+`to` it, the relay verifies the target with a `GetItem`): deferred to the
+owner. Today every display overhears every answer, and a `state_snapshot`
+meant for one joiner heals any other display that missed a frame (the
+stuck-timer merge, `architecture.md` "What an overlay needs to stay in sync"
+§3); unicast removes that incidental healing and needs its own ADR amending
+0011/0038. A role lookup to choose the size cap (the type decides, no lookup).
+Validating relayed payloads beyond `type`/`sessionId` (the relay stays opaque
+to them).
+
+**Consequences.** A storm is bounded by the panels, not the askers: after the
+leading answer, at most one triple per panel per 500 ms, ~720 posts/s at
+N = 60, P = 2, under the 2000 bucket however many sockets ask. A lone joiner is
+answered with no added delay. An ask that slips past the damper (a cold
+container) costs one `GetItem` and one panels-only fan-out, which the
+coalescing absorbs. Read-write pages other than panels (previews) still
+receive the ask and ignore it. Abuse still costs Lambda invocations at the
+stage rate; the stage throttle, reserved concurrency and revoking read tokens
+bound that.
+
+## 0051 — Relay receive path: a validated, synchronous callback per frame; input events are timestamped callbacks
+
+**Accepted · 2026-10-06** (retires `lastJsonMessage` as the delivery channel;
+the wire format, 0038's mirroring and 0050's admission stand)
+
+**Context.** `useWS` exposed the library's `lastJsonMessage` — one `useState`
+slot — and every consumer reacted in a `useEffect` keyed on it. Two frames
+landing before React rendered would batch to one render and the effect would
+see only the second: a dead heat's lane-1 `stop` lost on the display, a
+`request_state` answer (three frames) losing its selection or snapshot on a
+joiner. It held in practice only because `react-use-websocket` 4.13 wraps its
+`setLastMessage` in `flushSync` and React flushes a sync commit's passive
+effects before the next render — library internals and undocumented
+scheduling that an upgrade or a swap would silently undo. A dependency change
+also re-ran the effect over the held frame (a discipline change on a stream
+overlay re-applied the last `db_update`). Handlers dereferenced `data`
+unchecked, so one malformed frame from any read-write member
+(`{"type":"updatePreview","sessionId":"x"}`) threw inside every page in the
+room, and the root error boundary put the message full-screen on every OBS
+capture. The gamepad had the same single-slot shape: every rising edge of one
+poll set one `lastPress` state, so a dead heat's two reds (one Buzz! dongle
+carries both lanes) reached the console as one press.
+
+**Decision.**
+
+1. **`useWS({ sessionId, readToken, onMessage })`.** The library gets
+   `onMessage: receive` and `filter: () => false`. `receive` parses the frame,
+   checks it with `isRelayFrame`, traces it (dev builds only), and calls the
+   page's handler through a ref inside `flushSync`, in a `try`/`catch` that
+   logs and contains a throwing handler.
+2. **`flushSync` per frame** makes "one frame, one commit" the delivery
+   contract rather than a library side effect: the second of two frames in one
+   task is handled after the first's writes committed, so it reads that commit
+   — the render-refreshed refs (`stateRef`, the selection signature the mirror
+   forward compares against, ADR 0038 §4) and the handler closure itself. A
+   child keyed on handler-set state still sees every frame, because React
+   flushes pending passive effects before it starts the next render. Cost: one
+   sync render per frame, which the library's own `flushSync` already paid.
+3. **`filter: () => false`** keeps the library from ever storing a frame: its
+   `lastMessage` state would re-render the whole page per frame for a value
+   nothing reads, and it is the single slot this decision removes.
+4. **The guard** (`hooks/wsFrameGuard.ts`) is a hand-rolled
+   `Record<WSMessage['type'], check>`, so a union member added without a check
+   fails to compile. It checks what consumers read and nothing more: required
+   fields by type, optional and additive fields only when present, extra keys
+   pass, and the legacy shapes still on the wire mid-deploy pass (no
+   `discipline`/`seq`/`echo`/`at`/`startedAt`, a session frame carrying
+   `timerId: -1`). Unknown types are dropped — no consumer has a branch for
+   them — and so is a `db_update` for an entity the client cannot invalidate
+   (its switch had no default). A `state_snapshot` is checked against the
+   shape its own discriminator selects (`signalPhase` ⇒ Speedline), via the
+   deep `isSpeedlineSnapshotShape`/`isCountdownSnapshotShape`. An
+   `updateSelection` stamp more than 24 h ahead of the receiver's clock is
+   dropped (`SEQ_MAX_LEAD_MS`): it would win every LWW tiebreak until the wall
+   clock caught up. Drops are a `console.warn`, with the payload in dev builds
+   only.
+5. **No page holds a frame.** A consumer whose children need a frame sets it as
+   state inside its handler (`SpeedlineTimerDisplay` → `Stopwatch` `laneFrame`,
+   the Freestyle feed's `countdownMessage`). Control pages chain through
+   `useControlSession`'s `onPeerMessage`, called after the hook's own peer
+   bookkeeping in the same delivery, so both halves' writes share one commit.
+   A handler reads its props from the render that handles the frame, so a
+   prop change re-applies nothing.
+6. **Input events are timestamped callbacks, never state tokens.**
+   `useGamepads(onPress)` delivers each rising edge of a poll as
+   `{ button, seq, at }`, in button order, each inside `flushSync`, so the
+   second press reads what the first committed. `at` is the HID report's time
+   (`Date.now()` minus the report's age, clamped to 250 ms), and a stop takes
+   `at` rather than the time its handler ran. A new input source follows the
+   same shape.
+
+**Rejected.** A frame queue drained by an effect (a second mechanism for what
+`flushSync` gives directly, and drain order across consumers becomes the new
+hazard). Zod or another schema library (~13 kB gzip into every overlay bundle;
+the routes are not code-split). Validating fields no consumer reads (a new
+optional field would then be dropped by every older client mid-deploy).
+
+**Consequences.** A malformed frame costs a console line instead of a page;
+render errors still reach the error boundaries. A frame a consumer cannot
+handle is logged and contained, and the socket keeps delivering. An
+operator's edit and a peer frame can no longer share a commit: the edit
+commits (and pushes its own claim) before any frame is handled, which is what
+the mirror forward's causality test assumes. A `Stopwatch` that mounts late
+replays the last lane frame (it replayed the last frame of any type), then its
+recovery row; both are idempotent over a running lane. The test harness
+(`web/test/util/wsMock.ts`) runs every fixture through `isRelayFrame` and
+delivers it the same way, so a fixture production would drop fails its test.
+Owes the peer-mirroring and control+preview smokes.
+
+## 0052 — Data-plane integrity: shared input bounds, audit before tightening, cheap referential rules
+
+**Accepted · 2026-10-06** (bounds the inputs of 0016's athlete shape, 0005's
+photo keys and 0013's `matchId` provenance; 0045's manager rights stand)
+
+**Context.** The validators type-checked and little else: names, notes,
+`roundName` and ids were any non-empty string, `timeMs` any non-negative integer
+(`1e300` passed and DynamoDB 500'd it), `position` any integer, `breakMs`
+unbounded, and a competition any number of athletes. A granted (or
+compromised) manager could store ~15 athletes with ~390 KB names and push
+`listAthletes` and every rankings response past Lambda's 6 MB limit — every
+admin page and overlay for that competition 500s. `photoKey` was any string, and
+the read path signs `https://<cdn>/${photoKey}` with the _caller's_ event
+expiry, so a manager who learned another competition's key (overlay URLs leak
+by design, ADR 0003) got a fresh URL for it. A Match's `winnerId` only had to be
+an existing athlete, not one of the pair, and `advanceBracket` propagates it.
+PUT is a full replacement, so any bound tightened under existing data turns that
+record's next edit into a 400. Times are written on the race-stop path, where
+every extra DynamoDB call is fan-out latency.
+
+**Decision.**
+
+1. **One table of bounds, enforced server-side, mirrored in the forms.**
+   `FIELD_LIMITS` in `server/src/core/types.ts`, duplicated in
+   `web/src/app/types.ts` and guarded by `web/test/app/types.parity.test.ts`;
+   the admin forms take their `maxLength`/`min`/`max` from it. Each bound is
+   about twice the realistic maximum:
+
+   | Field                                                      | Bound                                                       |
+   | ---------------------------------------------------------- | ----------------------------------------------------------- |
+   | competition `name`                                         | ≤ 100                                                       |
+   | `config.freestyle.breakMs`                                 | integer 1..600 000                                          |
+   | `firstName`, `lastName`                                    | ≤ 50 each, also after a legacy `name` split (`name` ≤ 101)  |
+   | `shortName`                                                | ≤ 24                                                        |
+   | `birthDate`                                                | ISO date, year 1900..current                                |
+   | `country`, `country2`                                      | `^[A-Za-z]{2,3}$\|^\d{3}$` (what `toAlpha2` reads), trimmed |
+   | `notes`                                                    | ≤ 2000                                                      |
+   | `compId` and every body id (`athleteId`, `matchId`, slots) | `^[A-Za-z0-9_-]{1,64}$`                                     |
+   | `timeMs`                                                   | integer 0..86 400 000 (covers `DNF_SENTINEL`)               |
+   | `startTime`                                                | integer 1..now + 1 day                                      |
+   | `roundName`                                                | ≤ 40                                                        |
+   | `position`                                                 | integer 0..64 (0 = the manual form's default)               |
+   | `controlPenalty`                                           | ≤ 100 (no rule ceiling; a storage bound)                    |
+   | explicit `overall`                                         | ≥ −1000                                                     |
+   | `photoKey`                                                 | `^photos/<compId>/<64 hex>\.(jpg\|png\|webp)$`              |
+
+   Request bodies are capped at 32 KB (`parseJsonBody`, 413 before parsing),
+   and a competition at 300 athletes (`MAX_ATHLETES_PER_COMP`, 409 on create
+   via a `Select: COUNT` query; a soft cap — concurrent creates can both pass).
+
+2. **Audit before tightening.** `server/scripts/maintenance/auditFieldBounds.mjs`
+   checks stored rows against these bounds (it also counts foreign `photoKey`s
+   and winner-not-in-pair matches); it runs against prod before a bound ships,
+   and every hit is fixed in the data or grandfathered in the validator first.
+   Its rules carry a plain-ESM copy of the limits, kept equal to the validators'
+   by `server/test/scripts/fieldBounds.test.ts`.
+3. **A `photoKey` belongs to its competition.** The athletes handler requires
+   the `photos/<compId>/` prefix. On PUT a foreign key is grandfathered while it
+   equals the stored one (`renameCompId --skip-photos` leaves keys under the old
+   compId); the stored athlete is read only in that mismatch case. The web
+   builds every data-supplied CSS `url()` through `app/util/cssUrl.ts` (absolute
+   http(s)/blob only, quoted and escaped).
+4. **Referential rules are pure validator checks.** `winnerId` must be
+   `athlete1Id` or `athlete2Id`; the two slots must differ. A Time's or Score's
+   `matchId` is format-checked only: the server never reads it, and an
+   existence check would add a partition query to every race stop. The athlete
+   delete guard reads strongly consistent.
+
+**Rejected.** A `ConditionCheck` on the athlete in every Time/Score/Match write
+(closes the race of a delete against a concurrent reference write): it doubles
+the write cost and adds latency on the race-stop path, against a window of
+milliseconds whose worst case is an orphan Time that rankings already ignore.
+Per-competition caps on Times/Scores (a count on the race-stop path). A
+signer-side refusal of foreign prefixes (would break grandfathered keys; revisit
+if the prod audit finds none). A schema library (the validators are the tested
+surface and stay dependency-free).
+
+**Consequences.** A partition stays near 1 MB in the worst case, and no input
+can 500 a write. A stored record outside a bound 400s on its next edit until it
+is fixed — hence the audit gate; `country` is the bound most likely to hit real
+data, and its fallback is a plain length ≤ 8. A bound change is three edits —
+both `FIELD_LIMITS` copies and the audit copy — and the parity tests fail until
+all three agree. A legacy foreign `photoKey` keeps working until replaced, and
+replacing it moves the athlete onto its own prefix.

@@ -131,8 +131,6 @@ export const SpeedlineControlPage = () => {
   } = useStartSignalTimer({ onSignalComplete: () => {} });
   const peerAnchorRef = useRef<number>(0);
 
-  const { lastPressedGamepadButton } = useGamepads();
-
   const { playAudio, audioElement, audioBlocked } = useSignalAudio();
 
   const [resetConfirmOpen, setResetConfirmOpen] = useState<boolean>(false);
@@ -176,12 +174,12 @@ export const SpeedlineControlPage = () => {
   const runningTimerCount =
     (laneState[1].kind === 'running' ? 1 : 0) + (laneState[2].kind === 'running' ? 1 : 0);
 
-  // The gamepad handler + the snapshot builder + the peer-message handler run
-  // from effects keyed on a narrow dep (last pressed button / peerMessage), so
-  // their closures can hold stale timer state. Mirror the single source into one
-  // ref they read. `signalPhase` is the effective phase (what the board shows /
-  // answers request_state with); `localSignalPhase` is only the local sequence,
-  // read by the peer-abort handler (a peer -1/0 must cancel a LOCAL run only).
+  // The snapshot builder and the memoised stop/reset callbacks run from
+  // closures keyed on a narrow dep (or none), so they can hold stale timer
+  // state. Mirror the single source into one ref they read. `signalPhase` is
+  // the effective phase (what the board shows / answers request_state with);
+  // `localSignalPhase` is only the local sequence, read by the peer-abort
+  // handler (a peer -1/0 must cancel a LOCAL run only).
   const stateRef = useRef({
     laneTimers,
     text,
@@ -205,77 +203,72 @@ export const SpeedlineControlPage = () => {
   // in lockstep.
   const runLive = resetNeedsConfirm({ signalPhase: effectiveSignalPhase, runningTimerCount });
 
-  const {
-    sendWSMessage,
-    peerMessage,
-    link,
-    peerState,
-    selfRecovered,
-    enabledPreview,
-    togglePreview,
-  } = useControlSession<StopwatchWSMessage>({
-    sessionId,
-    runLive,
-    laneNames: laneNamesInput(recorder.laneAthletes, athletes.data ?? []),
-    selection: {
-      discipline: 'speed',
-      round: recorder.round,
-      gender: recorder.selectedGender,
-      matchId: recorder.selectedMatchId || null,
-      athlete1Id: recorder.laneAthletes[1] || null,
-      athlete2Id: recorder.laneAthletes[2] || null,
-      // Best-of-3 series tally (ADR 0017 §4) — drives the rounds-summary overlay.
-      runWins: recorder.runWins,
-      // Per-lane false-start counts — drives the preview's lane FALSE START badge.
-      falseStarts: recorder.fsCounts,
-    },
-    buildPreview: (enabled) => ({ type: 'updatePreview', data: { enabled } }),
-    buildLaneNames: (data) => ({
-      type: 'updateLaneNames',
-      data: { ...data, discipline: 'speed' },
-    }),
-    buildSelection: (data) => ({ type: 'updateSelection', data }),
-    buildSnapshot: (isPreviewEnabled) => ({
-      type: 'state_snapshot',
-      data: buildSpeedlineSnapshot({
-        isPreviewEnabled,
-        now: Date.now(),
-        signalPhase: stateRef.current.signalPhase,
-        text: stateRef.current.text,
-        timers: [
-          { timerId: 1, ...stateRef.current.laneTimers[1] },
-          { timerId: 2, ...stateRef.current.laneTimers[2] },
-        ],
-        falseStarts: stateRef.current.falseStarts,
+  const { sendWSMessage, link, peerState, selfRecovered, enabledPreview, togglePreview } =
+    useControlSession<StopwatchWSMessage>({
+      sessionId,
+      runLive,
+      laneNames: laneNamesInput(recorder.laneAthletes, athletes.data ?? []),
+      selection: {
+        discipline: 'speed',
+        round: recorder.round,
+        gender: recorder.selectedGender,
+        matchId: recorder.selectedMatchId || null,
+        athlete1Id: recorder.laneAthletes[1] || null,
+        athlete2Id: recorder.laneAthletes[2] || null,
+        // Best-of-3 series tally (ADR 0017 §4) — drives the rounds-summary overlay.
+        runWins: recorder.runWins,
+        // Per-lane false-start counts — drives the preview's lane FALSE START badge.
+        falseStarts: recorder.fsCounts,
+      },
+      buildPreview: (enabled) => ({ type: 'updatePreview', data: { enabled } }),
+      buildLaneNames: (data) => ({
+        type: 'updateLaneNames',
+        data: { ...data, discipline: 'speed' },
       }),
-    }),
-    // Peer mirroring (ADR 0038): catch up to an already-running peer panel on
-    // open. Write-free by construction — the snapshot only sets local state,
-    // and arming the recorder start lets a LATER LOCAL stop record correctly
-    // (the write then binds to this panel's operator action).
-    applySnapshot: (snapshot) => {
-      // Cross-mode crosstalk tolerance: a Freestyle control sharing this
-      // session also answers request_state, with a CountdownSnapshot — drop it.
-      if (!isSpeedlineSnapshot(snapshot)) return false;
-      const lane = (id: number) => {
-        const t = snapshot.timers.find((timer) => timer.timerId === id);
-        return { startTime: t?.startTime ?? null, stopTime: t?.stopTime ?? null };
-      };
-      setLaneTimers({ 1: lane(1), 2: lane(2) });
-      setText(snapshot.text);
-      // Static light recovery (no anchor in a snapshot): show the phase, don't
-      // run a sequence. Cancel any mirror so the reactive value takes over.
-      cancelPeerSignal();
-      setReactivePeerPhase(snapshot.signalPhase);
-      // A snapshot carries no abort flag (see `reactivePeerAborted`): a
-      // recovered -1 reads as a spent sequence, the commoner ending.
-      setReactivePeerAborted(false);
-      const running = snapshot.timers.find((t) => t.startTime !== null && t.stopTime === null);
-      if (running?.startTime != null) recorder.onRaceStart(running.startTime);
-      return true;
-    },
-    applySelection: recorder.applySelection,
-  });
+      buildSelection: (data) => ({ type: 'updateSelection', data }),
+      buildSnapshot: (isPreviewEnabled) => ({
+        type: 'state_snapshot',
+        data: buildSpeedlineSnapshot({
+          isPreviewEnabled,
+          now: Date.now(),
+          signalPhase: stateRef.current.signalPhase,
+          text: stateRef.current.text,
+          timers: [
+            { timerId: 1, ...stateRef.current.laneTimers[1] },
+            { timerId: 2, ...stateRef.current.laneTimers[2] },
+          ],
+          falseStarts: stateRef.current.falseStarts,
+        }),
+      }),
+      // Peer mirroring (ADR 0038): catch up to an already-running peer panel on
+      // open. Write-free by construction — the snapshot only sets local state,
+      // and arming the recorder start lets a LATER LOCAL stop record correctly
+      // (the write then binds to this panel's operator action).
+      applySnapshot: (snapshot) => {
+        // Cross-mode crosstalk tolerance: a Freestyle control sharing this
+        // session also answers request_state, with a CountdownSnapshot — drop it.
+        if (!isSpeedlineSnapshot(snapshot)) return false;
+        const lane = (id: number) => {
+          const t = snapshot.timers.find((timer) => timer.timerId === id);
+          return { startTime: t?.startTime ?? null, stopTime: t?.stopTime ?? null };
+        };
+        setLaneTimers({ 1: lane(1), 2: lane(2) });
+        setText(snapshot.text);
+        // Static light recovery (no anchor in a snapshot): show the phase, don't
+        // run a sequence. Cancel any mirror so the reactive value takes over.
+        cancelPeerSignal();
+        setReactivePeerPhase(snapshot.signalPhase);
+        // A snapshot carries no abort flag (see `reactivePeerAborted`): a
+        // recovered -1 reads as a spent sequence, the commoner ending.
+        setReactivePeerAborted(false);
+        const running = snapshot.timers.find((t) => t.startTime !== null && t.stopTime === null);
+        if (running?.startTime != null) recorder.onRaceStart(running.startTime);
+        return true;
+      },
+      applySelection: recorder.applySelection,
+      // Declared below with the timer actions it drives; runs only on a frame.
+      onPeerMessage: (message) => applyPeerMessage(message),
+    });
 
   // The console's interlock table (`app/util/speedlineLocks`): which controls
   // are inert and, in the operator's words, why — one map read by the buttons,
@@ -321,7 +314,7 @@ export const SpeedlineControlPage = () => {
 
   // What a handset press just did, for the card's readout — off the same lock
   // map the buttons read, and off the overlay standing at the instant of the
-  // press (which is why this is called from the press effect, not a render).
+  // press (which is why this is called from the press handler, not a render).
   const describePress = useCallback(
     (button: number) =>
       handsetReadout(button, speedlineHandsetOutcome(button, { locks, overlay: advanceOverlay() })),
@@ -338,8 +331,7 @@ export const SpeedlineControlPage = () => {
   // NEVER writes to the data plane — `onRaceStart`/`notePeerFinish` are local
   // bookkeeping (they arm a later LOCAL stop / record the result for the tally
   // derivation), and the Time POST stays on the panel whose operator stopped.
-  useEffect(() => {
-    if (!peerMessage) return;
+  const applyPeerMessage = (peerMessage: StopwatchWSMessage) => {
     switch (peerMessage.type) {
       case 'start': {
         const { startTime, lanes } = peerMessage.data;
@@ -404,7 +396,7 @@ export const SpeedlineControlPage = () => {
         break;
       }
     }
-  }, [peerMessage]);
+  };
 
   const start = (goEpoch?: number) => {
     // Anchor the race clock on the SCHEDULED GO epoch — the same schedule the
@@ -429,19 +421,18 @@ export const SpeedlineControlPage = () => {
   };
 
   const stop = useCallback(
-    (timer: 1 | 2) => {
+    (timer: 1 | 2, at: number = Date.now()) => {
       // Per-lane stops are valid only mid-race. The UI button is disabled outside
       // that window, but the gamepad path (buttons 10/15) fires unconditionally —
-      // see app/util/stopGuard. Reads the live single source (the effect closures
-      // can be stale). A false start no longer stops the lanes (rule S4) — the
-      // former all-lanes stop(-1) is gone; the run always runs to a finish.
+      // see app/util/stopGuard. Reads the live single source (this memoised
+      // closure can be stale). A false start never stops the lanes (rule S4).
       const { 1: lane1, 2: lane2 } = stateRef.current.laneTimers;
       const stopTimes = { 1: lane1.stopTime, 2: lane2.stopTime };
-      if (
-        !canStopLane({ startTime: stateRef.current.laneTimers[timer].startTime, stopTimes }, timer)
-      )
-        return;
-      const stopTime = Date.now();
+      const { startTime } = stateRef.current.laneTimers[timer];
+      if (startTime === null || !canStopLane({ startTime, stopTimes }, timer)) return;
+      // A handset press is timed off its HID report, which may predate a start
+      // this panel applied a moment later.
+      const stopTime = Math.max(at, startTime);
       setLaneTimers((t) => ({ ...t, [timer]: { ...t[timer], stopTime } }));
       // Record the finishing lane's time (no-op unless an athlete is assigned).
       recorder.recordFinish(timer, stopTime);
@@ -549,8 +540,8 @@ export const SpeedlineControlPage = () => {
 
   // Reset is destructive and fires from both the button and gamepad button 1.
   // Guard a mid-race wipe behind a confirmation; clear instantly when idle.
-  // Reads the live single source (stateRef) so the stale-closure gamepad effect
-  // still sees the current lanes.
+  // Reads the live single source (stateRef): the empty-dep callback's closure
+  // would otherwise hold the first render's lanes.
   const requestReset = useCallback(() => {
     const { laneTimers, signalPhase } = stateRef.current;
     const liveLanes =
@@ -568,14 +559,16 @@ export const SpeedlineControlPage = () => {
     reset();
   };
 
-  useEffect(() => {
+  // Called inside the poll's flushSync, once per press in button order, so a
+  // dead heat's second red reads the board the first one committed.
+  useGamepads(({ button, at }) => {
     // A question owns the board while it stands (FREESTYLE_BOARD_UX §4.8): the
     // on-screen twins already sit behind the modal backdrop, so the handset is
     // the one path that would still reach the transport — from a board the
     // operator cannot see. Read at press time, before the confirm this press
     // might be answering has been unmounted.
     if (overlayOwnsBoard()) return;
-    switch (lastPressedGamepadButton?.button) {
+    switch (button) {
       case 0:
         if (locks.start === null) startWithSignal();
         break;
@@ -591,13 +584,13 @@ export const SpeedlineControlPage = () => {
       // Resume is NOT here and must not be: un-stopping a lane is a judgement
       // the operator makes at the screen, never a key a gloved hand can hit.
       case 10:
-        stop(1);
+        stop(1, at);
         break;
       case 11:
         flagFs(1);
         break;
       case 15:
-        stop(2);
+        stop(2, at);
         break;
       case 16:
         flagFs(2);
@@ -605,7 +598,7 @@ export const SpeedlineControlPage = () => {
       default:
         break;
     }
-  }, [lastPressedGamepadButton]);
+  });
 
   // The LOCAL driving sequence broadcasts ONLY the SEED (armed + anchor + the
   // lanes GO will ignite); receivers derive set1/set2/GO and the race-clock

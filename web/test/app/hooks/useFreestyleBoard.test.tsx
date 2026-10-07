@@ -21,7 +21,6 @@ vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
     useWS: () => ({
       sendWSMessage: vi.fn(),
       readyState: socket.readyState,
-      lastJsonMessage: null,
       senderId: 'own-sender-id',
     }),
   };

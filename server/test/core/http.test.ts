@@ -12,6 +12,7 @@ vi.mock('core/competitionDb', async (importOriginal) => ({
 import { ConditionFailed } from 'core/competitionDb';
 import {
   HttpError,
+  MAX_BODY_BYTES,
   errorResponse,
   getAuth,
   json,
@@ -113,6 +114,27 @@ describe('parseJsonBody', () => {
       expect.unreachable();
     } catch (e) {
       expect((e as HttpError).status).toBe(400);
+    }
+  });
+
+  it('rejects a body over MAX_BODY_BYTES with a 413 before parsing', () => {
+    const atMax = JSON.stringify({ n: 'x'.repeat(MAX_BODY_BYTES - 8) });
+    expect(atMax).toHaveLength(MAX_BODY_BYTES);
+    expect(parseJsonBody({ body: atMax })).toEqual({ n: 'x'.repeat(MAX_BODY_BYTES - 8) });
+
+    // Counted in UTF-8 bytes: half as many 2-byte characters already overflow.
+    const overMax = [
+      { body: `${atMax} ` },
+      { body: Buffer.from(`${atMax} `).toString('base64'), isBase64Encoded: true },
+      { body: JSON.stringify({ n: 'ä'.repeat(MAX_BODY_BYTES / 2) }) },
+    ];
+    for (const event of overMax) {
+      try {
+        parseJsonBody(event);
+        expect.unreachable();
+      } catch (e) {
+        expect((e as HttpError).status).toBe(413);
+      }
     }
   });
 });

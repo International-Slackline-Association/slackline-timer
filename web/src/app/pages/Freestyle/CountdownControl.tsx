@@ -1,7 +1,7 @@
 import { Box, Chip, Divider, Paper, Typography } from '@mui/material';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { Stack } from '@mui/system';
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { Countdown } from './Countdown';
 import { useGamepads } from 'app/hooks/useGamepads';
 import { usePeerFlash } from 'app/hooks/usePeerFlash';
@@ -101,7 +101,8 @@ interface Props {
    */
   reserveBreakRows?: boolean;
   onStart(lane: PlayerId): void;
-  onStop(lane: PlayerId): void;
+  /** `at`: the press epoch a handset stop is timed off (defaults to now). */
+  onStop(lane: PlayerId, at?: number): void;
   onReset(lane: PlayerId): void;
   onTakeBreak(lane: PlayerId): void;
   /**
@@ -127,7 +128,6 @@ export const CountdownControl = (props: Props) => {
   // peer event landing mid-question restates the number — and re-arming the
   // lane retires the question (`useLapsingConfirm`).
   const [asking, setAsking] = useLapsingConfirm<number>(laneResetNeedsConfirm(props.lane));
-  const { lastPressedGamepadButton } = useGamepads();
   const peerApplied = usePeerFlash(props.peerEventToken ?? null);
 
   const breaksLeft = props.lane.breaksLeft;
@@ -162,29 +162,17 @@ export const CountdownControl = (props: Props) => {
   // is noise on a board read at a glance.
   const whyLock = props.lane.phase === 'running' ? locks.stop : locks.start;
 
-  // The gamepad effect is keyed only on the last pressed button, so its closure
-  // can hold stale props. Mirror the live guards into refs so the pad path sees
-  // the current lane/locks (matches the Speedline ControlPage pattern). One
-  // mirror per object, not one per field it guards on — two copies of the same
-  // object can disagree.
-  const laneRef = useRef(props.lane);
-  laneRef.current = props.lane;
-  const modeRef = useRef(props.mode);
-  modeRef.current = props.mode;
-  const locksRef = useRef(locks);
-  locksRef.current = locks;
-
   // Reset fires from both the button and the yellow handset key, and
   // `laneResetNeedsConfirm` is the one rule for both entry points.
   const requestReset = () => {
-    const lock = locksRef.current.reset;
+    const lock = locks.reset;
     if (lock !== null) {
       // Only reachable from the pad — the on-screen Reset is disabled by the
       // same lock — so this is the blocked key's answer, not a dead branch.
       props.onBlocked(lock);
       return;
     }
-    if (laneResetNeedsConfirm(laneRef.current)) {
+    if (laneResetNeedsConfirm(props.lane)) {
       setAsking(Date.now());
       return;
     }
@@ -199,14 +187,12 @@ export const CountdownControl = (props: Props) => {
     props.onReset(props.id);
   };
 
-  useEffect(() => {
-    if (lastPressedGamepadButton === undefined) return;
+  useGamepads(({ button, at }) => {
     // A question on screen owns the board (§4.8): only ADVANCE answers it, so
     // this lane's four keys wait — including the one that opened it.
     if (overlayOwnsBoard()) return;
     const indexAdjustment = props.id === 2 ? LANE_2_OFFSET : 0;
-    const index = lastPressedGamepadButton.button - indexAdjustment;
-    const live = locksRef.current;
+    const index = button - indexAdjustment;
     // Every key answers: it acts, or it hands its own lock to the board (§3's
     // no-op row). The lock is the same field the button beside it greys on, so
     // the pad and the screen cannot word one state two ways.
@@ -214,10 +200,10 @@ export const CountdownControl = (props: Props) => {
       lock === null ? fire() : props.onBlocked(lock);
     switch (index) {
       case LANE_BUTTONS.start:
-        act(live.start, () => props.onStart(props.id));
+        act(locks.start, () => props.onStart(props.id));
         break;
       case LANE_BUTTONS.stop:
-        act(live.stop, () => props.onStop(props.id));
+        act(locks.stop, () => props.onStop(props.id, at));
         break;
       case LANE_BUTTONS.reset:
         requestReset();
@@ -225,16 +211,14 @@ export const CountdownControl = (props: Props) => {
       case LANE_BUTTONS.aux:
         // Break button: in battle it ends the turn (a fall — Stop-as-fall); in
         // quali it takes the advisory break.
-        if (modeRef.current === 'battle') {
-          act(live.stop, () => props.onStop(props.id));
+        if (props.mode === 'battle') {
+          act(locks.stop, () => props.onStop(props.id, at));
         } else {
-          act(live.takeBreak, () => props.onTakeBreak(props.id));
+          act(locks.takeBreak, () => props.onTakeBreak(props.id));
         }
         break;
     }
-    // Effect keyed only on the button token so a repeated press re-fires; the
-    // guards read live values via refs.
-  }, [lastPressedGamepadButton]);
+  });
 
   return (
     <Paper

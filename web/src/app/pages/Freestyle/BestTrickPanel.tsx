@@ -1,5 +1,5 @@
 import { Box, Divider, Paper, Stack, Typography } from '@mui/material';
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { Countdown } from './Countdown';
 import { useGamepads } from 'app/hooks/useGamepads';
 import { overlayOwnsBoard } from 'app/hooks/useAdvanceInput';
@@ -135,7 +135,6 @@ const MARK_SX = {
  */
 export const BestTrickPanel = (props: Props) => {
   const { series } = props;
-  const { lastPressedGamepadButton } = useGamepads();
   const tallyAtRisk = series !== null && seriesTallyNeedsConfirm(series);
   // The tally is the risk, so a peer reset or a disarm retires the question
   // (`useLapsingConfirm`); what it holds is which press asked.
@@ -176,22 +175,12 @@ export const BestTrickPanel = (props: Props) => {
   // The interlock table (brief §4.7), shared by the buttons and the pad keys.
   const locks = bestTrickLocks({ series, runningLane: props.runningLane });
 
-  // The pad effect is keyed only on the press token, so its closure can hold a
-  // stale series. Mirror the live props into refs (the CountdownControl pattern).
-  const seriesRef = useRef(series);
-  seriesRef.current = series;
-  const locksRef = useRef(locks);
-  locksRef.current = locks;
-
-  useEffect(() => {
-    if (lastPressedGamepadButton === undefined) return;
+  useGamepads(({ button }) => {
     // A question on screen owns the board (§4.8): only ADVANCE answers it, so
     // the orange key waits with the lane keys.
     if (overlayOwnsBoard()) return;
-    const { button } = lastPressedGamepadButton;
     if (button !== TRY_BUTTON[1] && button !== TRY_BUTTON[2]) return;
-    const live = seriesRef.current;
-    if (live !== null && live.clock.running) {
+    if (series !== null && series.clock.running) {
       props.onEndTry();
       return;
     }
@@ -199,15 +188,13 @@ export const BestTrickPanel = (props: Props) => {
     // Off a series the key is not silent, it is LOCKED (`bestTrickLocks` words
     // it `best trick is not armed`, or blames the running lane first) — the
     // board answers it like any other blocked key rather than swallowing it.
-    const lock = locksRef.current.startTry[side];
+    const lock = locks.startTry[side];
     if (lock !== null) {
       props.onBlocked(lock);
       return;
     }
     props.onStartTry(side);
-    // Effect keyed only on the button token so a repeated press re-fires; the
-    // guards read the live series/locks via the refs.
-  }, [lastPressedGamepadButton]);
+  });
 
   if (series === null) {
     return (

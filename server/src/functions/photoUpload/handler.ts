@@ -17,7 +17,9 @@ import {
  * POST /competitions/{compId}/photo-uploads → S3 presigned POST.
  *
  * Keys are content-hashed (photos/<compId>/<sha256>.<ext>): immutable,
- * unguessable, deduplicating. The browser computes the SHA-256, uploads via
+ * unguessable, deduplicating. The checksum fields make S3 verify the bytes
+ * against that hash, so a key can't be overwritten with other content.
+ * The browser resizes the image, computes the SHA-256, uploads via
  * the presigned POST (FormData against `url` + `fields`), then PUTs the athlete
  * with the returned photoKey. Reads never touch S3 directly — they go through
  * the CloudFront signed-URL pipeline (core/photoUrl.ts).
@@ -33,7 +35,13 @@ const EXTENSIONS: Record<string, string> = {
 };
 
 const UPLOAD_URL_TTL_SECONDS = 300;
-const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+/** Matches the browser-side resize target (web app/util/resizeImage.ts) and
+ *  the seed pre-check (scripts/lib/seedClient.mjs). */
+export const MAX_PHOTO_BYTES = 1024 * 1024;
+
+/** S3 wants the checksum base64-encoded; the client sends hex. */
+export const checksumSha256Base64 = (sha256Hex: string): string =>
+  Buffer.from(sha256Hex, 'hex').toString('base64');
 
 export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = async (event) => {
   try {
@@ -59,11 +67,14 @@ export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = a
     const { url, fields } = await createPresignedPost(s3, {
       Bucket: bucket,
       Key: photoKey,
-      Fields: { 'Content-Type': contentType },
-      // Server-enforced bounds the browser can't lie about: bytes ≤ 8 MB and
-      // the content type must match (a presigned PUT could express neither).
+      // Every field becomes an exact-match policy condition.
+      Fields: {
+        'Content-Type': contentType,
+        'x-amz-checksum-algorithm': 'SHA256',
+        'x-amz-checksum-sha256': checksumSha256Base64(body.sha256),
+      },
       Conditions: [
-        ['content-length-range', 0, MAX_PHOTO_BYTES],
+        ['content-length-range', 1, MAX_PHOTO_BYTES],
         ['eq', '$Content-Type', contentType],
       ],
       Expires: UPLOAD_URL_TTL_SECONDS,

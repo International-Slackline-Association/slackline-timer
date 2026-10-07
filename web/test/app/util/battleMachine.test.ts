@@ -92,6 +92,15 @@ describe('battleMachine â€” per-athlete budget persists across turns (ADR 0019 Â
     });
   });
 
+  it('never credits back time for a stop stamped before the turn started', () => {
+    // A handset stop is timed off its HID report, which can predate a START
+    // dispatched a moment later.
+    let s = step(fresh(), { type: 'START', lane: 1, at: 10_000 });
+    s = step(s, { type: 'STOP', lane: 1, at: 9_900 });
+    expect(s[1]).toMatchObject({ phase: 'idle', budgetMs: BUDGET });
+    expect(s.pauseStartedAt).toBe(10_000);
+  });
+
   it('marks a lane finished (budget 0) when a stop lands exactly at the budget end', () => {
     let s = step(fresh(), { type: 'START', lane: 1, at: 0 });
     s = step(s, { type: 'STOP', lane: 1, at: BUDGET });

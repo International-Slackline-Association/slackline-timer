@@ -35,14 +35,17 @@ Creating a competition selects it, so you can go straight on to the athletes.
 | **First / last name** | Kept separate because the broadcast cards set them in different weights. Leave the last name blank for a mononym. |
 | **Short name**        | Optional. Used where an overlay is tight on space; otherwise the last name is used.                               |
 | **Birth date**        | —                                                                                                                 |
-| **Country**           | ISO code, e.g. `USA` or `DE`. Drives the flag on the graphics.                                                    |
-| **Second country**    | Optional, for dual representation.                                                                                |
+| **Country**           | A 2- or 3-letter code (`DE`, `USA`, IOC `SUI`) or a 3-digit numeric code. Drives the flag on the graphics.        |
+| **Second country**    | Optional, for dual representation; same codes as Country.                                                         |
 | **Gender**            | Determines which field the athlete competes in.                                                                   |
 | **Notes**             | Optional, internal.                                                                                               |
 
 ### Photos
 
-Use **Upload photo** on the athlete form. JPG, PNG or WebP, up to 8 MB.
+Use **Upload photo** on the athlete form. JPG, PNG or WebP, up to 30 MB.
+Photos are resized automatically before upload (to a JPEG of at most
+1280 pixels on the long side), so a straight-from-the-camera picture is fine
+and comes out the right way up.
 
 The form shows a **live preview of the broadcast card** as you fill it in —
 photo, name split and flag — so you can check how an athlete will look on air

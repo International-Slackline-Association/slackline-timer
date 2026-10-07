@@ -38,7 +38,7 @@ describe('speedlineHandsetOutcome', () => {
     );
   });
 
-  // The pad effect bails on `overlayOwnsBoard()` ahead of every interlock, and
+  // The pad handler bails on `overlayOwnsBoard()` ahead of every interlock, and
   // this desk binds no answer to the pad — so the question, not the board, is
   // what a press behind it is told about.
   it('blames the standing question rather than the board behind it', () => {

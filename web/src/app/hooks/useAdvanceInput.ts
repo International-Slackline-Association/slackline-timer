@@ -211,13 +211,9 @@ export const useAdvanceInput = (onAdvance: () => void): (() => void) => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // The pad leg: keyed on the press token (monotonic seq), so a deliberate
-  // same-button re-press fires while a mere re-render does not.
-  const { lastPressedGamepadButton } = useGamepads();
-  useEffect(() => {
-    if (lastPressedGamepadButton?.button !== ADVANCE_BUTTON) return;
-    press();
-  }, [lastPressedGamepadButton, press]);
+  useGamepads(({ button }) => {
+    if (button === ADVANCE_BUTTON) press();
+  });
 
   return press;
 };

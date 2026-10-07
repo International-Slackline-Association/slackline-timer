@@ -207,3 +207,40 @@ describe('competitionDb manager grants (per-competition ACL)', () => {
     expect(compIds).toEqual(['worlds-2026', 'euros-2026']);
   });
 });
+
+describe('competitionDb athlete cap + delete guard', () => {
+  afterEach(() => {
+    sendMock.mockReset();
+  });
+
+  it('countAthletes sums Select: COUNT pages', async () => {
+    sendMock
+      .mockResolvedValueOnce({ Count: 250, LastEvaluatedKey: { PK: 'COMP#c1', SK: 'ATHLETE#x' } })
+      .mockResolvedValueOnce({ Count: 40 });
+
+    expect(await competitionDb.countAthletes('c1')).toBe(290);
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    expect(sendMock.mock.calls[0][0].input).toMatchObject({
+      Select: 'COUNT',
+      ExpressionAttributeValues: { ':pk': 'COMP#c1', ':prefix': 'ATHLETE#' },
+    });
+    expect(sendMock.mock.calls[1][0].input.ExclusiveStartKey).toEqual({
+      PK: 'COMP#c1',
+      SK: 'ATHLETE#x',
+    });
+  });
+
+  it('athleteHasReferences reads strongly consistent', async () => {
+    sendMock.mockResolvedValue({ Items: [] });
+
+    expect(await competitionDb.athleteHasReferences('c1', 'a1')).toEqual({
+      times: false,
+      matches: false,
+      scores: false,
+    });
+    expect(sendMock).toHaveBeenCalledTimes(3);
+    for (const [command] of sendMock.mock.calls) {
+      expect(command.input.ConsistentRead).toBe(true);
+    }
+  });
+});

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../../infra/app';
 import { CognitoConfig, SlacklineTimerV1Stack } from '../../infra/slackline-stack';
+import { OFFLINE_ENV } from '../../scripts/offlineEnv.mjs';
 
 // Machine-checked documentation of what the stack synthesizes: the invariants
 // asserted here (retention, public access, grants, authorizer cache keys, the
@@ -29,6 +30,8 @@ const stack = new SlacklineTimerV1Stack(app, 'slackline-timer-v1', {
 const template = Template.fromStack(stack);
 
 const LAMBDA_COUNT = 13;
+// HTTP routes in the surface table (the WS system routes excluded).
+const HTTP_ROUTE_COUNT = 30;
 
 // A function role's grants land in its ServiceRoleDefaultPolicy; table ARNs are
 // Fn::GetAtt refs carrying the table's logical id ('SpeedlineTimerTable' relay /
@@ -40,6 +43,30 @@ const fnPolicy = (fnLogicalId: string): string => {
   );
   expect(key, `default policy for ${fnLogicalId}`).toBeDefined();
   return JSON.stringify(policies[key!].Properties.PolicyDocument);
+};
+
+interface PolicyStatementJson {
+  Effect: string;
+  Action: string | string[];
+  Resource: unknown;
+}
+
+const statementsOf = (fnLogicalId: string): PolicyStatementJson[] =>
+  (JSON.parse(fnPolicy(fnLogicalId)) as { Statement: PolicyStatementJson[] }).Statement;
+
+// The actions a role is allowed on resources whose serialised ARN contains
+// `resourceRef` (a table/bucket logical id, or an ARN fragment).
+const actionsOn = (fnLogicalId: string, resourceRef: string): string[] =>
+  statementsOf(fnLogicalId)
+    .filter((st) => st.Effect === 'Allow' && JSON.stringify(st.Resource).includes(resourceRef))
+    .flatMap((st) => [st.Action].flat())
+    .sort();
+
+const tableByName = (tableName: string) => {
+  const tables = template.findResources('AWS::DynamoDB::Table');
+  const entry = Object.values(tables).find((t) => t.Properties.TableName === tableName);
+  expect(entry, tableName).toBeDefined();
+  return entry!;
 };
 
 describe('DynamoDB tables', () => {
@@ -61,6 +88,18 @@ describe('DynamoDB tables', () => {
         }),
       });
     }
+  });
+
+  // M5: deletion protection does not undo a bad seed/advance or a bulk delete;
+  // relay rows are 20-min ephemera and stay without PITR.
+  it('enables 35-day PITR on the competition table only', () => {
+    expect(
+      tableByName('slackline-timer-v1-competition-prod').Properties
+        .PointInTimeRecoverySpecification,
+    ).toEqual({ PointInTimeRecoveryEnabled: true, RecoveryPeriodInDays: 35 });
+    expect(
+      tableByName('slackline-timer-v1-relay-prod').Properties.PointInTimeRecoverySpecification,
+    ).toBeUndefined();
   });
 
   it('expires relay connection rows via the ddb_ttl attribute', () => {
@@ -89,7 +128,7 @@ describe('photo CDN', () => {
 
   // Housekeeping insurance against orphaned content-hashed upload keys (an
   // athlete's replaced photo is never dereferenced). Time-based expiry scoped
-  // to the photos/ prefix, well beyond the ≤10-day event access window.
+  // to the photos/ prefix, well beyond the event access window.
   it('expires stale photos/ objects after 90 days', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
       BucketName: 'slackline-timer-v1-photos-prod',
@@ -118,6 +157,17 @@ describe('photo CDN', () => {
     });
   });
 
+  it('attaches the managed SECURITY_HEADERS response headers policy', () => {
+    template.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        Comment: Match.stringLikeRegexp('athlete photos'),
+        DefaultCacheBehavior: Match.objectLike({
+          ResponseHeadersPolicyId: '67f7725c-6f97-4210-82d7-5512b31e9d03',
+        }),
+      }),
+    });
+  });
+
   it('grants s3:PutObject to the photoUpload function only', () => {
     const policies = template.findResources('AWS::IAM::Policy');
     const putObjectPolicies = Object.keys(policies).filter((logicalId) =>
@@ -125,6 +175,19 @@ describe('photo CDN', () => {
     );
     expect(putObjectPolicies).toHaveLength(1);
     expect(putObjectPolicies[0]).toContain('PhotoUploadFunction');
+  });
+
+  // grantPut would add PutObjectLegalHold/Retention/Tagging on bucket/*, each
+  // signable into the presigned POST.
+  it('scopes photoUpload to exactly s3:PutObject on photos/*', () => {
+    const s3Statements = statementsOf('PhotoUploadFunction').filter((st) =>
+      [st.Action].flat().some((a) => a.startsWith('s3:')),
+    );
+    expect(s3Statements).toHaveLength(1);
+    expect(s3Statements[0].Action).toBe('s3:PutObject');
+    const resource = JSON.stringify(s3Statements[0].Resource);
+    expect(resource).toContain('PhotosBucket');
+    expect(resource).toContain('/photos/*');
   });
 });
 
@@ -216,6 +279,65 @@ describe('Lambdas', () => {
       expect(fnPolicy(id), id).toContain('CompetitionTable');
     }
     expect(fnPolicy('MessageHandlerFunction')).not.toContain('CompetitionTable');
+  });
+
+  // core/broadcast.ts only lists a session's rows (db.getAllConnections → Query)
+  // and prunes stale ones (db.removeConnection → DeleteItem).
+  it('limits the writers to relay Query + DeleteItem', () => {
+    for (const id of [
+      'CompetitionsFunction',
+      'AthletesFunction',
+      'TimesFunction',
+      'MatchesFunction',
+      'ScoresFunction',
+    ]) {
+      expect(actionsOn(id, 'SpeedlineTimerTable'), id).toEqual([
+        'dynamodb:DeleteItem',
+        'dynamodb:Query',
+      ]);
+    }
+  });
+
+  // Grant items share the COMP# partition with every other entity, so a narrower
+  // grant would need per-SK-prefix key conditions.
+  it('keeps managers full read-write on the competition table, off the relay', () => {
+    const actions = actionsOn('ManagersFunction', 'CompetitionTable');
+    for (const a of ['dynamodb:PutItem', 'dynamodb:DeleteItem', 'dynamodb:Query'])
+      expect(actions).toContain(a);
+    expect(fnPolicy('ManagersFunction')).not.toContain('SpeedlineTimerTable');
+  });
+
+  // L3: core/offline.ts gates the offline branches (incl. the `local-dev`
+  // operator bypass) at runtime; this pins that no offline-only key reaches a
+  // deployed function. Derived from scripts/offlineEnv.mjs so a new offline key
+  // is covered automatically; the allowlist is the keys prod sets too.
+  it('carries no offline-harness-only env key on any function', () => {
+    const SHARED_WITH_PROD = new Set([
+      'SPEEDLINE_TIMER_TABLE',
+      'COMPETITION_TABLE',
+      'COGNITO_USER_POOL_ID',
+      'COGNITO_CLIENT_ID',
+      'COGNITO_TIMER_GROUP',
+      'WS_API_ENDPOINT',
+      'PHOTOS_BUCKET',
+    ]);
+    const offlineOnly = Object.keys(OFFLINE_ENV).filter((k) => !SHARED_WITH_PROD.has(k));
+    expect(offlineOnly).toEqual(
+      expect.arrayContaining([
+        'IS_OFFLINE',
+        'DYNAMODB_ENDPOINT',
+        'S3_ENDPOINT',
+        'READ_TOKEN_SECRET',
+        'PHOTO_PRIVATE_KEY',
+      ]),
+    );
+    for (const [id, fn] of Object.entries(template.findResources('AWS::Lambda::Function'))) {
+      const keys = Object.keys(fn.Properties.Environment.Variables);
+      expect(
+        keys.filter((k) => offlineOnly.includes(k)),
+        id,
+      ).toEqual([]);
+    }
   });
 
   it('keeps read-only roles free of writes and WS fan-out', () => {
@@ -324,7 +446,10 @@ describe('Lambdas', () => {
 });
 
 describe('WebSocket relay', () => {
-  it('keys the authorizer cache on BOTH query params (ADR 0022)', () => {
+  // WS authorizers have no result TTL (ADR 0022 status note); the identity
+  // sources make API Gateway 401 a $connect missing either param before the
+  // authorizer Lambda runs.
+  it('requires BOTH query params as identity sources (401 before the Lambda)', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Authorizer', {
       AuthorizerType: 'REQUEST',
       IdentitySource: [
@@ -430,41 +555,56 @@ describe('HTTP data plane', () => {
       (r) => r.Properties.RouteKey as string,
     );
     expect(actual.sort()).toEqual([...expected].sort());
+    expect(expected.filter((k) => !k.startsWith('$'))).toHaveLength(HTTP_ROUTE_COUNT);
+  });
+
+  // L13: defaultAuthorizer covers every route today; this pins it so a route
+  // added with HttpNoneAuthorizer (or an override) fails.
+  it('authorizes every HTTP route with the custom request authorizer', () => {
+    const authorizers = template.findResources('AWS::ApiGatewayV2::Authorizer', {
+      Properties: { Name: 'timerHttpAuthorizer' },
+    });
+    const [httpAuthorizerId] = Object.keys(authorizers);
+    expect(httpAuthorizerId).toBeDefined();
+    const httpRoutes = Object.values(template.findResources('AWS::ApiGatewayV2::Route')).filter(
+      (r) => !String(r.Properties.RouteKey).startsWith('$'),
+    );
+    expect(httpRoutes).toHaveLength(HTTP_ROUTE_COUNT);
+    for (const r of httpRoutes) {
+      expect(r.Properties.AuthorizationType, r.Properties.RouteKey).toBe('CUSTOM');
+      expect(r.Properties.AuthorizerId, r.Properties.RouteKey).toEqual({ Ref: httpAuthorizerId });
+    }
+  });
+
+  it('authorizes WS $connect only; $disconnect/$default ride the admitted socket', () => {
+    const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route'));
+    const byKey = (key: string) => {
+      const route = routes.find((r) => r.Properties.RouteKey === key);
+      expect(route, key).toBeDefined();
+      return route!.Properties;
+    };
+    expect(byKey('$connect').AuthorizationType).toBe('CUSTOM');
+    expect(byKey('$connect').AuthorizerId).toBeDefined();
+    for (const key of ['$disconnect', '$default']) {
+      expect(byKey(key).AuthorizationType ?? 'NONE', key).toBe('NONE');
+    }
   });
 });
 
-// ADR 0031 §5 — a parameter-flagged, default-OFF rate-based WAF WebACL fronting the
-// two regional API GW endpoints. Every WAF resource is gated on WafEnabledCondition
-// so a normal deploy provisions NONE of them (no standing cost); ops flips
-// WafEnabled=true only on an observed abuse event.
-describe('AWS WAF (regional, default-OFF)', () => {
-  it('exposes a WafEnabled parameter defaulting to false', () => {
-    template.hasParameter('WafEnabled', {
-      Type: 'String',
-      Default: 'false',
-      AllowedValues: ['true', 'false'],
-    });
-  });
-
-  it('synthesizes exactly one REGIONAL rate-based WebACL, gated on WafEnabled', () => {
-    template.resourceCountIs('AWS::WAFv2::WebACL', 1);
-    const acls = template.findResources('AWS::WAFv2::WebACL');
-    const [id, acl] = Object.entries(acls)[0];
-    expect(acl.Condition, `${id} must be condition-gated`).toBe('WafEnabledCondition');
-    expect(acl.Properties.Scope).toBe('REGIONAL');
-    expect(acl.Properties.DefaultAction).toEqual({ Allow: {} });
-    const ruleNames = (acl.Properties.Rules as { Name: string }[]).map((r) => r.Name);
-    expect(ruleNames).toContain('RateLimitPerIp');
-  });
-
-  it('associates the WebACL with BOTH the HTTP and WS stages, gated on WafEnabled', () => {
-    const assocs = template.findResources('AWS::WAFv2::WebACLAssociation');
-    expect(Object.keys(assocs)).toHaveLength(2);
-    for (const [id, a] of Object.entries(assocs)) {
-      expect(a.Condition, `${id} must be condition-gated`).toBe('WafEnabledCondition');
-      // stage ARN: .../apis/<apiId>/stages/prod
-      expect(JSON.stringify(a.Properties.ResourceArn)).toContain('/stages/prod');
-    }
+// H3: a regional WAF ACL cannot attach to HTTP or WebSocket APIs (REST only), so
+// the backend carries none; the default-OFF CLOUDFRONT ACL for the web
+// distribution lives in the billing stack.
+describe('AWS WAF', () => {
+  it('provisions no WAFv2 resource and no WafEnabled parameter in the backend', () => {
+    const { Resources, Parameters } = template.toJSON() as {
+      Resources: Record<string, { Type: string }>;
+      Parameters?: Record<string, unknown>;
+    };
+    const wafTypes = Object.values(Resources)
+      .map((r) => r.Type)
+      .filter((t) => t.startsWith('AWS::WAFv2::'));
+    expect(wafTypes).toEqual([]);
+    expect(Object.keys(Parameters ?? {})).not.toContain('WafEnabled');
   });
 });
 

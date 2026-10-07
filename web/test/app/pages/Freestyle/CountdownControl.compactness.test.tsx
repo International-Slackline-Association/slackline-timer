@@ -5,9 +5,7 @@ import { CountdownControl } from 'app/pages/Freestyle/CountdownControl';
 
 import { px } from '../../../util/computedUnits';
 
-vi.mock('app/hooks/useGamepads', () => ({
-  useGamepads: () => ({ lastPressedGamepadButton: undefined }),
-}));
+vi.mock('app/hooks/useGamepads', () => import('../../../util/gamepadMock'));
 
 describe('CountdownControl compact chrome', () => {
   it('keeps the lane card chrome compact against the desk rhythm', () => {

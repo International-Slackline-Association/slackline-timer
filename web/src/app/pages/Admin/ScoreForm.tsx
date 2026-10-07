@@ -3,7 +3,14 @@ import { Checkbox, FormControlLabel, TextField, Typography } from '@mui/material
 import { useCreateScore, useUpdateScore } from 'app/api/scores';
 import { SelectField, enumOptions } from 'app/components/SelectField';
 import { EntityFormDialog, useEntityForm } from 'app/pages/Admin/entityForm';
-import { MATCH_ROUNDS, computeOverall, type Athlete, type MatchRound, type Score } from 'app/types';
+import {
+  FIELD_LIMITS,
+  MATCH_ROUNDS,
+  computeOverall,
+  type Athlete,
+  type MatchRound,
+  type Score,
+} from 'app/types';
 import { formatScore } from 'app/util/resultLabel';
 import { roundLabel } from 'app/util/rounds';
 
@@ -34,12 +41,14 @@ const toFormState = (score?: Score): FormState => ({
   dnf: score?.dnf ?? false,
 });
 
-/** A finite number >= 0, or null when the field is blank/invalid. */
-const parseNonNeg = (s: string): number | null => {
+/** A finite number in 0..max, or null when the field is blank/invalid. */
+const parseNonNeg = (s: string, max = Infinity): number | null => {
   if (s.trim() === '') return null;
   const n = Number(s);
-  return Number.isFinite(n) && n >= 0 ? n : null;
+  return Number.isFinite(n) && n >= 0 && n <= max ? n : null;
 };
+
+const CONTROL_PENALTY_MAX = FIELD_LIMITS.controlPenaltyMax;
 
 /**
  * Create/edit dialog for a freestyle score. `score` undefined → create;
@@ -77,7 +86,7 @@ export const ScoreForm = ({
     combo: parseNonNeg(form.combo),
     style: parseNonNeg(form.style),
     bestTrick: isQuali ? 0 : parseNonNeg(form.bestTrick),
-    controlPenalty: isQuali ? 0 : parseNonNeg(form.controlPenalty),
+    controlPenalty: isQuali ? 0 : parseNonNeg(form.controlPenalty, CONTROL_PENALTY_MAX),
   };
   const componentsInvalid = Object.values(components).some((n) => n === null);
   const overall = parseNonNeg(form.overall);
@@ -110,14 +119,14 @@ export const ScoreForm = ({
     [K in keyof FormState]: FormState[K] extends string ? K : never;
   }[keyof FormState];
 
-  const numberField = (field: StringField, label: string) => (
+  const numberField = (field: StringField, label: string, max?: number) => (
     <TextField
       label={label}
       type="number"
-      slotProps={{ htmlInput: { min: 0, step: 'any' } }}
+      slotProps={{ htmlInput: { min: 0, max, step: 'any' } }}
       value={form[field]}
       onChange={updateField(field)}
-      error={parseNonNeg(form[field]) === null}
+      error={parseNonNeg(form[field], max) === null}
       required
     />
   );
@@ -151,7 +160,7 @@ export const ScoreForm = ({
       {numberField('combo', 'Combo')}
       {numberField('style', 'Style')}
       {!isQuali && numberField('bestTrick', 'Best trick')}
-      {!isQuali && numberField('controlPenalty', 'Control penalty')}
+      {!isQuali && numberField('controlPenalty', 'Control penalty', CONTROL_PENALTY_MAX)}
       <TextField
         label="Overall"
         type="number"

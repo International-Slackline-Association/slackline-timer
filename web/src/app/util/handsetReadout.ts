@@ -9,7 +9,7 @@
  *
  * Pure, and derived from exactly what the handlers dispatch on: the button
  * numbers come from `buzzer.ts`'s constants, the verdicts from the same
- * `laneLocks` / `bestTrickLocks` interlock table the pad effects in
+ * `laneLocks` / `bestTrickLocks` interlock table the pad handlers in
  * `CountdownControl` / `BestTrickPanel` read, the ADVANCE step from the same
  * `advanceRoute` that press dispatches, and the overlay answer from the one
  * `advanceOverlay` guard. Nothing here re-decides anything.

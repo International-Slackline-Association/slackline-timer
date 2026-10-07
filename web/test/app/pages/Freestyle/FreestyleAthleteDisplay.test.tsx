@@ -6,11 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CountdownWSMessage } from 'app/hooks/useWebSocket';
 
 // The display opens a receiver socket via the shared feed. Stub it so no real
-// socket opens (the realtime path is deliberately untested) and feed it the
-// message under test as `lastJsonMessage` — same harness as the
-// FreestyleTimerDisplay suite (both mount useFreestyleTimerFeed).
-const { lastMessage, wsParams, readyState, playAudio, audioBlocked } = vi.hoisted(() => ({
-  lastMessage: { current: null as CountdownWSMessage | null },
+// socket opens, and hand it the frame under test through the captured
+// `onMessage` (`deliverFrames`) — same harness as the FreestyleTimerDisplay
+// suite (both mount useFreestyleTimerFeed).
+const { wsParams, readyState, playAudio, audioBlocked } = vi.hoisted(() => ({
   wsParams: { current: null as { sessionId: string; readToken?: string } | null },
   // Mutable so a suite can drive a CLOSED -> OPEN cycle (see the surface-seeding
   // suite): the feed accepts exactly one fresh seed per socket.
@@ -20,12 +19,17 @@ const { lastMessage, wsParams, readyState, playAudio, audioBlocked } = vi.hoiste
 }));
 vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
   const actual = await importOriginal<typeof import('app/hooks/useWebSocket')>();
+  const { useCapturedSocket } = await import('../../../util/wsMock');
   return {
     ...actual,
-    useWS: (params: { sessionId: string; readToken?: string }) => {
+    useWS: (params: {
+      sessionId: string;
+      readToken?: string;
+      onMessage?: (frame: never) => void;
+    }) => {
       wsParams.current = params;
+      useCapturedSocket(params);
       return {
-        lastJsonMessage: lastMessage.current,
         readyState: readyState.current,
         sendWSMessage: vi.fn(),
       };
@@ -47,6 +51,7 @@ vi.mock('app/hooks/useSignalAudio', () => ({
 }));
 
 import { FreestyleAthleteDisplay } from 'app/pages/Freestyle/FreestyleAthleteDisplay';
+import { deliver as deliverFrames } from '../../../util/wsMock';
 
 const tree = (
   client: QueryClient,
@@ -60,10 +65,9 @@ const tree = (
   </QueryClientProvider>
 );
 
-// `repaint` re-renders the same display so a freshly-set lastMessage flows in —
-// standing in for a message arriving over the (mocked) socket. The QueryClient is
-// created ONCE per display: a fresh one per repaint changes the feed's message
-// effect dependency, which silently re-applies the last message on every render.
+// `repaint` re-renders the same display (a socket state change); frames arrive
+// through `deliverFrames`. The QueryClient is created ONCE per display, so a
+// repaint keeps the cache.
 const renderDisplay = (variant: 'venue' | 'stream' = 'venue', search?: string) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(tree(client, variant, search));
@@ -150,7 +154,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  lastMessage.current = null;
   readyState.current = 1;
   playAudio.mockClear();
 });
@@ -160,56 +163,49 @@ afterEach(() => {
 // warm-up view has yielded to the lane layout under test.
 describe('FreestyleAthleteDisplay quali/battle layout switch', () => {
   it('renders the two stacked lanes once a run starts (no mode on the wire)', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(namesMessage('Jane', 'John'));
 
     expect(screen.getByText('Jane')).toBeInTheDocument();
     expect(screen.getByText('John')).toBeInTheDocument();
   });
 
   it('collapses to the single lane-1 hero when the board says quali', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(namesMessage('Jane', 'John'));
 
-    lastMessage.current = selectionMessage('quali');
-    repaint();
+    deliverFrames(selectionMessage('quali'));
 
     expect(screen.getByText('Jane')).toBeInTheDocument();
     expect(screen.queryByText('John')).not.toBeInTheDocument();
   });
 
   it('restores the split screen when the board switches back to battle', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(namesMessage('Jane', 'John'));
 
-    lastMessage.current = selectionMessage('quali');
-    repaint();
+    deliverFrames(selectionMessage('quali'));
     expect(screen.queryByText('John')).not.toBeInTheDocument();
 
-    lastMessage.current = selectionMessage('battle');
-    repaint();
+    deliverFrames(selectionMessage('battle'));
     expect(screen.getByText('John')).toBeInTheDocument();
   });
 });
 
 describe('FreestyleAthleteDisplay quali break counter', () => {
   it('shows the advisory break counter while a quali break runs', () => {
-    lastMessage.current = selectionMessage('quali');
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(selectionMessage('quali'));
 
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_break',
       timerId: 1,
       data: { runRemainingMs: 60_000, breakMs: 30_000, breaksLeft: 1 },
-    };
-    repaint();
+    });
 
     expect(screen.getByText('Break · 1 left')).toBeInTheDocument();
   });
@@ -221,10 +217,9 @@ describe('FreestyleAthleteDisplay quali break counter', () => {
 // STATUS athlete-display-next-up; covered by the "battle next up" suite below.)
 describe('FreestyleAthleteDisplay battle layout omissions', () => {
   it('renders no break/pause surface in battle', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = selectionMessage('battle');
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(selectionMessage('battle'));
 
     expect(screen.queryByText(/Break/)).not.toBeInTheDocument();
   });
@@ -235,12 +230,10 @@ describe('FreestyleAthleteDisplay battle layout omissions', () => {
 // the board's relayed `nextUp` hint (ADR 0037).
 describe('FreestyleAthleteDisplay battle next up', () => {
   it('marks the next-up player from the relayed hint', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    repaint();
-    lastMessage.current = selectionMessage('battle', 2);
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(namesMessage('Jane', 'John'));
+    deliverFrames(selectionMessage('battle', 2));
 
     // The arrow rides the marked lane's name row (lane 2 = John), not the other.
     const marker = screen.getByRole('img', { name: 'On deck' });
@@ -249,25 +242,21 @@ describe('FreestyleAthleteDisplay battle next up', () => {
   });
 
   it('hides the marker when no next-up player is defined', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    repaint();
-    lastMessage.current = selectionMessage('battle', null);
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(namesMessage('Jane', 'John'));
+    deliverFrames(selectionMessage('battle', null));
 
     expect(screen.queryByRole('img', { name: 'On deck' })).not.toBeInTheDocument();
   });
 
   it('shows no next-up marker in quali (single-hero layout)', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(namesMessage('Jane', 'John'));
     // A stray hint on a quali board must not surface (source gates it to battle;
     // the quali layout has no marker regardless).
-    lastMessage.current = selectionMessage('quali', 2);
-    repaint();
+    deliverFrames(selectionMessage('quali', 2));
 
     expect(screen.queryByRole('img', { name: 'On deck' })).not.toBeInTheDocument();
   });
@@ -279,12 +268,10 @@ describe('FreestyleAthleteDisplay battle next up', () => {
 // promise applied to a mode that has no second slot).
 describe('FreestyleAthleteDisplay quali next up', () => {
   const qualiDisplay = async (qualiNextUp?: string | null) => {
-    lastMessage.current = startLane(1, 60_000);
     const view = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    view.repaint();
-    lastMessage.current = selectionMessage('quali', null, qualiNextUp);
-    view.repaint();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(namesMessage('Jane', 'John'));
+    deliverFrames(selectionMessage('quali', null, qualiNextUp));
     // The pool arrives from the data plane; the marker cannot name anyone before it.
     await act(async () => {
       await Promise.resolve();
@@ -321,8 +308,8 @@ describe('FreestyleAthleteDisplay battle over', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
 
-    lastMessage.current = startLane(1, 2_000);
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(startLane(1, 2_000));
 
     act(() => {
       vi.setSystemTime(3_000);
@@ -331,8 +318,7 @@ describe('FreestyleAthleteDisplay battle over', () => {
     // Lane 1 spent, lane 2 untouched: the battle is still live.
     expect(screen.queryByText('Battle Over')).not.toBeInTheDocument();
 
-    lastMessage.current = startLane(2, 2_000);
-    repaint();
+    deliverFrames(startLane(2, 2_000));
     act(() => {
       vi.setSystemTime(6_000);
       vi.advanceTimersToNextTimer();
@@ -351,14 +337,13 @@ describe('FreestyleAthleteDisplay battle over', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
 
-    lastMessage.current = startLane(1, 1_000);
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(startLane(1, 1_000));
     act(() => {
       vi.setSystemTime(2_000);
       vi.advanceTimersToNextTimer();
     });
-    lastMessage.current = startLane(2, 1_000);
-    repaint();
+    deliverFrames(startLane(2, 1_000));
     act(() => {
       vi.setSystemTime(4_000);
       vi.advanceTimersToNextTimer();
@@ -371,22 +356,20 @@ describe('FreestyleAthleteDisplay battle over', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
 
-    lastMessage.current = startLane(1, 1_000);
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(startLane(1, 1_000));
     act(() => {
       vi.setSystemTime(2_000);
       vi.advanceTimersToNextTimer();
     });
-    lastMessage.current = startLane(2, 1_000);
-    repaint();
+    deliverFrames(startLane(2, 1_000));
     act(() => {
       vi.setSystemTime(4_000);
       vi.advanceTimersToNextTimer();
     });
     expect(screen.getByText('Battle Over')).toBeInTheDocument();
 
-    lastMessage.current = startLane(1, 60_000);
-    repaint();
+    deliverFrames(startLane(1, 60_000));
     expect(screen.queryByText('Battle Over')).not.toBeInTheDocument();
   });
 });
@@ -407,106 +390,109 @@ describe('FreestyleAthleteDisplay warm-up default view', () => {
   });
 
   it('shows the pending warm-up view once the room seeds it (warm-up re-arm)', () => {
-    lastMessage.current = resetLane(0, 300_000);
     renderDisplay();
+    deliverFrames(resetLane(0, 300_000));
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
     expect(screen.getByText('05:00')).toBeInTheDocument();
   });
 
   it('yields to the lane layout when a lane run starts', () => {
-    lastMessage.current = resetLane(0, 300_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    repaint();
+    renderDisplay();
+    deliverFrames(resetLane(0, 300_000));
+    deliverFrames(namesMessage('Jane', 'John'));
     // The pending warm-up shadows the lane layout until a run starts.
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
     expect(screen.queryByText('Jane')).not.toBeInTheDocument();
 
-    lastMessage.current = startLane(1, 60_000);
-    repaint();
+    deliverFrames(startLane(1, 60_000));
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
     expect(screen.getByText('Jane')).toBeInTheDocument();
   });
 
   it('yields to the lane layout when a best-trick try starts (timerId 3)', () => {
-    lastMessage.current = resetLane(0, 300_000);
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(resetLane(0, 300_000));
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
 
-    lastMessage.current = startLane(3, 30_000);
-    repaint();
+    deliverFrames(startLane(3, 30_000));
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
 
   it('returns when the operator starts a new warm-up mid-competition', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
 
-    lastMessage.current = startLane(0, 300_000);
-    repaint();
+    deliverFrames(startLane(0, 300_000));
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
   });
 
   it('does not resurface on a warm-up reset mid-competition (re-arm only)', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
 
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'reset_countdown',
       timerId: 0,
       data: { remainingMs: 300_000 },
-    };
-    repaint();
+    });
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
 
   it('recovers the pending warm-up view from an idle control snapshot', () => {
-    lastMessage.current = snapshotMessage([
-      { timerId: 0, remainingMs: 300_000, isRunning: false },
-      { timerId: 1, remainingMs: 90_000, isRunning: false },
-      { timerId: 2, remainingMs: 90_000, isRunning: false },
-    ]);
     renderDisplay();
+    deliverFrames(
+      snapshotMessage([
+        { timerId: 0, remainingMs: 300_000, isRunning: false },
+        { timerId: 1, remainingMs: 90_000, isRunning: false },
+        { timerId: 2, remainingMs: 90_000, isRunning: false },
+      ]),
+    );
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
   });
 
   it('recovers the lane view when the snapshot shows the warm-up spent', () => {
-    lastMessage.current = snapshotMessage([
-      { timerId: 0, remainingMs: 0, isRunning: false },
-      { timerId: 1, remainingMs: 90_000, isRunning: false },
-      { timerId: 2, remainingMs: 90_000, isRunning: false },
-    ]);
     renderDisplay();
+    deliverFrames(
+      snapshotMessage([
+        { timerId: 0, remainingMs: 0, isRunning: false },
+        { timerId: 1, remainingMs: 90_000, isRunning: false },
+        { timerId: 2, remainingMs: 90_000, isRunning: false },
+      ]),
+    );
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
 
   it('recovers the lane view when a run is live even though the warm-up is pending', () => {
-    lastMessage.current = snapshotMessage([
-      { timerId: 0, remainingMs: 300_000, isRunning: false },
-      { timerId: 1, remainingMs: 45_000, isRunning: true },
-      { timerId: 2, remainingMs: 90_000, isRunning: false },
-    ]);
     renderDisplay();
+    deliverFrames(
+      snapshotMessage([
+        { timerId: 0, remainingMs: 300_000, isRunning: false },
+        { timerId: 1, remainingMs: 45_000, isRunning: true },
+        { timerId: 2, remainingMs: 90_000, isRunning: false },
+      ]),
+    );
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
 
   it('recovers a RUNNING warm-up view even after lanes have spent budgets', () => {
-    lastMessage.current = snapshotMessage([
-      { timerId: 0, remainingMs: 250_000, isRunning: true },
-      { timerId: 1, remainingMs: 0, isRunning: false },
-      { timerId: 2, remainingMs: 90_000, isRunning: false },
-    ]);
     renderDisplay();
+    deliverFrames(
+      snapshotMessage([
+        { timerId: 0, remainingMs: 250_000, isRunning: true },
+        { timerId: 1, remainingMs: 0, isRunning: false },
+        { timerId: 2, remainingMs: 90_000, isRunning: false },
+      ]),
+    );
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
   });
@@ -518,12 +504,14 @@ describe('FreestyleAthleteDisplay warm-up default view', () => {
   // expired-and-cleared like the already-connected viewers whose hero Countdown
   // fired onExpire — never a resurrected WARM-UP OVER hold for the late joiner.
   it('recovers the lane view when the running warm-up has fully elapsed', () => {
-    lastMessage.current = snapshotMessage([
-      { timerId: 0, remainingMs: 0, isRunning: true },
-      { timerId: 1, remainingMs: 90_000, isRunning: false },
-      { timerId: 2, remainingMs: 90_000, isRunning: false },
-    ]);
     renderDisplay();
+    deliverFrames(
+      snapshotMessage([
+        { timerId: 0, remainingMs: 0, isRunning: true },
+        { timerId: 1, remainingMs: 90_000, isRunning: false },
+        { timerId: 2, remainingMs: 90_000, isRunning: false },
+      ]),
+    );
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
@@ -543,14 +531,12 @@ describe('FreestyleAthleteDisplay surface seeding (once per socket)', () => {
   ]);
 
   it('holds the lane clocks when a peer join snapshot lands on a seeded display', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(namesMessage('Jane', 'John'));
     expect(screen.getByText('Jane')).toBeInTheDocument();
 
-    lastMessage.current = pendingWarmupSnapshot;
-    repaint();
+    deliverFrames(pendingWarmupSnapshot);
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
     expect(screen.getByText('Jane')).toBeInTheDocument();
@@ -558,23 +544,22 @@ describe('FreestyleAthleteDisplay surface seeding (once per socket)', () => {
   });
 
   it('still takes the snapshot on a display that has heard nothing', () => {
-    lastMessage.current = pendingWarmupSnapshot;
     renderDisplay();
+    deliverFrames(pendingWarmupSnapshot);
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
   });
 
   it('accepts one fresh seed again after a CLOSED -> OPEN reconnect', () => {
-    lastMessage.current = startLane(1, 60_000);
     const { repaint } = renderDisplay();
+    deliverFrames(startLane(1, 60_000));
 
     readyState.current = 3;
     repaint();
     readyState.current = 1;
     repaint();
 
-    lastMessage.current = pendingWarmupSnapshot;
-    repaint();
+    deliverFrames(pendingWarmupSnapshot);
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
   });
@@ -589,14 +574,12 @@ describe('FreestyleAthleteDisplay post-warm-up handoff', () => {
   });
 
   it('hands off to the lane layout when the operator stops the warm-up', () => {
-    lastMessage.current = startLane(0, 300_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(0, 300_000));
+    deliverFrames(namesMessage('Jane', 'John'));
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
 
-    lastMessage.current = stopLane(0, 120_000);
-    repaint();
+    deliverFrames(stopLane(0, 120_000));
 
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
     expect(screen.getByText('Jane')).toBeInTheDocument();
@@ -607,10 +590,9 @@ describe('FreestyleAthleteDisplay post-warm-up handoff', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
 
-    lastMessage.current = startLane(0, 1_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John');
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(0, 1_000));
+    deliverFrames(namesMessage('Jane', 'John'));
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
 
     act(() => {
@@ -623,37 +605,34 @@ describe('FreestyleAthleteDisplay post-warm-up handoff', () => {
   });
 
   it('re-claims the warm-up surface when a new warm-up starts after a stop', () => {
-    lastMessage.current = startLane(0, 300_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = stopLane(0, 120_000);
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(0, 300_000));
+    deliverFrames(stopLane(0, 120_000));
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
 
-    lastMessage.current = startLane(0, 300_000);
-    repaint();
+    deliverFrames(startLane(0, 300_000));
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
   });
 });
 
 describe('FreestyleAthleteDisplay shared heroes', () => {
   it('reveals the WARM-UP hero on a timerId 0 start_countdown', () => {
-    lastMessage.current = {
+    renderDisplay();
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'start_countdown',
       timerId: 0,
       data: { remainingMs: 300_000 },
-    };
-
-    renderDisplay();
+    });
 
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
   });
 
   it('shows the best-trick hero and hides the lane layout while armed', () => {
-    lastMessage.current = namesMessage('Alpha', 'Bravo');
-    const { repaint } = renderDisplay();
+    renderDisplay();
+    deliverFrames(namesMessage('Alpha', 'Bravo'));
 
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'updateSelection',
       data: {
@@ -666,8 +645,7 @@ describe('FreestyleAthleteDisplay shared heroes', () => {
         // turn: null so the hero's turn-name line doesn't itself render "Alpha".
         bestTrick: { cap: 5, tries: { 1: 2, 2: 1 }, turn: null, clockRunning: false, rev: 0 },
       },
-    };
-    repaint();
+    });
 
     expect(screen.getByText('Best Trick')).toBeInTheDocument();
     expect(screen.getByText(/2\/5/)).toBeInTheDocument();
@@ -681,16 +659,14 @@ describe('FreestyleAthleteDisplay shared heroes', () => {
 // the freestyle athlete display mid-event.
 describe('FreestyleAthleteDisplay discipline crosstalk', () => {
   it('ignores the speed board lane names, keeping the freestyle heroes', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John', 'freestyle');
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(namesMessage('Jane', 'John', 'freestyle'));
     expect(screen.getByText('Jane')).toBeInTheDocument();
 
     // A speed board sharing the room re-pushes its own lane names — they must not
     // overwrite the freestyle hero names.
-    lastMessage.current = namesMessage('Sprint One', 'Sprint Two', 'speed');
-    repaint();
+    deliverFrames(namesMessage('Sprint One', 'Sprint Two', 'speed'));
 
     expect(screen.getByText('Jane')).toBeInTheDocument();
     expect(screen.getByText('John')).toBeInTheDocument();
@@ -698,17 +674,15 @@ describe('FreestyleAthleteDisplay discipline crosstalk', () => {
   });
 
   it('ignores a speed board selection, holding the freestyle mode', () => {
-    lastMessage.current = startLane(1, 60_000);
-    const { repaint } = renderDisplay();
-    lastMessage.current = namesMessage('Jane', 'John', 'freestyle');
-    repaint();
-    lastMessage.current = selectionMessage('quali');
-    repaint();
+    renderDisplay();
+    deliverFrames(startLane(1, 60_000));
+    deliverFrames(namesMessage('Jane', 'John', 'freestyle'));
+    deliverFrames(selectionMessage('quali'));
     expect(screen.queryByText('John')).not.toBeInTheDocument();
 
     // A speed selection carries no freestyleMode; applying it would clear quali
     // and re-split the screen. The guard drops it, so the hero stays collapsed.
-    lastMessage.current = {
+    deliverFrames({
       sessionId: 'worlds-2026',
       type: 'updateSelection',
       data: {
@@ -719,8 +693,7 @@ describe('FreestyleAthleteDisplay discipline crosstalk', () => {
         athlete1Id: 'a1',
         athlete2Id: 'a2',
       },
-    };
-    repaint();
+    });
 
     expect(screen.getByText('Jane')).toBeInTheDocument();
     expect(screen.queryByText('John')).not.toBeInTheDocument();

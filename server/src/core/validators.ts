@@ -8,6 +8,7 @@
 import {
   BATTLE_ONLY_SCORE_COMPONENTS,
   DISCIPLINE,
+  FIELD_LIMITS,
   GENDERS,
   MATCH_ROUNDS,
   SCORE_COMPONENT_MAX,
@@ -36,8 +37,48 @@ export type Validated<T> = { ok: true; value: T } | { ok: false; errors: string[
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 
+/** Every id a body carries, and the compId (= the relay sessionId). */
+export const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** Alpha-2, IOC/alpha-3 or numeric-3: the shapes `toAlpha2` resolves to a flag. */
+export const COUNTRY_RE = /^[A-Za-z]{2,3}$|^\d{3}$/;
+
+/** The content-hashed key `photoUpload` mints; group 1 is the owning compId. */
+export const PHOTO_KEY_RE = /^photos\/([A-Za-z0-9_-]{1,64})\/[0-9a-f]{64}\.(jpg|png|webp)$/;
+
+/**
+ * Soft cap, checked on athlete create only: 300 × ~3 KB keeps `listAthletes` and
+ * the rankings responses near 1 MB, far under Lambda's 6 MB.
+ */
+export const MAX_ATHLETES_PER_COMP = 300;
+
+export const isBoundedString = (v: unknown, max: number): v is string =>
+  typeof v === 'string' && v.length <= max;
+
+export const isId = (v: unknown): v is string => typeof v === 'string' && ID_RE.test(v);
+
+export const isIntInRange = (v: unknown, min: number, max: number): v is number =>
+  Number.isInteger(v) && (v as number) >= min && (v as number) <= max;
+
+export const isFiniteInRange = (v: unknown, min: number, max: number): v is number =>
+  typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
+
 const isIsoDate = (v: unknown): v is string =>
   typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
+
+const isBirthDate = (v: unknown, now: number): boolean =>
+  isIsoDate(v) &&
+  isIntInRange(Number(v.slice(0, 4)), FIELD_LIMITS.birthYearMin, new Date(now).getUTCFullYear());
+
+const competitionNameError = (v: unknown): string | null =>
+  isNonEmptyString(v) && v.length <= FIELD_LIMITS.competitionName
+    ? null
+    : `name is required (max ${FIELD_LIMITS.competitionName} chars)`;
+
+const optionalIdError = (b: Record<string, unknown>, field: string): string | null =>
+  b[field] === undefined || isId(b[field])
+    ? null
+    : `${field} must be an id (1-${FIELD_LIMITS.id} chars, letters/digits/_/-) when given`;
 
 /** Competition create input (compId is the relay sessionId — keep it URL-safe). */
 export const validateCompetitionInput = (
@@ -46,10 +87,9 @@ export const validateCompetitionInput = (
   const errors: string[] = [];
   const b = (body ?? {}) as Record<string, unknown>;
 
-  if (!isNonEmptyString(b.compId) || !/^[A-Za-z0-9_-]{1,64}$/.test(b.compId as string)) {
-    errors.push('compId is required (1-64 chars, letters/digits/_/-)');
-  }
-  if (!isNonEmptyString(b.name)) errors.push('name is required');
+  if (!isId(b.compId)) errors.push('compId is required (1-64 chars, letters/digits/_/-)');
+  const nameError = competitionNameError(b.name);
+  if (nameError) errors.push(nameError);
   if (!isIsoDate(b.startDate)) errors.push('startDate must be an ISO date (YYYY-MM-DD)');
   if (!isIsoDate(b.endDate)) errors.push('endDate must be an ISO date (YYYY-MM-DD)');
   if (errors.length === 0 && Date.parse(b.endDate as string) < Date.parse(b.startDate as string)) {
@@ -60,7 +100,7 @@ export const validateCompetitionInput = (
   return {
     ok: true,
     value: {
-      compId: (b.compId as string).trim(),
+      compId: b.compId as string,
       name: (b.name as string).trim(),
       startDate: b.startDate as string,
       endDate: b.endDate as string,
@@ -80,7 +120,8 @@ export const validateCompetitionUpdateInput = (
   const errors: string[] = [];
   const b = (body ?? {}) as Record<string, unknown>;
 
-  if (!isNonEmptyString(b.name)) errors.push('name is required');
+  const nameError = competitionNameError(b.name);
+  if (nameError) errors.push(nameError);
   if (!isIsoDate(b.startDate)) errors.push('startDate must be an ISO date (YYYY-MM-DD)');
   if (!isIsoDate(b.endDate)) errors.push('endDate must be an ISO date (YYYY-MM-DD)');
   if (errors.length === 0 && Date.parse(b.endDate as string) < Date.parse(b.startDate as string)) {
@@ -91,8 +132,9 @@ export const validateCompetitionUpdateInput = (
   const config = b.config as { freestyle?: { breakMs?: unknown } } | undefined;
   const rawBreak = config?.freestyle?.breakMs;
   if (rawBreak !== undefined) {
-    if (typeof rawBreak !== 'number' || !Number.isInteger(rawBreak) || rawBreak <= 0) {
-      errors.push('config.freestyle.breakMs must be a positive integer when given');
+    const { min, max } = FIELD_LIMITS.breakMs;
+    if (!isIntInRange(rawBreak, min, max)) {
+      errors.push(`config.freestyle.breakMs must be an integer ${min}..${max} when given`);
     } else {
       breakMs = rawBreak;
     }
@@ -118,6 +160,7 @@ export const validateCompetitionUpdateInput = (
  */
 export const validateAthleteInput = (
   body: unknown,
+  now: number = Date.now(),
 ): Validated<Omit<Athlete, 'athleteId' | 'compId'>> => {
   const errors: string[] = [];
   const b = (body ?? {}) as Record<string, unknown>;
@@ -139,20 +182,42 @@ export const validateAthleteInput = (
     // A mononym is only allowed via the legacy-name migration path.
     errors.push('lastName is required');
   }
-  if (b.shortName !== undefined && typeof b.shortName !== 'string') {
-    errors.push('shortName must be a string when given');
+  if (migrated !== undefined && !isBoundedString(b.name, FIELD_LIMITS.legacyName)) {
+    errors.push(`name must be at most ${FIELD_LIMITS.legacyName} chars`);
   }
-  if (!isIsoDate(b.birthDate)) errors.push('birthDate must be an ISO date (YYYY-MM-DD)');
-  if (!isNonEmptyString(b.country)) errors.push('country is required');
+  // Checked on the resolved halves, so a split legacy name obeys them too.
+  if (firstName.length > FIELD_LIMITS.firstName) {
+    errors.push(`firstName must be at most ${FIELD_LIMITS.firstName} chars`);
+  }
+  if (lastName.length > FIELD_LIMITS.lastName) {
+    errors.push(`lastName must be at most ${FIELD_LIMITS.lastName} chars`);
+  }
+  if (b.shortName !== undefined && !isBoundedString(b.shortName, FIELD_LIMITS.shortName)) {
+    errors.push(`shortName must be a string of at most ${FIELD_LIMITS.shortName} chars when given`);
+  }
+  if (!isBirthDate(b.birthDate, now)) {
+    errors.push(
+      `birthDate must be an ISO date (YYYY-MM-DD) from ${FIELD_LIMITS.birthYearMin} to this year`,
+    );
+  }
+  if (typeof b.country !== 'string' || !COUNTRY_RE.test(b.country.trim())) {
+    errors.push('country must be an alpha-2, alpha-3/IOC or numeric-3 code');
+  }
   if (!isGender(b.gender)) errors.push(`gender must be one of: ${GENDERS.join(', ')}`);
-  if (b.country2 !== undefined && !isNonEmptyString(b.country2)) {
-    errors.push('country2 must be a non-empty string when given');
+  if (
+    b.country2 !== undefined &&
+    (typeof b.country2 !== 'string' || !COUNTRY_RE.test(b.country2.trim()))
+  ) {
+    errors.push('country2 must be an alpha-2, alpha-3/IOC or numeric-3 code when given');
   }
-  if (b.notes !== undefined && typeof b.notes !== 'string') {
-    errors.push('notes must be a string when given');
+  if (b.notes !== undefined && !isBoundedString(b.notes, FIELD_LIMITS.notes)) {
+    errors.push(`notes must be a string of at most ${FIELD_LIMITS.notes} chars when given`);
   }
-  if (b.photoKey !== undefined && !isNonEmptyString(b.photoKey)) {
-    errors.push('photoKey must be a non-empty string when given');
+  if (
+    b.photoKey !== undefined &&
+    !(typeof b.photoKey === 'string' && PHOTO_KEY_RE.test(b.photoKey))
+  ) {
+    errors.push('photoKey must be a photos/<compId>/<sha256>.<jpg|png|webp> key when given');
   }
 
   if (errors.length > 0) return { ok: false, errors };
@@ -185,31 +250,29 @@ export const validateTimeInput = (
   const errors: string[] = [];
   const b = (body ?? {}) as Record<string, unknown>;
 
-  if (!isNonEmptyString(b.athleteId)) errors.push('athleteId is required');
+  if (!isId(b.athleteId)) errors.push('athleteId is required (an id)');
   if (!isTimeRound(b.round)) errors.push(`round must be one of: ${TIME_ROUNDS.join(', ')}`);
-  if (typeof b.timeMs !== 'number' || !Number.isInteger(b.timeMs) || b.timeMs < 0) {
-    errors.push('timeMs must be a non-negative integer');
-  }
+  const { min, max } = FIELD_LIMITS.timeMs;
+  if (!isIntInRange(b.timeMs, min, max)) errors.push(`timeMs must be an integer ${min}..${max}`);
   if (
     b.startTime !== undefined &&
-    (typeof b.startTime !== 'number' || !Number.isInteger(b.startTime) || b.startTime <= 0)
+    !isIntInRange(b.startTime, 1, now + FIELD_LIMITS.startTimeSkewMs)
   ) {
-    errors.push('startTime must be a positive epoch-ms integer when given');
+    errors.push('startTime must be an epoch-ms integer no later than a day from now when given');
   }
-  if (b.matchId !== undefined && !isNonEmptyString(b.matchId)) {
-    errors.push('matchId must be a non-empty string when given');
-  }
+  const matchIdError = optionalIdError(b, 'matchId');
+  if (matchIdError) errors.push(matchIdError);
 
   if (errors.length > 0) return { ok: false, errors };
   const timeMs = b.timeMs as number;
   return {
     ok: true,
     value: {
-      athleteId: (b.athleteId as string).trim(),
+      athleteId: b.athleteId as string,
       round: b.round as TimeRound,
       timeMs,
       startTime: (b.startTime as number | undefined) ?? Math.max(0, now - timeMs),
-      ...(b.matchId !== undefined ? { matchId: (b.matchId as string).trim() } : {}),
+      ...(b.matchId !== undefined ? { matchId: b.matchId as string } : {}),
     },
   };
 };
@@ -222,17 +285,23 @@ export const validateMatchInput = (body: unknown): Validated<Omit<Match, 'matchI
   if (!isDiscipline(b.discipline))
     errors.push(`discipline must be one of: ${DISCIPLINE.join(', ')}`);
   if (!isMatchRound(b.round)) errors.push(`round must be one of: ${MATCH_ROUNDS.join(', ')}`);
-  if (b.roundName !== undefined && typeof b.roundName !== 'string') {
-    errors.push('roundName must be a string when given');
+  if (b.roundName !== undefined && !isBoundedString(b.roundName, FIELD_LIMITS.roundName)) {
+    errors.push(`roundName must be a string of at most ${FIELD_LIMITS.roundName} chars when given`);
   }
   if (!isGender(b.gender)) errors.push(`gender must be one of: ${GENDERS.join(', ')}`);
-  if (typeof b.position !== 'number' || !Number.isInteger(b.position)) {
-    errors.push('position must be an integer');
+  const { min, max } = FIELD_LIMITS.position;
+  if (!isIntInRange(b.position, min, max)) {
+    errors.push(`position must be an integer ${min}..${max}`);
   }
   for (const slot of ['athlete1Id', 'athlete2Id', 'winnerId'] as const) {
-    if (b[slot] !== undefined && !isNonEmptyString(b[slot])) {
-      errors.push(`${slot} must be a non-empty string when given`);
-    }
+    const slotError = optionalIdError(b, slot);
+    if (slotError) errors.push(slotError);
+  }
+  if (b.athlete1Id !== undefined && b.athlete1Id === b.athlete2Id) {
+    errors.push('athlete1Id and athlete2Id must differ');
+  }
+  if (b.winnerId !== undefined && b.winnerId !== b.athlete1Id && b.winnerId !== b.athlete2Id) {
+    errors.push('winnerId must be athlete1Id or athlete2Id');
   }
 
   if (errors.length > 0) return { ok: false, errors };
@@ -262,7 +331,7 @@ export const validateScoreInput = (body: unknown): Validated<Omit<Score, 'scoreI
   const errors: string[] = [];
   const b = (body ?? {}) as Record<string, unknown>;
 
-  if (!isNonEmptyString(b.athleteId)) errors.push('athleteId is required');
+  if (!isId(b.athleteId)) errors.push('athleteId is required (an id)');
   if (!isMatchRound(b.round)) errors.push(`round must be one of: ${MATCH_ROUNDS.join(', ')}`);
   for (const comp of ['difficulty', 'combo', 'style', 'bestTrick', 'controlPenalty'] as const) {
     if (typeof b[comp] !== 'number' || !Number.isFinite(b[comp]) || (b[comp] as number) < 0) {
@@ -270,8 +339,13 @@ export const validateScoreInput = (body: unknown): Validated<Omit<Score, 'scoreI
     }
   }
   // Per-component maxima (rule F8); a value over its cap is always a data-entry
-  // error (400 for 40), which would otherwise flip a battle via the overall.
-  for (const [comp, max] of Object.entries(SCORE_COMPONENT_MAX)) {
+  // error (400 for 40), which would otherwise flip a battle via the overall. The
+  // control penalty has no rule ceiling, only the storage bound.
+  const componentMax = {
+    ...SCORE_COMPONENT_MAX,
+    controlPenalty: FIELD_LIMITS.controlPenaltyMax,
+  };
+  for (const [comp, max] of Object.entries(componentMax)) {
     if (typeof b[comp] === 'number' && Number.isFinite(b[comp]) && (b[comp] as number) > max) {
       errors.push(`${comp} must be <= ${max}`);
     }
@@ -287,14 +361,14 @@ export const validateScoreInput = (body: unknown): Validated<Omit<Score, 'scoreI
   if (
     b.overall !== undefined &&
     b.overall !== '' &&
-    (typeof b.overall !== 'number' || !Number.isFinite(b.overall))
+    !isFiniteInRange(b.overall, FIELD_LIMITS.overallMin, Infinity)
   ) {
-    errors.push('overall must be a finite number when given');
+    errors.push(`overall must be a finite number >= ${FIELD_LIMITS.overallMin} when given`);
   }
   // Ceiling on an explicit override, the same bound the console blocks Save on —
-  // a typo (400 for 40) can't flip a match through the API either. Upper bound
-  // only: an uncapped control penalty may take a battle overall legitimately
-  // negative, and a DNF carries no judged value to bound.
+  // a typo (400 for 40) can't flip a match through the API either. The floor is
+  // only the storage bound above: the control penalty may take a battle overall
+  // legitimately negative, and a DNF carries no judged value to bound.
   if (
     b.dnf !== true &&
     isMatchRound(b.round) &&
@@ -307,9 +381,8 @@ export const validateScoreInput = (body: unknown): Validated<Omit<Score, 'scoreI
   if (b.dnf !== undefined && typeof b.dnf !== 'boolean') {
     errors.push('dnf must be a boolean when given');
   }
-  if (b.matchId !== undefined && !isNonEmptyString(b.matchId)) {
-    errors.push('matchId must be a non-empty string when given');
-  }
+  const matchIdError = optionalIdError(b, 'matchId');
+  if (matchIdError) errors.push(matchIdError);
 
   if (errors.length > 0) return { ok: false, errors };
   const components = {
@@ -322,7 +395,7 @@ export const validateScoreInput = (body: unknown): Validated<Omit<Score, 'scoreI
   return {
     ok: true,
     value: {
-      athleteId: (b.athleteId as string).trim(),
+      athleteId: b.athleteId as string,
       round: b.round as MatchRound,
       ...components,
       overall:
@@ -330,7 +403,7 @@ export const validateScoreInput = (body: unknown): Validated<Omit<Score, 'scoreI
           ? computeOverall(components)
           : normalizeScoreValue(b.overall as number),
       ...(b.dnf === true ? { dnf: true } : {}),
-      ...(b.matchId !== undefined ? { matchId: (b.matchId as string).trim() } : {}),
+      ...(b.matchId !== undefined ? { matchId: b.matchId as string } : {}),
     },
   };
 };

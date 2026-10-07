@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StopwatchWSMessage } from 'app/hooks/useWebSocket';
 import { PRE_BEEP_PHASE } from 'app/hooks/useStartSignalTimer';
 
-// Stub the receiver socket so no real socket opens (the realtime path is
-// deliberately untested) and capture the params it connects with. `readyState`
-// defaults to OPEN so the display renders its idle clock.
-const { lastMessage, wsParams, readyState, audioBlocked, playAudioMock } = vi.hoisted(() => ({
-  lastMessage: { current: null as StopwatchWSMessage | null },
+// Stub the receiver socket so no real socket opens and capture the params it
+// connects with; frames arrive through the captured `onMessage`
+// (`deliverFrames`). `readyState` defaults to OPEN so the display renders its
+// idle clock.
+const { wsParams, readyState, audioBlocked, playAudioMock } = vi.hoisted(() => ({
   wsParams: { current: null as { sessionId: string; readToken?: string } | null },
   readyState: { current: 1 },
   audioBlocked: { current: false },
@@ -17,12 +17,17 @@ const { lastMessage, wsParams, readyState, audioBlocked, playAudioMock } = vi.ho
 }));
 vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
   const actual = await importOriginal<typeof import('app/hooks/useWebSocket')>();
+  const { useCapturedSocket } = await import('../../../util/wsMock');
   return {
     ...actual,
-    useWS: (params: { sessionId: string; readToken?: string }) => {
+    useWS: (params: {
+      sessionId: string;
+      readToken?: string;
+      onMessage?: (frame: never) => void;
+    }) => {
       wsParams.current = params;
+      useCapturedSocket(params);
       return {
-        lastJsonMessage: lastMessage.current,
         readyState: readyState.current,
         sendWSMessage: vi.fn(),
         sendAck: vi.fn(),
@@ -52,6 +57,7 @@ import { SpeedlineTimerDisplay } from 'app/pages/Speedline/SpeedlineTimerDisplay
 import { OVERLAY_LANE } from 'app/theme/tokens';
 
 import { pinViewport, px } from '../../../util/computedUnits';
+import { deliver as deliverFrames } from '../../../util/wsMock';
 
 const renderDisplay = (variant: 'projector' | 'broadcast', search: string) =>
   render(
@@ -80,14 +86,12 @@ describe('SpeedlineTimerDisplay relay session', () => {
   // "default" sessionId fallback that made the $connect authorizer reject the
   // handshake and blank the overlay.
   it('opens the relay on ?compId= for the broadcast overlay', () => {
-    lastMessage.current = null;
     renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
     expect(wsParams.current?.sessionId).toBe('worlds-2026');
     expect(wsParams.current?.readToken).toBe('abc');
   });
 
   it('opens the relay on ?sessionId= for the projector', () => {
-    lastMessage.current = null;
     renderDisplay('projector', '?sessionId=worlds-2026');
     expect(wsParams.current?.sessionId).toBe('worlds-2026');
   });
@@ -99,31 +103,23 @@ describe('SpeedlineTimerDisplay state recovery', () => {
   // "FALSE START" callout is the `request_state` → `state_snapshot` reply. Assert
   // the snapshot's persisted `text` is repainted, not just the timer lanes.
   it('repaints the persisted text from a state_snapshot on late join', () => {
-    lastMessage.current = null;
     readyState.current = 1; // OPEN — the OPEN effect clears liveSinceOpen + requests state
-    const { rerender } = renderDisplay('projector', '?sessionId=worlds-2026');
+    renderDisplay('projector', '?sessionId=worlds-2026');
     expect(screen.queryByText('FALSE START')).toBeNull();
 
     // The operator's snapshot reply arrives (no live updateText was seen since open).
-    act(() => {
-      lastMessage.current = {
-        type: 'state_snapshot',
-        sessionId: 'worlds-2026',
-        data: {
-          isPreviewEnabled: true,
-          signalPhase: -1,
-          text: 'FALSE START',
-          timers: [
-            { timerId: 1, startTime: null, stopTime: null },
-            { timerId: 2, startTime: null, stopTime: null },
-          ],
-        },
-      };
-      rerender(
-        <MemoryRouter initialEntries={['/route?sessionId=worlds-2026']}>
-          <SpeedlineTimerDisplay variant="projector" />
-        </MemoryRouter>,
-      );
+    deliverFrames({
+      type: 'state_snapshot',
+      sessionId: 'worlds-2026',
+      data: {
+        isPreviewEnabled: true,
+        signalPhase: -1,
+        text: 'FALSE START',
+        timers: [
+          { timerId: 1, startTime: null, stopTime: null },
+          { timerId: 2, startTime: null, stopTime: null },
+        ],
+      },
     });
 
     expect(screen.getByText('FALSE START')).toBeInTheDocument();
@@ -132,17 +128,9 @@ describe('SpeedlineTimerDisplay state recovery', () => {
 
 describe('SpeedlineTimerDisplay false-start badge (rules S2–S4)', () => {
   const renderWithMessage = (msg: StopwatchWSMessage) => {
-    lastMessage.current = null;
     readyState.current = 1;
-    const { rerender } = renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
-    act(() => {
-      lastMessage.current = msg;
-      rerender(
-        <MemoryRouter initialEntries={['/route?compId=worlds-2026&token=abc']}>
-          <SpeedlineTimerDisplay variant="broadcast" />
-        </MemoryRouter>,
-      );
-    });
+    renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
+    deliverFrames(msg);
   };
 
   it('renders a lane badge from the board selection (2nd FS on lane 1)', () => {
@@ -165,9 +153,8 @@ describe('SpeedlineTimerDisplay false-start badge (rules S2–S4)', () => {
   // LWW seq (ADR 0038 §4), one hop further out: the losing side of a crossed
   // panel edit arriving late must not clear a fresher flag off the display.
   it('ignores a stale-stamped selection (last-writer-wins by seq)', () => {
-    lastMessage.current = null;
     readyState.current = 1;
-    const { rerender } = renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
+    renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
     const selectionData = {
       discipline: 'speed' as const,
       round: 'final' as const,
@@ -176,34 +163,22 @@ describe('SpeedlineTimerDisplay false-start badge (rules S2–S4)', () => {
       athlete1Id: 'a1',
       athlete2Id: 'a2',
     };
-    const repaint = () =>
-      rerender(
-        <MemoryRouter initialEntries={['/route?compId=worlds-2026&token=abc']}>
-          <SpeedlineTimerDisplay variant="broadcast" />
-        </MemoryRouter>,
-      );
 
-    act(() => {
-      lastMessage.current = {
-        type: 'updateSelection',
-        sessionId: 'worlds-2026',
-        senderId: 'panel-b',
-        seq: 100,
-        data: { ...selectionData, falseStarts: { 1: 2, 2: 0 } },
-      };
-      repaint();
+    deliverFrames({
+      type: 'updateSelection',
+      sessionId: 'worlds-2026',
+      senderId: 'panel-b',
+      seq: 100,
+      data: { ...selectionData, falseStarts: { 1: 2, 2: 0 } },
     });
     expect(screen.getByText(/2nd false start/i)).toBeInTheDocument();
 
-    act(() => {
-      lastMessage.current = {
-        type: 'updateSelection',
-        sessionId: 'worlds-2026',
-        senderId: 'panel-c',
-        seq: 99,
-        data: { ...selectionData, falseStarts: { 1: 0, 2: 0 } },
-      };
-      repaint();
+    deliverFrames({
+      type: 'updateSelection',
+      sessionId: 'worlds-2026',
+      senderId: 'panel-c',
+      seq: 99,
+      data: { ...selectionData, falseStarts: { 1: 0, 2: 0 } },
     });
     expect(screen.getByText(/2nd false start/i)).toBeInTheDocument();
   });
@@ -211,48 +186,35 @@ describe('SpeedlineTimerDisplay false-start badge (rules S2–S4)', () => {
   // Discipline crosstalk: both disciplines share one relay room, so a Freestyle
   // board's selection (no falseStarts) must not clear a live speed lane badge.
   it('ignores a freestyle board selection, holding the speed lane badge', () => {
-    lastMessage.current = null;
     readyState.current = 1;
-    const { rerender } = renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
-    const repaint = () =>
-      rerender(
-        <MemoryRouter initialEntries={['/route?compId=worlds-2026&token=abc']}>
-          <SpeedlineTimerDisplay variant="broadcast" />
-        </MemoryRouter>,
-      );
+    renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
 
-    act(() => {
-      lastMessage.current = {
-        type: 'updateSelection',
-        sessionId: 'worlds-2026',
-        data: {
-          discipline: 'speed',
-          round: 'final',
-          gender: 'male',
-          matchId: 'm1',
-          athlete1Id: 'a1',
-          athlete2Id: 'a2',
-          falseStarts: { 1: 2, 2: 0 },
-        },
-      };
-      repaint();
+    deliverFrames({
+      type: 'updateSelection',
+      sessionId: 'worlds-2026',
+      data: {
+        discipline: 'speed',
+        round: 'final',
+        gender: 'male',
+        matchId: 'm1',
+        athlete1Id: 'a1',
+        athlete2Id: 'a2',
+        falseStarts: { 1: 2, 2: 0 },
+      },
     });
     expect(screen.getByText(/2nd false start/i)).toBeInTheDocument();
 
-    act(() => {
-      lastMessage.current = {
-        type: 'updateSelection',
-        sessionId: 'worlds-2026',
-        data: {
-          discipline: 'freestyle',
-          round: 'final',
-          gender: 'male',
-          matchId: 'm2',
-          athlete1Id: 'b1',
-          athlete2Id: 'b2',
-        },
-      };
-      repaint();
+    deliverFrames({
+      type: 'updateSelection',
+      sessionId: 'worlds-2026',
+      data: {
+        discipline: 'freestyle',
+        round: 'final',
+        gender: 'male',
+        matchId: 'm2',
+        athlete1Id: 'b1',
+        athlete2Id: 'b2',
+      },
     });
     // The freestyle selection is dropped (no falseStarts reset), so the speed
     // badge survives.
@@ -285,7 +247,6 @@ describe('SpeedlineTimerDisplay audio-muted badge (projector-only)', () => {
   // PA. On the broadcast overlay it is pure clutter composited over live video and
   // is suppressed regardless of the (irrelevant) tab audio state.
   it('shows the badge on the projector while audio is blocked', () => {
-    lastMessage.current = null;
     readyState.current = 1;
     audioBlocked.current = true;
     renderDisplay('projector', '?sessionId=worlds-2026');
@@ -293,7 +254,6 @@ describe('SpeedlineTimerDisplay audio-muted badge (projector-only)', () => {
   });
 
   it('suppresses the badge on the broadcast overlay even when audio is blocked', () => {
-    lastMessage.current = null;
     readyState.current = 1;
     audioBlocked.current = true;
     renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
@@ -307,18 +267,9 @@ describe('SpeedlineTimerDisplay start-signal from the anchor seed', () => {
   // the display derives set1 (+3000) / set2 (+4000) / GO (+5000) and their beeps
   // locally off that anchor, so they are exact under any relay latency.
   const setup = () => {
-    lastMessage.current = null;
     readyState.current = 1;
-    const r = renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
-    const deliver = (msg: StopwatchWSMessage) =>
-      act(() => {
-        lastMessage.current = msg;
-        r.rerender(
-          <MemoryRouter initialEntries={['/route?compId=worlds-2026&token=abc']}>
-            <SpeedlineTimerDisplay variant="broadcast" />
-          </MemoryRouter>,
-        );
-      });
+    renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
+    const deliver = (msg: StopwatchWSMessage) => deliverFrames(msg);
     return { deliver };
   };
 
@@ -419,7 +370,6 @@ describe('SpeedlineTimerDisplay start-signal from the anchor seed', () => {
 
 describe('SpeedlineTimerDisplay solo run (one lane assigned)', () => {
   const setup = (variant: 'projector' | 'broadcast' = 'broadcast') => {
-    lastMessage.current = null;
     readyState.current = 1;
     const search =
       variant === 'broadcast' ? '?compId=worlds-2026&token=abc' : '?sessionId=worlds-2026';
@@ -430,11 +380,7 @@ describe('SpeedlineTimerDisplay solo run (one lane assigned)', () => {
           <SpeedlineTimerDisplay variant={variant} />
         </MemoryRouter>,
       );
-    const deliver = (msg: StopwatchWSMessage) =>
-      act(() => {
-        lastMessage.current = msg;
-        repaint();
-      });
+    const deliver = (msg: StopwatchWSMessage) => deliverFrames(msg);
     const setReadyState = (state: number) =>
       act(() => {
         readyState.current = state;
@@ -487,7 +433,6 @@ describe('SpeedlineTimerDisplay idle clock', () => {
   // Part (b): the broadcast overlay paints the idle 0:00.00 numeral on OPEN,
   // without waiting for a first relay message (isPreviewEnabled defaults true).
   it('paints the idle 0:00.00 clock on OPEN before any message', () => {
-    lastMessage.current = null;
     readyState.current = 1; // OPEN
     renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
     expect(screen.getAllByText('0:00.00').length).toBeGreaterThanOrEqual(2);
@@ -500,7 +445,6 @@ describe('SpeedlineTimerDisplay corner geometry', () => {
 
   /** The lane-1 column's corner inset and its time plate, as jsdom computes them. */
   const laneGeometry = (search = '?compId=worlds-2026&token=abc') => {
-    lastMessage.current = null;
     readyState.current = 1;
     renderDisplay('broadcast', search);
     const lane = screen.getByTestId('timer-lane-1');
@@ -539,7 +483,6 @@ describe('SpeedlineTimerDisplay corner geometry', () => {
   // The time hugs the lane's outer edge, mirroring the name strip above it.
   it('justifies each lane clock to its outer edge', () => {
     restoreViewport = pinViewport(1920, 1080);
-    lastMessage.current = null;
     readyState.current = 1;
     renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
     const justify = (lane: number) =>

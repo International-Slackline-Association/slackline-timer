@@ -3,15 +3,20 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Keep the real photoUpload validation; stub only the network seams it uses.
+// Keep the real photoUpload validation; stub only the network + canvas seams it uses.
 const { apiFetchMock } = vi.hoisted(() => ({ apiFetchMock: vi.fn() }));
 vi.mock('app/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('app/api/client')>();
   return { ...actual, apiFetch: apiFetchMock };
 });
+vi.mock('app/util/resizeImage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('app/util/resizeImage')>();
+  return { ...actual, resizeImage: async (file: File) => file };
+});
 
-import { MAX_PHOTO_BYTES } from 'app/api/photoUpload';
+import { MAX_SOURCE_BYTES } from 'app/api/photoUpload';
 import { AthleteForm } from 'app/pages/Admin/AthleteForm';
+import { FIELD_LIMITS } from 'app/types';
 
 const COMP = 'worlds-2026';
 const fetchMock = vi.fn();
@@ -70,7 +75,7 @@ describe('AthleteForm photo upload', () => {
 
   it('shows an error when the file is oversize', async () => {
     renderForm();
-    pickPhoto(fakeFile('big.png', 'image/png', MAX_PHOTO_BYTES + 1));
+    pickPhoto(fakeFile('big.png', 'image/png', MAX_SOURCE_BYTES + 1));
 
     expect(await screen.findByText(/too large/i)).toBeInTheDocument();
     expect(apiFetchMock).not.toHaveBeenCalled();
@@ -100,5 +105,22 @@ describe('AthleteForm photo upload', () => {
     expect(screen.queryByText(/unsupported image type/i)).not.toBeInTheDocument();
     // Save stays enabled (not stuck disabled by a lingering upload state).
     expect(screen.getByRole('button', { name: 'Create' })).not.toBeDisabled();
+  });
+});
+
+describe('AthleteForm input bounds', () => {
+  it('caps each text input at its FIELD_LIMITS length', () => {
+    renderForm();
+    const maxLengthOf = (label: RegExp) => screen.getByLabelText(label).getAttribute('maxlength');
+
+    expect(maxLengthOf(/^first name/i)).toBe(String(FIELD_LIMITS.firstName));
+    expect(maxLengthOf(/^last name/i)).toBe(String(FIELD_LIMITS.lastName));
+    expect(maxLengthOf(/^short name/i)).toBe(String(FIELD_LIMITS.shortName));
+    expect(maxLengthOf(/^country/i)).toBe(String(FIELD_LIMITS.country));
+    expect(maxLengthOf(/^second country/i)).toBe(String(FIELD_LIMITS.country));
+    expect(maxLengthOf(/^notes/i)).toBe(String(FIELD_LIMITS.notes));
+    expect(screen.getByLabelText(/^birth date/i).getAttribute('min')).toBe(
+      `${FIELD_LIMITS.birthYearMin}-01-01`,
+    );
   });
 });

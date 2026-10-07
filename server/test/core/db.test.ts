@@ -78,10 +78,20 @@ describe('db.refreshConnectionTtl', () => {
       db.refreshConnectionTtl({ sessionId: 's1', connectionId: 'conn-1' }),
     ).resolves.toBeUndefined();
 
-    sendMock.mockRejectedValueOnce(new Error('condition failed')).mockResolvedValueOnce({});
+    sendMock.mockRejectedValueOnce(new Error('condition failed'));
     await expect(
       db.refreshConnectionTtl({ sessionId: 's1', connectionId: 'conn-1' }),
     ).rejects.toThrow('condition failed');
+  });
+
+  it('skips the map refresh when the forward row is gone', async () => {
+    sendMock.mockRejectedValueOnce(new Error('condition failed'));
+
+    await expect(
+      db.refreshConnectionTtl({ sessionId: 'other-session', connectionId: 'conn-1' }),
+    ).rejects.toThrow('condition failed');
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
   });
 });
 

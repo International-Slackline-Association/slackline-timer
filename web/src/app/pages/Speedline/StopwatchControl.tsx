@@ -42,7 +42,6 @@ export const StopwatchControl = (props: Props) => {
         </Typography>
       )}
       <Stopwatch
-        lastJsonMessage={undefined}
         // Ungated by the link, unlike the preview's plates: these clocks are
         // the board's own state, and a run still timing through an outage is
         // exactly when the timekeeper must see it.

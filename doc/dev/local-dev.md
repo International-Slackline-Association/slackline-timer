@@ -177,7 +177,8 @@ repo. No real portrait fixtures ship with this repository, and there is no
 `server/scripts/seedRemote.mjs` (`npm --prefix server run seed`) for a real
 deployment. `resources/seed/prod/` is git-ignored (real event data, athlete PII);
 the committed `demo.seed.json` athletes are invented and carry no `photo` —
-`seedRemote.mjs` uploads whatever `photo` a dataset names, while the local
+`seedRemote.mjs` uploads whatever `photo` a dataset names (as-is, so each file
+must fit the 1 MiB upload cap — a larger one is refused before presigning), while the local
 generator (`seedLocal.mjs`, behind `npm run db:seed`) draws the identicon
 described above instead.
 

@@ -444,8 +444,9 @@ export const reduce = (state: BattleState, event: BattleEvent): BattleResult => 
       if (lane.phase !== 'running') {
         return { state, effects: [] };
       }
-      const remainingMs = laneRemainingMs(lane, event.at);
-      return endTurn(state, event.lane, remainingMs, event.at, []);
+      // A handset stop is stamped at its HID report, which can predate the START.
+      const at = Math.max(event.at, lane.startedAt);
+      return endTurn(state, event.lane, laneRemainingMs(lane, at), at, []);
     }
 
     case 'TIMEOUT': {

@@ -78,7 +78,9 @@ const SIZES = {
 } as const;
 
 interface Props {
-  lastJsonMessage: StopwatchWSMessage | undefined;
+  /** The display's last lane-scoped relay frame (`start`/`stop`/`resume`/
+   * `reset`) — a new object per frame, applied once per change. */
+  laneFrame?: StopwatchWSMessage;
   /** Shows the block. The preview gates it on its socket being OPEN; the control
    * board's clocks are its own state and always show (`StopwatchControl`). */
   isReady: boolean;
@@ -94,7 +96,7 @@ interface Props {
    * Controlled lane state for the operator's ControlPage: the page owns timer
    * state outright and drives the display through this prop, so the component is
    * presentational there and does NOT depend on the relay echo. When set,
-   * `lastJsonMessage` is ignored (the loopback is not a delivery channel for the
+   * `laneFrame` is ignored (the loopback is not a delivery channel for the
    * control's own clocks — ADR 0027); the preview leaves it unset and keeps
    * consuming relay messages.
    */
@@ -115,7 +117,7 @@ interface Props {
 }
 
 export const Stopwatch: React.FC<Props> = ({
-  lastJsonMessage,
+  laneFrame,
   isReady,
   timerId,
   recovery,
@@ -223,10 +225,10 @@ export const Stopwatch: React.FC<Props> = ({
   const controlled = laneState !== undefined;
 
   useEffect(() => {
-    if (controlled || !lastJsonMessage) {
+    if (controlled || !laneFrame) {
       return;
     }
-    const { data, type } = lastJsonMessage;
+    const { data, type } = laneFrame;
     switch (type) {
       case 'start':
         // A start ignites only its listed lanes (a solo quali run — the other
@@ -257,7 +259,7 @@ export const Stopwatch: React.FC<Props> = ({
         reset();
         break;
     }
-  }, [lastJsonMessage]);
+  }, [laneFrame]);
 
   // Snapshot recovery (preview): merge newer-wins per lane rather than blindly
   // replacing, because a snapshot can now arrive AFTER live messages (the

@@ -105,8 +105,3 @@ export function parseTimeString(str: string | null | undefined): number | null {
 
   return min * 60_000 + sec * 1_000 + hund * 10;
 }
-
-/** True when `parseTimeString` would succeed for `str`. */
-export function isValidTimeFormat(str: string | null | undefined): boolean {
-  return parseTimeString(str) !== null;
-}

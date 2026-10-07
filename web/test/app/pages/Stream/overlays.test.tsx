@@ -10,23 +10,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Athlete, Match, MatchRound, RankedAthlete, Score, Time } from 'app/types';
 
 // Overlays open a read-token WS for live refresh — stub it so no socket opens.
-// `wsState.lastJsonMessage` lets a test feed an `updateSelection` (the board's
-// live selection) without a real socket; default null = nothing pushed yet.
-const { wsState, sendWSMessageMock } = vi.hoisted(() => ({
-  wsState: { lastJsonMessage: null as unknown },
-  sendWSMessageMock: vi.fn(),
-}));
-vi.mock('app/hooks/useWebSocket', () => ({
-  // readyState 1 = OPEN, so the ConnectionLostBadge stays quiet in these tests.
-  // `sendWSMessage` absorbs the on-OPEN `request_state` catch-up send — one
-  // STABLE fn (it sits in useStreamRefresh's effect deps; a per-render identity
-  // would re-fire the on-OPEN invalidation every render).
-  useWS: () => ({
-    lastJsonMessage: wsState.lastJsonMessage,
-    readyState: 1,
-    sendWSMessage: sendWSMessageMock,
-  }),
-}));
+// `deliverFrames` hands a mounted overlay an `updateSelection` (the board's live
+// selection) through the captured `onMessage`.
+const { sendWSMessageMock } = vi.hoisted(() => ({ sendWSMessageMock: vi.fn() }));
+vi.mock('app/hooks/useWebSocket', async () => {
+  const { useCapturedSocket } = await import('../../../util/wsMock');
+  return {
+    // readyState 1 = OPEN, so the ConnectionLostBadge stays quiet in these tests.
+    // `sendWSMessage` absorbs the on-OPEN `request_state` catch-up send — one
+    // STABLE fn (it sits in useStreamRefresh's effect deps; a per-render identity
+    // would re-fire the on-OPEN invalidation every render).
+    useWS: (params: { onMessage?: (frame: never) => void }) => {
+      useCapturedSocket(params);
+      return { readyState: 1, sendWSMessage: sendWSMessageMock };
+    },
+  };
+});
 
 const { apiFetchMock } = vi.hoisted(() => ({ apiFetchMock: vi.fn() }));
 vi.mock('app/api/client', async (importOriginal) => {
@@ -56,6 +55,7 @@ import {
 import { refVh, refVw } from 'app/util/overlayScale';
 
 import { emPx, pinViewport, px, vhPx, vwPx } from '../../../util/computedUnits';
+import { deliver as deliverFrames } from '../../../util/wsMock';
 
 const COMP = 'worlds-2026';
 
@@ -113,7 +113,6 @@ const TOKEN_HALO = overlayTextShadow.replace(/,\s+/g, ',');
 afterEach(() => {
   apiFetchMock.mockReset();
   sendWSMessageMock.mockReset();
-  wsState.lastJsonMessage = null;
 });
 
 const selectionMessage = (data: {
@@ -1532,7 +1531,13 @@ describe('VsOverlay', () => {
     });
     // The board swapped its lanes: a2 stands on lane 1 — SVO-B and the lane
     // names already follow this pairing, so the VS card must render John left.
-    wsState.lastJsonMessage = {
+
+    renderOverlay(
+      `/stream/vs/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/vs/:round/:gender',
+      <VsOverlay />,
+    );
+    deliverFrames({
       type: 'updateSelection',
       data: {
         discipline: 'speed',
@@ -1542,13 +1547,7 @@ describe('VsOverlay', () => {
         athlete1Id: 'a2',
         athlete2Id: 'a1',
       },
-    };
-
-    renderOverlay(
-      `/stream/vs/final/male?compId=${COMP}&token=tok-1`,
-      '/stream/vs/:round/:gender',
-      <VsOverlay />,
-    );
+    });
 
     await screen.findByText('Jane');
     const text = document.body.textContent ?? '';
@@ -2628,17 +2627,6 @@ describe('VsLiveOverlay (round-following)', () => {
     ];
     // The board is live on the FINAL — the card must show the final's times, not
     // the quarter's, even though the URL carries no round at all.
-    wsState.lastJsonMessage = {
-      type: 'updateSelection',
-      data: {
-        discipline: 'speed',
-        round: 'final',
-        gender: 'male',
-        matchId: 'f1',
-        athlete1Id: 'a1',
-        athlete2Id: 'a2',
-      },
-    };
     apiFetchMock.mockImplementation((path: string) => {
       if (path.includes('/matches')) return Promise.resolve(matches);
       if (path.includes('/athletes'))
@@ -2665,6 +2653,17 @@ describe('VsLiveOverlay (round-following)', () => {
       '/stream/vs-live/:gender',
       <VsLiveOverlay />,
     );
+    deliverFrames({
+      type: 'updateSelection',
+      data: {
+        discipline: 'speed',
+        round: 'final',
+        gender: 'male',
+        matchId: 'f1',
+        athlete1Id: 'a1',
+        athlete2Id: 'a2',
+      },
+    });
 
     expect(await screen.findByText('1:23.45')).toBeInTheDocument();
     expect(screen.getByText('Jane')).toBeInTheDocument();
@@ -2728,17 +2727,6 @@ describe('WinnerOverlay', () => {
   });
 
   it('follows the board selection to a different decided match', async () => {
-    wsState.lastJsonMessage = {
-      type: 'updateSelection',
-      data: {
-        discipline: 'speed',
-        round: 'final',
-        gender: 'male',
-        matchId: 'm2',
-        athlete1Id: 'a3',
-        athlete2Id: 'a4',
-      },
-    };
     const matches: Match[] = [
       winnerMatch(),
       winnerMatch({
@@ -2766,6 +2754,17 @@ describe('WinnerOverlay', () => {
       '/stream/winner/:round/:gender',
       <WinnerOverlay />,
     );
+    deliverFrames({
+      type: 'updateSelection',
+      data: {
+        discipline: 'speed',
+        round: 'final',
+        gender: 'male',
+        matchId: 'm2',
+        athlete1Id: 'a3',
+        athlete2Id: 'a4',
+      },
+    });
 
     // The board's match (m2) wins → its winner a4 (Mark) shows, not m1's a1.
     expect(await screen.findByText('Mark')).toBeInTheDocument();
@@ -2897,7 +2896,14 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
 
   it('anchors the tally to the athletes, one identity card each', async () => {
     // 2–1: athlete1 won two runs, athlete2 one — three resolved runs so far.
-    wsState.lastJsonMessage = {
+    mockComp();
+
+    renderOverlay(
+      `/stream/rounds-summary/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/rounds-summary/:round/:gender',
+      <RoundsSummaryOverlay />,
+    );
+    deliverFrames({
       type: 'updateSelection',
       data: {
         discipline: 'speed',
@@ -2908,14 +2914,7 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
         athlete2Id: 'a2',
         runWins: { 1: 2, 2: 1 },
       },
-    };
-    mockComp();
-
-    renderOverlay(
-      `/stream/rounds-summary/final/male?compId=${COMP}&token=tok-1`,
-      '/stream/rounds-summary/:round/:gender',
-      <RoundsSummaryOverlay />,
-    );
+    });
 
     // Name-anchored tally, "JANE 2 – 1 JOHN": run order isn't on the wire
     // (ADR 0017), so the digits anchor to the athletes, not a chronology.
@@ -2964,18 +2963,6 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
     [1280, 720],
   ])('spaces the series off the capture frame at %ix%i', async (width, height) => {
     const restore = pinViewport(width, height);
-    wsState.lastJsonMessage = {
-      type: 'updateSelection',
-      data: {
-        discipline: 'speed',
-        round: 'final',
-        gender: 'male',
-        matchId: 'm1',
-        athlete1Id: 'a1',
-        athlete2Id: 'a2',
-        runWins: { 1: 1, 2: 0 },
-      },
-    };
     mockComp();
     try {
       renderOverlay(
@@ -2983,6 +2970,18 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
         '/stream/rounds-summary/:round/:gender',
         <RoundsSummaryOverlay />,
       );
+      deliverFrames({
+        type: 'updateSelection',
+        data: {
+          discipline: 'speed',
+          round: 'final',
+          gender: 'male',
+          matchId: 'm1',
+          athlete1Id: 'a1',
+          athlete2Id: 'a2',
+          runWins: { 1: 1, 2: 0 },
+        },
+      });
       const tally = await screen.findByTestId('series-tally');
       // The old MUI spacing (24 / 16px) as reference px: equal at 1080p, scaled
       // with the cards at 720p rather than staying device px.
@@ -2995,7 +2994,14 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
   });
 
   it('sets the tally separator in the numeral face at the digits’ size and weight', async () => {
-    wsState.lastJsonMessage = {
+    mockComp();
+
+    renderOverlay(
+      `/stream/rounds-summary/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/rounds-summary/:round/:gender',
+      <RoundsSummaryOverlay />,
+    );
+    deliverFrames({
       type: 'updateSelection',
       data: {
         discipline: 'speed',
@@ -3006,14 +3012,7 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
         athlete2Id: 'a2',
         runWins: { 1: 1, 2: 0 },
       },
-    };
-    mockComp();
-
-    renderOverlay(
-      `/stream/rounds-summary/final/male?compId=${COMP}&token=tok-1`,
-      '/stream/rounds-summary/:round/:gender',
-      <RoundsSummaryOverlay />,
-    );
+    });
 
     const separator = window.getComputedStyle(await screen.findByTestId('series-separator'));
     for (const id of ['series-wins-1', 'series-wins-2']) {
@@ -3029,7 +3028,14 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
 
   it('reports empty (blank on camera) until the first run resolves', async () => {
     // A board selection with a pristine 0–0 tally: no run decided yet.
-    wsState.lastJsonMessage = {
+    mockComp();
+
+    renderOverlay(
+      `/stream/rounds-summary/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/rounds-summary/:round/:gender',
+      <RoundsSummaryOverlay />,
+    );
+    deliverFrames({
       type: 'updateSelection',
       data: {
         discipline: 'speed',
@@ -3040,14 +3046,7 @@ describe('RoundsSummaryOverlay (best-of-3 series story)', () => {
         athlete2Id: 'a2',
         runWins: { 1: 0, 2: 0 },
       },
-    };
-    mockComp();
-
-    renderOverlay(
-      `/stream/rounds-summary/final/male?compId=${COMP}&token=tok-1`,
-      '/stream/rounds-summary/:round/:gender',
-      <RoundsSummaryOverlay />,
-    );
+    });
 
     const marker = await screen.findByTestId('stream-status');
     await vi.waitFor(() => expect(marker).toHaveAttribute('data-stream-status', 'empty'));
@@ -3135,12 +3134,6 @@ describe('SvoOverlay (identity card)', () => {
 
 describe('SvoLiveOverlay (board-driven card)', () => {
   it('shows the side-1 athlete + best time from the live selection (speed)', async () => {
-    wsState.lastJsonMessage = selectionMessage({
-      discipline: 'speed',
-      round: 'final',
-      athlete1Id: 'a1',
-      athlete2Id: 'a2',
-    });
     const times: Time[] = [
       { timeId: 't1', compId: COMP, athleteId: 'a1', round: 'final', timeMs: 83_450, startTime: 1 },
     ];
@@ -3156,6 +3149,14 @@ describe('SvoLiveOverlay (board-driven card)', () => {
       '/stream/svo-live/:side',
       <SvoLiveOverlay />,
     );
+    deliverFrames(
+      selectionMessage({
+        discipline: 'speed',
+        round: 'final',
+        athlete1Id: 'a1',
+        athlete2Id: 'a2',
+      }),
+    );
 
     expect(await screen.findByText('Jane')).toBeInTheDocument();
     expect(screen.getByText('1:23.45')).toBeInTheDocument();
@@ -3167,12 +3168,6 @@ describe('SvoLiveOverlay (board-driven card)', () => {
   });
 
   it('shows the side-2 athlete + freestyle overall from the live selection', async () => {
-    wsState.lastJsonMessage = selectionMessage({
-      discipline: 'freestyle',
-      round: 'final',
-      athlete1Id: 'a1',
-      athlete2Id: 'a2',
-    });
     const scores: Score[] = [
       {
         scoreId: 's2',
@@ -3199,6 +3194,14 @@ describe('SvoLiveOverlay (board-driven card)', () => {
       '/stream/svo-live/:side',
       <SvoLiveOverlay />,
     );
+    deliverFrames(
+      selectionMessage({
+        discipline: 'freestyle',
+        round: 'final',
+        athlete1Id: 'a1',
+        athlete2Id: 'a2',
+      }),
+    );
 
     expect(await screen.findByText('John')).toBeInTheDocument();
     expect(screen.getByText('27.50')).toBeInTheDocument();
@@ -3206,12 +3209,6 @@ describe('SvoLiveOverlay (board-driven card)', () => {
   });
 
   it('suppresses the result line (no em-dash) when the side has no result yet', async () => {
-    wsState.lastJsonMessage = selectionMessage({
-      discipline: 'speed',
-      round: 'final',
-      athlete1Id: 'a1',
-      athlete2Id: 'a2',
-    });
     apiFetchMock.mockImplementation((path: string) => {
       if (path.includes('/athletes'))
         return Promise.resolve([athlete('a1', 'Jane Doe'), athlete('a2', 'John Roe')]);
@@ -3223,6 +3220,14 @@ describe('SvoLiveOverlay (board-driven card)', () => {
       `/stream/svo-live/1?compId=${COMP}&token=tok-1`,
       '/stream/svo-live/:side',
       <SvoLiveOverlay />,
+    );
+    deliverFrames(
+      selectionMessage({
+        discipline: 'speed',
+        round: 'final',
+        athlete1Id: 'a1',
+        athlete2Id: 'a2',
+      }),
     );
 
     expect(await screen.findByText('Jane')).toBeInTheDocument();
@@ -3254,22 +3259,25 @@ describe('SvoLiveOverlay (board-driven card)', () => {
 
   it('aligns both sides with the timer lower-third corners', async () => {
     const renderSide = (side: 1 | 2) => {
-      wsState.lastJsonMessage = selectionMessage({
-        discipline: 'speed',
-        round: 'final',
-        athlete1Id: 'a1',
-        athlete2Id: 'a2',
-      });
       apiFetchMock.mockImplementation((path: string) =>
         path.includes('/athletes')
           ? Promise.resolve([athlete('a1', 'Jane Doe'), athlete('a2', 'John Roe')])
           : Promise.resolve([]),
       );
-      return renderOverlay(
+      const view = renderOverlay(
         `/stream/svo-live/${side}?compId=${COMP}&token=tok-1`,
         '/stream/svo-live/:side',
         <SvoLiveOverlay />,
       );
+      deliverFrames(
+        selectionMessage({
+          discipline: 'speed',
+          round: 'final',
+          athlete1Id: 'a1',
+          athlete2Id: 'a2',
+        }),
+      );
+      return view;
     };
 
     const { unmount } = renderSide(1);

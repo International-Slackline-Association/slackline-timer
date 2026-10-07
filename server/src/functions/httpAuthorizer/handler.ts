@@ -2,6 +2,7 @@ import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import type { APIGatewayRequestSimpleAuthorizerHandlerV2WithContext } from 'aws-lambda';
 import { competitionDb } from 'core/competitionDb';
 import type { AuthContext } from 'core/http';
+import { isOffline } from 'core/offline';
 import { verifyReadToken } from 'core/readToken';
 import { getReadTokenSecret } from 'core/secrets';
 
@@ -40,7 +41,7 @@ export const main: APIGatewayRequestSimpleAuthorizerHandlerV2WithContext<AuthCon
   const token = raw.replace(/^Bearer\s+/i, '');
 
   // Offline: accept the web's `local-dev` dummy as an operator (no Cognito locally).
-  if (process.env.IS_OFFLINE === 'true' && token === 'local-dev') {
+  if (isOffline() && token === 'local-dev') {
     return { isAuthorized: true, context: { role: 'admin', compId: '*' } };
   }
 

@@ -6,20 +6,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Athlete, Time } from 'app/types';
 
+import { deliver as deliverFrames } from '../../../util/wsMock';
+
 const { wsState, sendWSMessageMock } = vi.hoisted(() => ({
   // readyState 1 = ReadyState.OPEN (literal — this runs before imports resolve).
-  wsState: { lastJsonMessage: null as unknown, readyState: 1 as ReadyState },
+  wsState: { readyState: 1 as ReadyState },
   // Stable fn: it sits in useStreamRefresh's effect deps; a per-render identity
   // would re-fire the on-OPEN invalidation every render.
   sendWSMessageMock: vi.fn(),
 }));
-vi.mock('app/hooks/useWebSocket', () => ({
-  useWS: () => ({
-    lastJsonMessage: wsState.lastJsonMessage,
-    readyState: wsState.readyState,
-    sendWSMessage: sendWSMessageMock,
-  }),
-}));
+vi.mock('app/hooks/useWebSocket', async () => {
+  const { useCapturedSocket } = await import('../../../util/wsMock');
+  return {
+    useWS: (params: { onMessage?: (frame: never) => void }) => {
+      useCapturedSocket(params);
+      return { readyState: wsState.readyState, sendWSMessage: sendWSMessageMock };
+    },
+  };
+});
 
 const { apiFetchMock } = vi.hoisted(() => ({ apiFetchMock: vi.fn() }));
 vi.mock('app/api/client', async (importOriginal) => {
@@ -69,19 +73,12 @@ const renderBridge = (path: string) => {
 afterEach(() => {
   apiFetchMock.mockReset();
   pushMock.mockClear();
-  wsState.lastJsonMessage = null;
   wsState.readyState = ReadyState.OPEN;
   vi.useRealTimers();
 });
 
 describe('BridgePage', () => {
   it('pushes resolved name/result for the live selection to the H2R target', async () => {
-    wsState.lastJsonMessage = selectionMessage({
-      discipline: 'speed',
-      round: 'final',
-      athlete1Id: 'a1',
-      athlete2Id: 'a2',
-    });
     const times: Time[] = [
       { timeId: 't1', compId: COMP, athleteId: 'a1', round: 'final', timeMs: 83_450, startTime: 1 },
     ];
@@ -93,6 +90,14 @@ describe('BridgePage', () => {
     });
 
     renderBridge(`/stream/bridge?compId=${COMP}&token=tok-1&h2r=http://127.0.0.1:4001`);
+    deliverFrames(
+      selectionMessage({
+        discipline: 'speed',
+        round: 'final',
+        athlete1Id: 'a1',
+        athlete2Id: 'a2',
+      }),
+    );
 
     // Wait until the resolved push lands (the first push fires before the queries
     // settle, so assert on the latest once the name is populated).
@@ -111,12 +116,6 @@ describe('BridgePage', () => {
   });
 
   it('defaults the target to localhost:4001 when no ?h2r is given', async () => {
-    wsState.lastJsonMessage = selectionMessage({
-      discipline: 'speed',
-      round: 'final',
-      athlete1Id: 'a1',
-      athlete2Id: null,
-    });
     apiFetchMock.mockImplementation((path: string) => {
       if (path.includes('/athletes')) return Promise.resolve([athlete('a1', 'Jane Doe')]);
       if (path.includes('/times')) return Promise.resolve([]);
@@ -124,6 +123,14 @@ describe('BridgePage', () => {
     });
 
     renderBridge(`/stream/bridge?compId=${COMP}&token=tok-1`);
+    deliverFrames(
+      selectionMessage({
+        discipline: 'speed',
+        round: 'final',
+        athlete1Id: 'a1',
+        athlete2Id: null,
+      }),
+    );
 
     await vi.waitFor(() => expect(pushMock).toHaveBeenCalled());
     expect(pushMock.mock.calls.at(-1)?.[0]).toBe('http://127.0.0.1:4001');

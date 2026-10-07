@@ -5,7 +5,6 @@ import {
   DNF_SENTINEL,
   formatClock,
   formatMs,
-  isValidTimeFormat,
   parseTimeString,
   remainingCeilSecond,
   remainingFrom,
@@ -132,17 +131,5 @@ describe('parseTimeString', () => {
   it('rejects garbage', () => {
     expect(parseTimeString('abc')).toBeNull();
     expect(parseTimeString('1:0x.07')).toBeNull();
-  });
-});
-
-describe('isValidTimeFormat', () => {
-  it('is true for parseable strings', () => {
-    expect(isValidTimeFormat('1:05.07')).toBe(true);
-    expect(isValidTimeFormat('')).toBe(true);
-  });
-
-  it('is false for unparseable strings', () => {
-    expect(isValidTimeFormat('abc')).toBe(false);
-    expect(isValidTimeFormat('1:60.00')).toBe(false);
   });
 });

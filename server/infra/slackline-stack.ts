@@ -26,6 +26,7 @@ import {
   KeyGroup,
   PriceClass,
   PublicKey,
+  ResponseHeadersPolicy,
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
@@ -36,10 +37,7 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { BlockPublicAccess, Bucket, HttpMethods } from 'aws-cdk-lib/aws-s3';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
-import { CfnWebACLAssociation } from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
-
-import { defineWafToggle, makeRateBasedWebAcl } from './waf';
 
 // SSM parameter names; all three must exist before the first deploy. The two
 // secrets are SecureString and reach the Lambdas as *names* only, fetched +
@@ -104,8 +102,7 @@ export class SlacklineTimerV1Stack extends Stack {
     const photoCdn = definePhotoCdn(this, stage);
     const fns = defineFunctions(this, stage, tables, photoCdn, cognito);
     const wsStage = defineWsRelay(this, stage, fns);
-    const { httpApi, httpStage } = defineHttpApi(this, stage, fns);
-    defineWaf(this, stage, wsStage, httpStage);
+    const httpApi = defineHttpApi(this, stage, fns);
 
     new CfnOutput(this, 'HttpApiUrl', {
       description: 'Competition data-plane HTTP API base URL.',
@@ -127,6 +124,9 @@ export class SlacklineTimerV1Stack extends Stack {
 // athletes/times/matches/scores/meta (SK layout in src/core/keys.ts). Both stay
 // on-demand (ADR 0031 §4) and RETAIN + deletion-protected, so `cdk destroy`
 // leaves them as unmanaged orphans — see server/scripts/decommission/stacks.json.
+// Only the competition table has PITR: deletion protection does not undo a bad
+// seed/advance or bulk delete, while relay rows are 20-min ephemera. A restore
+// creates a new table (runbook: doc/dev/deploy.md).
 
 interface Tables {
   relay: Table;
@@ -152,6 +152,10 @@ function defineTables(stack: Stack, stage: string): Tables {
     partitionKey: { name: 'PK', type: AttributeType.STRING },
     sortKey: { name: 'SK', type: AttributeType.STRING },
     billingMode: BillingMode.PAY_PER_REQUEST,
+    pointInTimeRecoverySpecification: {
+      pointInTimeRecoveryEnabled: true,
+      recoveryPeriodInDays: 35,
+    },
     deletionProtection: true,
     removalPolicy: RemovalPolicy.RETAIN,
   });
@@ -179,8 +183,8 @@ function definePhotoCdn(stack: Stack, stage: string): PhotoCdn {
     // when an athlete's photo is replaced, so orphans accumulate forever. S3
     // lifecycle is time-based (it can't see which keys an athlete row still
     // references), so we expire on age instead. The event-scoped access model
-    // caps a photo's useful life at the competition window (signed URLs die
-    // ≤10 days after the event, core/eventWindow.ts); 90 days sits well beyond
+    // caps a photo's useful life at the competition window (signed URLs live
+    // 12–18 h and never past the event, core/eventWindow.ts); 90 days sits well beyond
     // that even allowing for athletes entered weeks ahead of the event, so any
     // object this old is certainly unreferenced. Free control, no standing cost.
     lifecycleRules: [
@@ -222,6 +226,9 @@ function definePhotoCdn(stack: Stack, stage: string): PhotoCdn {
       compress: true,
       // Keys are content-hashed, so long edge caching is safe.
       cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+      // Managed (no per-policy cost, flat-rate-plan compatible): `nosniff` keeps
+      // a non-image body uploaded under an image Content-Type from rendering.
+      responseHeadersPolicy: ResponseHeadersPolicy.SECURITY_HEADERS,
       trustedKeyGroups: [keyGroup],
     },
   });
@@ -415,17 +422,18 @@ function defineFunctions(
   ];
 
   // Grants are per need, not per role. The relay table reaches beyond the relay
-  // handlers only to the five entity writers, whose core/broadcast.ts db_update
-  // fan-out reads + prunes connection rows (their ManageConnections grant
-  // follows in defineWsRelay). The authorizers, rankings, photoUpload and
-  // createReadToken only ever read the competition table (getCompetition /
-  // list*); connectionHandler writes its own connection rows and reads back the
-  // reverse map item a $disconnect needs to resolve its session (core/db.ts).
+  // handlers only to the five entity writers, whose core/broadcast.ts fan-out
+  // (db_update, revoke's reader disconnect) only Queries a session's rows and
+  // Deletes stale ones (their ManageConnections grant follows in defineWsRelay).
+  // The authorizers, rankings, photoUpload and createReadToken only ever read
+  // the competition table (getCompetition / list*); connectionHandler writes its
+  // own connection rows and reads back the reverse map item a $disconnect needs
+  // to resolve its session (core/db.ts).
   const writers = [competitions, athletes, times, matches, scores];
   tables.relay.grantReadWriteData(connection);
   tables.relay.grantReadWriteData(message);
   for (const fn of writers) {
-    tables.relay.grantReadWriteData(fn);
+    tables.relay.grant(fn, 'dynamodb:Query', 'dynamodb:DeleteItem');
     tables.competition.grantReadWriteData(fn);
   }
   for (const fn of [authorizer, httpAuthorizer, rankings, photoUpload, createReadToken]) {
@@ -443,7 +451,15 @@ function defineFunctions(
     }),
   );
   // Only photoUpload signs presigned POSTs — no other function gets s3:PutObject.
-  photoCdn.bucket.grantPut(photoUpload);
+  // Exactly PutObject on the upload prefix: grantPut would add the legal-hold/
+  // retention/tagging variants on the whole bucket, all signable into a POST.
+  photoUpload.addToRolePolicy(
+    new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: ['s3:PutObject'],
+      resources: [photoCdn.bucket.arnForObjects('photos/*')],
+    }),
+  );
   // Secret reads (core/secrets.ts runtime fetch): each SecureString is readable
   // only by its consumers. The default aws/ssm KMS key decrypts via-service, so
   // no kms:Decrypt grant is needed.
@@ -474,8 +490,9 @@ function defineFunctions(
 }
 
 // ── WebSocket relay ───────────────────────────────────────────────────────────
-// Both query params feed the authorizer decision and so are the cache key — a
-// cached result must never carry across a different sessionId (ADR 0022).
+// Both query params are identity sources: a $connect missing either is rejected
+// with 401 before the authorizer Lambda runs. WS authorizers have no result TTL,
+// so nothing is cached across sessionIds (ADR 0022).
 
 function defineWsRelay(stack: Stack, stage: string, fns: Fns): WebSocketStage {
   const wsApi = new WebSocketApi(stack, 'WebsocketsApi', {
@@ -531,11 +548,7 @@ function defineWsRelay(stack: Stack, stage: string, fns: Fns): WebSocketStage {
 // Custom request authorizer: Cognito IdToken+timeradmin → admin, or an event
 // read token → reader. The native JWT authorizer can't check cognito:groups.
 
-function defineHttpApi(
-  stack: Stack,
-  stage: string,
-  fns: Fns,
-): { httpApi: HttpApi; httpStage: HttpStage } {
+function defineHttpApi(stack: Stack, stage: string, fns: Fns): HttpApi {
   const httpAuthorizer = new HttpLambdaAuthorizer('TimerHttpAuthorizer', fns.httpAuthorizer, {
     authorizerName: 'timerHttpAuthorizer',
     responseTypes: [HttpLambdaResponseType.SIMPLE],
@@ -560,7 +573,7 @@ function defineHttpApi(
       maxAge: Duration.hours(1),
     },
   });
-  const httpStage = new HttpStage(stack, 'HttpStage', {
+  new HttpStage(stack, 'HttpStage', {
     httpApi,
     stageName: stage,
     autoDeploy: true,
@@ -655,45 +668,5 @@ function defineHttpApi(
       httpApi.addRoutes({ path: r.path, methods: r.methods, integration });
     }
   }
-  return { httpApi, httpStage };
-}
-
-// ── AWS WAF (regional) ──────────────────────────────────────────────────────────
-// ADR 0031 §5: a parameter-flagged, default-OFF rate-based WebACL fronting the two
-// regional API Gateway endpoints (the HTTP data plane + the WS relay), gated on the
-// WafEnabled parameter so a normal deploy provisions NO WAF resources and carries no
-// standing cost. The CloudFront-scoped counterpart for the web dist lives in the
-// us-east-1 billing stack (CLOUDFRONT-scope WAF is us-east-1-only). Ops flips this on
-// only on an observed abuse event — enable runbook: doc/dev/deploy.md §6.3 + infra/waf.ts.
-// Behavioural verification (burst → block) is owed post-enable (guardrail-deploy-smoke).
-
-function defineWaf(
-  stack: Stack,
-  stage: string,
-  wsStage: WebSocketStage,
-  httpStage: HttpStage,
-): void {
-  const enabled = defineWafToggle(stack);
-  const webAcl = makeRateBasedWebAcl(stack, 'RegionalWebAcl', {
-    scope: 'REGIONAL',
-    namePrefix: `slackline-timer-v1-${stage}`,
-    condition: enabled,
-  });
-
-  // API Gateway v2 stage ARNs (WAF associates with the stage, not the API):
-  // arn:aws:apigateway:<region>::/apis/<apiId>/stages/<stageName>. Both stages
-  // share the region/partition; only apiId + stageName differ.
-  const stageArn = (apiId: string): string =>
-    `arn:${stack.partition}:apigateway:${stack.region}::/apis/${apiId}/stages/${stage}`;
-
-  for (const [id, apiId] of [
-    ['HttpApiWafAssociation', httpStage.api.apiId],
-    ['WsApiWafAssociation', wsStage.api.apiId],
-  ] as const) {
-    const assoc = new CfnWebACLAssociation(stack, id, {
-      resourceArn: stageArn(apiId),
-      webAclArn: webAcl.attrArn,
-    });
-    assoc.cfnOptions.condition = enabled;
-  }
+  return httpApi;
 }

@@ -5,6 +5,7 @@ import { SelectField, enumOptions } from 'app/components/SelectField';
 import { EntityFormDialog, useEntityForm } from 'app/pages/Admin/entityForm';
 import {
   DISCIPLINE,
+  FIELD_LIMITS,
   GENDERS,
   MATCH_ROUNDS,
   type Athlete,
@@ -80,7 +81,12 @@ export const MatchForm = ({
     normalize: clearOrphanedWinner,
   });
 
-  const positionInvalid = !Number.isInteger(Number.parseInt(form.position, 10));
+  const position = Number(form.position);
+  const positionInvalid =
+    form.position.trim() === '' ||
+    !Number.isInteger(position) ||
+    position < FIELD_LIMITS.position.min ||
+    position > FIELD_LIMITS.position.max;
   const canSubmit = !positionInvalid;
 
   const eligible = athletes.filter((a) => a.gender === form.gender);
@@ -95,7 +101,7 @@ export const MatchForm = ({
       round: form.round,
       ...(form.roundName.trim() ? { roundName: form.roundName.trim() } : {}),
       gender: form.gender,
-      position: Number.parseInt(form.position, 10),
+      position,
       ...(form.athlete1Id ? { athlete1Id: form.athlete1Id } : {}),
       ...(form.athlete2Id ? { athlete2Id: form.athlete2Id } : {}),
       ...(form.winnerId ? { winnerId: form.winnerId } : {}),
@@ -151,6 +157,7 @@ export const MatchForm = ({
           helperText="Override the round label, e.g. Final 1"
           value={form.roundName}
           onChange={updateField('roundName')}
+          slotProps={{ htmlInput: { maxLength: FIELD_LIMITS.roundName } }}
           sx={{ flex: 2 }}
         />
         <TextField
@@ -158,6 +165,7 @@ export const MatchForm = ({
           type="number"
           value={form.position}
           onChange={updateField('position')}
+          slotProps={{ htmlInput: { ...FIELD_LIMITS.position, step: 1 } }}
           error={positionInvalid}
           sx={{ flex: 1 }}
         />

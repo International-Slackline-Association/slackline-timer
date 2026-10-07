@@ -241,6 +241,20 @@ describe('TimesPage', () => {
     await waitFor(() => expect(screen.queryByText('New time')).not.toBeInTheDocument());
   });
 
+  it('blocks a time over 24 h (the server bound)', async () => {
+    wireApi([]);
+    renderPage(COMP);
+    await screen.findByText(/no times recorded yet/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /add time/i }));
+    await screen.findByText('New time');
+    fireEvent.change(screen.getByLabelText(/^athlete/i), { target: { value: 'a1' } });
+    fireEvent.change(screen.getByLabelText(/^time/i), { target: { value: '1440:00.00' } });
+    expect(screen.getByRole('button', { name: 'Create' })).not.toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/^time/i), { target: { value: '1440:00.01' } });
+    expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled();
+  });
+
   it('creates a DNF time saving the sentinel', async () => {
     wireApi([], (method, body) =>
       method === 'POST' ? ({ ...(body as object), timeId: 't1', compId: COMP } as Time) : undefined,

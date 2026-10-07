@@ -3,6 +3,8 @@ import {
   ListUsersCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 
+import { isOffline } from 'core/offline';
+
 /**
  * Resolve an ISA user by email against the shared Cognito pool, used by the
  * managers Lambda to key a grant on the caller's immutable `sub` rather than
@@ -55,10 +57,10 @@ export const resolveUserByEmail = async (
 
   // Offline: no Cognito. A deterministic fake sub keeps the managers UI (grant/
   // list/revoke against the LocalStack table) exercisable in local dev — the
-  // same handler-level IS_OFFLINE pattern as core/aws/clients.ts. The manager
+  // same handler-level isOffline() pattern as core/aws/clients.ts. The manager
   // *login* path still needs real Cognito (the offline authorizer only knows
   // the `local-dev` operator).
-  if (process.env.IS_OFFLINE === 'true') {
+  if (isOffline()) {
     return { sub: `offline-${normalized.toLowerCase()}`, email: normalized };
   }
 

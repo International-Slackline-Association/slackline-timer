@@ -1,5 +1,5 @@
 import { Paper, Stack, Typography } from '@mui/material';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { BuzzerMappingDialog } from 'app/components/BuzzerMappingDialog';
 import { GamepadPicker } from 'app/components/GamepadPicker';
@@ -23,7 +23,7 @@ interface Props {
   rows: BuzzerMappingRow[];
   /**
    * What a press of `button` just did, in the card's one line. Called AT PRESS
-   * TIME, from the effect that sees the press: both boards' verdicts depend on
+   * TIME, from the press handler: both boards' verdicts depend on
    * an interlock table and on the overlay standing at that instant, neither of
    * which can be re-derived a render later.
    */
@@ -58,20 +58,13 @@ interface Props {
  */
 export const HandsetCard = ({ title, rows, describe, variant = 'card' }: Props) => {
   const { connectedPads } = useGamepadSelection();
-  const { lastPressedGamepadButton } = useGamepads();
   const [last, setLast] = useState<{ line: string; at: number } | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
-  // The pad effect is keyed only on the press token, so its closure can hold a
-  // stale board (the `CountdownControl` pattern) — mirror the live describer.
-  const describeRef = useRef(describe);
-  describeRef.current = describe;
-
-  useEffect(() => {
-    if (lastPressedGamepadButton === undefined) return;
-    setLast({ line: describeRef.current(lastPressedGamepadButton.button), at: Date.now() });
+  useGamepads(({ button, at }) => {
+    setLast({ line: describe(button), at });
     setNow(Date.now());
-  }, [lastPressedGamepadButton]);
+  });
 
   useEffect(() => {
     if (last === null || Date.now() - last.at >= AGO_STALE_MS) return;
