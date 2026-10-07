@@ -10,13 +10,11 @@ coverage
 
 # Editor directories and files
 .vscode/*
-!.vscode/settings.json
 !.vscode/extensions.json
 .idea
 *.DS_Store
 
 server/lib
-server/token-generator.sh
 .vscode/settings.json
 
 web/.env.development

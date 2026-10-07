@@ -22,10 +22,10 @@ stayed isolated past a rollback buffer.
 **Usage** (run from anywhere; the script cd's into `server/` for the CDK app):
 
 ```bash
-# Dry run, both regions — prints what would be reclaimed, changes nothing:
+# Dry run, all three regions — prints what would be reclaimed, changes nothing:
 node scripts/maintenance/gcBootstrapAssets.mjs
 
-# Actually reclaim (both regions):
+# Actually reclaim (all three regions):
 node scripts/maintenance/gcBootstrapAssets.mjs --delete
 
 # One environment only:
@@ -36,7 +36,7 @@ Defaults are conservative: **dry-run unless `--delete`**, a 30-day rollback buff
 (`--rollback-buffer-days`) and a 7-day created buffer (`--created-buffer-days`) so
 recent and recently-isolated assets are never touched. Needs `AWS_PROFILE` — from
 the repo-root `.env.deploy`, the shell, or `--profile` per run — with access to
-both regions. `cdk gc` is still experimental, hence
+all three regions (eu-central-2 backend, eu-central-1 web, us-east-1 billing). `cdk gc` is still experimental, hence
 the `--unstable=gc` flag inside the script.
 
 **Cadence.** There's no urgency — bootstrap-bucket storage is cheap. Run it
@@ -46,18 +46,23 @@ size becomes noticeable. It is safe to run the dry run any time.
 ## `renameCompId.mjs` — rename a competition's `compId`
 
 **Why a script.** `compId` is the DynamoDB partition key (`COMP#<id>`) for _every_
-item in a competition (META / athletes / times / matches / scores), is stored
+item in a competition (META / athletes / times / matches / scores / manager
+grants), is stored
 again as a plain `compId` attribute on each, and is baked into every athlete's S3
 photo key (`photos/<compId>/<hash>.ext`). DynamoDB can't mutate a primary key in
 place and there is no rename API, so a rename is a copy-the-whole-partition-to-a-
 new-key migration plus a matching S3 object copy — run directly against DynamoDB
-and S3.
+and S3. Each manager's reverse grant row (`USER#<sub>` / `COMP#<id>`, outside the
+partition) moves with it, so granted managers keep the comp in their list.
 
 **Safety model** (like decommission / `gcBootstrapAssets`): **dry-run unless
-`--yes`**; refuses to clobber a target that already holds items; **copy → verify
+`--yes`**; refuses to clobber a target holding anything but a prior copy of this
+same rename; **copy → verify
 → optional sweep** — the source is left intact unless you pass `--delete-source`,
 so you can eyeball the renamed comp in `/admin` first; idempotent (Put/CopyObject
-overwrite), so a re-run after a partial failure is safe.
+overwrite), so a re-run after a partial failure is safe. Writes to the old comp
+between the copy and the sweep are not carried over, so run it outside a live
+event.
 
 **Usage:**
 

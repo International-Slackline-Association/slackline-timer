@@ -1,10 +1,12 @@
 // Rename a competition's compId across the prod data plane.
 //
 // No API route can: compId is the partition key (`COMP#<id>`) of every item in
-// the competition, a plain `compId` attribute on each, and part of each photo key
-// (`photos/<compId>/<hash>.ext`). A key can't be mutated in place, so this is a
-// copy-the-partition migration plus an S3 object copy, run directly against
-// DynamoDB + S3.
+// the competition (manager grants included), a plain `compId` attribute on each,
+// and part of each photo key (`photos/<compId>/<hash>.ext`). A key can't be
+// mutated in place, so this is a copy-the-partition migration plus an S3 object
+// copy, run directly against DynamoDB + S3. Outside the partition it also moves
+// each manager's reverse grant row (USER#<sub> / COMP#<id>), so granted managers
+// keep the comp in their list.
 //
 // What it does NOT touch, and why:
 //   - Relay table (`…-relay-prod`): ephemeral connection rows that expire after
@@ -16,12 +18,15 @@
 //
 // Safety model (mirrors decommission/gc + seedRemote):
 //   - DRY RUN by default: prints the plan, writes nothing. Pass --yes to execute.
-//   - Never clobbers: aborts if the target partition already holds any item.
+//   - Never clobbers: aborts if the target partition holds anything other than a
+//     prior (possibly partial) copy of this same rename.
 //   - Copy → verify → (optional) sweep. The source is LEFT INTACT unless you pass
 //     --delete-source, so you can sanity-check the renamed comp in the admin UI
 //     first, then re-run with --delete-source to remove the old partition.
 //   - Idempotent: copy uses Put/CopyObject (overwrite), so a re-run after a
 //     partial failure is safe.
+//   - Between the copy and the sweep, writes to the OLD comp are not carried
+//     over: freeze it (no live event) before running.
 //
 // Flags:
 //   --from <id>        source compId (required)
@@ -42,7 +47,12 @@
 // chain. Expired SSO? `aws sso login --profile <p>` first.
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { BatchWriteCommand, DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  BatchWriteCommand,
+  DynamoDBDocumentClient,
+  GetCommand,
+  QueryCommand,
+} from '@aws-sdk/lib-dynamodb';
 import {
   CopyObjectCommand,
   DeleteObjectsCommand,
@@ -51,6 +61,7 @@ import {
 } from '@aws-sdk/client-s3';
 
 import { loadProfileCreds, parseArgs, resolveProfile, runMain } from '../lib/awsCli.mjs';
+import { compPk, isPriorCopy, photoPrefix, planRename } from './lib/renamePlan.mjs';
 
 const DEFAULTS = {
   region: 'eu-central-2',
@@ -59,8 +70,6 @@ const DEFAULTS = {
 };
 
 const COMP_ID_RE = /^[A-Za-z0-9_-]{1,64}$/; // must match validateCompetitionInput
-const compPk = (id) => `COMP#${id}`;
-const photoPrefix = (id) => `photos/${id}/`;
 const chunk = (arr, n) =>
   Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 
@@ -155,9 +164,18 @@ runMain(async () => {
       `source partition ${compPk(from)} has ${source.length} item(s) but no META — refusing (not a competition?).`,
     );
   }
-  if (targetExisting.length > 0) {
+  const oldPrefix = photoPrefix(from);
+  const { newItems, photoMoves, foreignPhotos, reverseGrants } = planRename(source, from, to, {
+    skipPhotos,
+  });
+  if (targetExisting.length > 0 && !isPriorCopy(targetExisting, newItems)) {
     throw new Error(
-      `target '${to}' already holds ${targetExisting.length} item(s) — refusing to clobber. Pick a fresh compId.`,
+      `target '${to}' already holds ${targetExisting.length} item(s) that are not a copy of '${from}' — refusing to clobber. Pick a fresh compId.`,
+    );
+  }
+  if (targetExisting.length > 0) {
+    console.log(
+      `Target '${to}' holds a prior copy of '${from}' (${targetExisting.length} item(s)); resuming.\n`,
     );
   }
 
@@ -169,19 +187,6 @@ runMain(async () => {
   console.log(`Source ${compPk(from)} holds ${source.length} item(s):`);
   for (const [kind, n] of Object.entries(byKind).sort()) console.log(`  ${kind.padEnd(8)} ${n}`);
 
-  // --- plan photo moves -------------------------------------------------------
-  const oldPrefix = photoPrefix(from);
-  const photoMoves = []; // { oldKey, newKey }
-  let foreignPhotos = 0;
-  for (const item of source) {
-    const key = item.photoKey;
-    if (typeof key !== 'string' || key.length === 0) continue;
-    if (key.startsWith(oldPrefix)) {
-      photoMoves.push({ oldKey: key, newKey: photoPrefix(to) + key.slice(oldPrefix.length) });
-    } else {
-      foreignPhotos += 1; // photoKey not under this comp's prefix — leave untouched
-    }
-  }
   if (!skipPhotos) {
     console.log(
       `\nPhotos: ${photoMoves.length} object(s) to copy under ${photoPrefix(to)}` +
@@ -195,17 +200,9 @@ runMain(async () => {
     );
   }
 
-  // --- build rewritten items --------------------------------------------------
-  // Rewrite PK + the self-describing `compId` attribute on every item; rewrite
-  // photoKey too unless photos are being left in place.
-  const rewritePhoto = !skipPhotos && photoMoves.length > 0;
-  const newItems = source.map((item) => {
-    const next = { ...item, PK: compPk(to), compId: to };
-    if (rewritePhoto && typeof item.photoKey === 'string' && item.photoKey.startsWith(oldPrefix)) {
-      next.photoKey = photoPrefix(to) + item.photoKey.slice(oldPrefix.length);
-    }
-    return next;
-  });
+  if (reverseGrants.length) {
+    console.log(`\nManager grants: ${reverseGrants.length} reverse row(s) to move to '${to}'.`);
+  }
 
   if (!commit) {
     console.log(
@@ -219,7 +216,7 @@ runMain(async () => {
   await batchWrite(
     ddb,
     table,
-    newItems.map((Item) => ({ PutRequest: { Item } })),
+    [...newItems, ...reverseGrants.map((g) => g.put)].map((Item) => ({ PutRequest: { Item } })),
   );
 
   // --- copy S3 photos ---------------------------------------------------------
@@ -243,6 +240,12 @@ runMain(async () => {
       `verify FAILED: source had ${source.length} item(s) but target has ${target.length}. Source left intact — inspect before retrying.`,
     );
   }
+  for (const { put } of reverseGrants) {
+    const res = await ddb.send(
+      new GetCommand({ TableName: table, Key: { PK: put.PK, SK: put.SK } }),
+    );
+    if (!res.Item) throw new Error(`verify FAILED: reverse grant ${put.PK} / ${put.SK} missing.`);
+  }
   if (!skipPhotos) {
     for (const { newKey } of photoMoves) {
       await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: newKey })); // throws if missing
@@ -250,6 +253,7 @@ runMain(async () => {
   }
   console.log(
     `Verified: ${target.length} item(s)` +
+      (reverseGrants.length ? ` + ${reverseGrants.length} reverse grant(s)` : '') +
       (skipPhotos ? '' : ` + ${photoMoves.length} photo(s)`) +
       ` present under '${to}'.`,
   );
@@ -267,7 +271,9 @@ runMain(async () => {
     await batchWrite(
       ddb,
       table,
-      source.map((i) => ({ DeleteRequest: { Key: { PK: i.PK, SK: i.SK } } })),
+      [...source.map((i) => ({ PK: i.PK, SK: i.SK })), ...reverseGrants.map((g) => g.oldKey)].map(
+        (Key) => ({ DeleteRequest: { Key } }),
+      ),
     );
     if (!skipPhotos && photoMoves.length) {
       for (const group of chunk(photoMoves, 1000)) {

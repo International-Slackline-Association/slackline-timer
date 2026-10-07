@@ -20,7 +20,6 @@ import {
 } from 'app/theme/tokens';
 import { refVh } from 'app/util/overlayScale';
 import {
-  BRACKET_SLOTS,
   type NameLabel,
   nameTreeLayout,
   profileTreeLayout,
@@ -424,13 +423,9 @@ const NamePlateBody = ({ athlete, isWinner }: { athlete: Athlete; isWinner: bool
             // `AthleteCard` already makes. The plate's inset ring stays
             // `race.go`: it sits on the stroke, not the white fill.
             accent={isWinner ? colors.race.goDim : undefined}
-            sx={{ color: colors.overlay.nameInk, lineHeight: 1 }}
           />
         </Box>
       </Box>
     </>
   );
 };
-
-/** Re-export for callers that want the slot list (e.g. tests). */
-export { BRACKET_SLOTS };
