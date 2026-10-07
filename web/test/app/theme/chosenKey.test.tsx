@@ -21,7 +21,7 @@ import { colors } from 'app/theme/tokens';
  * lands on it in both states, since MUI's own selected look wins wherever the
  * theme is silent.
  */
-describe('the mode toggle’s chosen key (FREESTYLE_BOARD_UX §6)', () => {
+describe('the mode toggle’s chosen key (freestyle-board-ux §6)', () => {
   const renderThemed = (ui: ReactElement) =>
     render(<ThemeProvider theme={telemetryTheme}>{ui}</ThemeProvider>);
 

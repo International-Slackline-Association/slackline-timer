@@ -1168,7 +1168,7 @@ describe.each([
   });
 });
 
-describe('useControlSession peer presence (FREESTYLE_BOARD_UX §3/§4.10)', () => {
+describe('useControlSession peer presence (freestyle-board-ux §3/§4.10)', () => {
   /** Deliver an incoming peer message (see `receive`). */
   const deliver = receive;
 

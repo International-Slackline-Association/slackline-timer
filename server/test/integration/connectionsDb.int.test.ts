@@ -89,7 +89,7 @@ describe.skipIf(!reachable)('connections db integration', () => {
     ]);
   });
 
-  it('returns null for an unmapped connection (predating the map, or TTL-expired)', async () => {
+  it('returns null for an unmapped connection (duplicate disconnect, pruned, or TTL-expired)', async () => {
     expect(await db.getConnectionSession(newConn())).toBeNull();
   });
 
@@ -132,8 +132,8 @@ describe.skipIf(!reachable)('connections db integration', () => {
       new DeleteCommand({ TableName: TIMER_TABLE, Key: { PK: `CONN#${connectionId}`, SK: 'MAP' } }),
     );
 
-    // A socket opened before the map existed must not lose its heartbeat and get
-    // evicted from a live room 20 min later.
+    // A lost map item must not cost the socket its forward heartbeat (and an
+    // eviction from a live room 20 min later).
     await expect(db.refreshConnectionTtl({ sessionId, connectionId })).resolves.toBeUndefined();
     expect(await db.getConnection({ sessionId, connectionId })).not.toBeNull();
     expect(await readMapItem(connectionId)).toBeUndefined();

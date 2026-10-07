@@ -37,7 +37,7 @@ describe('StopwatchControl lane labelling', () => {
   // The page owns the interlock table (`speedlineLocks`), so the column asks it
   // rather than re-deciding from the lane state next to it — one answer for the
   // button, the why-line and the handset guard.
-  it("follows the page's lock, and prints it (FREESTYLE_BOARD_UX §4.7)", () => {
+  it("follows the page's lock, and prints it (freestyle-board-ux §4.7)", () => {
     const { rerender } = render(
       <StopwatchControl id={1} laneState={{ kind: 'idle' }} stop={noop} lock={IDLE_LOCK} />,
     );
@@ -64,7 +64,7 @@ describe('StopwatchControl lane labelling', () => {
 
 // The Speedline board speaks the Freestyle board's control dialect
 // (freestyle-board-ux §6, the P3 sibling note).
-describe('StopwatchControl live-control contract (FREESTYLE_BOARD_UX §6)', () => {
+describe('StopwatchControl live-control contract (freestyle-board-ux §6)', () => {
   it('sizes Stop at the 56 px race target', () => {
     render(<StopwatchControl id={1} laneState={{ kind: 'idle' }} stop={noop} lock={IDLE_LOCK} />);
     const style = window.getComputedStyle(stop(1));

@@ -94,7 +94,7 @@ const PAIRS: [surface: string, ground: string, foreground: string, min: number][
   ['setDim break numeral on the canvas', surface.canvas, race.setDim, 3],
 ];
 
-describe('live-path contrast (FREESTYLE_BOARD_UX §6)', () => {
+describe('live-path contrast (freestyle-board-ux §6)', () => {
   it.each(PAIRS)('%s clears its floor', (_surface, ground, foreground, min) => {
     expect(ratio(ground, foreground)).toBeGreaterThanOrEqual(min);
   });

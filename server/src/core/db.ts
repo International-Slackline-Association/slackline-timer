@@ -89,8 +89,9 @@ const addConnection = async (params: {
 
 /**
  * Resolve a connection's session from the reverse map. Null when the item is gone
- * (a socket predating this mapping, or already expired/pruned) — the caller then
- * has no key to delete by and leaves the forward row to its TTL.
+ * (a duplicate $disconnect, rows already 410-pruned, or a map item that
+ * TTL-expired after failed heartbeats) — the caller then has no key to delete by
+ * and leaves the forward row to its TTL.
  */
 const getConnectionSession = async (connectionId: string): Promise<string | null> => {
   const result = await ddb.send(
@@ -105,8 +106,7 @@ const getConnectionSession = async (connectionId: string): Promise<string | null
 
 /**
  * Heartbeat a live connection's TTL from the keepalive ping — forward row and map
- * item together, so the map can't expire out from under a socket that is still
- * open. Both updates are guarded by attribute_exists(PK) so neither is ever
+ * item, so the map normally shares the forward row's TTL. Both updates are guarded by attribute_exists(PK) so neither is ever
  * recreated: a ping arriving after the rows TTL-expired or were 410-pruned must
  * NOT resurrect them — a revived forward row is a phantom in every fan-out and
  * would lose its `readOnly` flag (letting an overlay inject), and a revived map
@@ -126,9 +126,11 @@ const refreshConnectionTtl = async (params: { sessionId: string; connectionId: s
       }),
     );
   // Forward row first, and its failure propagates: a ping naming a session the
-  // socket is not in fails here and never reaches the map item. Not
-  // transactional, as the map item may legitimately be absent (a socket
-  // predating it) and only the forward row's heartbeat keeps a live socket.
+  // socket is not in fails here and never reaches the map item. Two plain
+  // updates, not a transaction: half the WRU per ping (ADR 0050), and a failed
+  // map refresh must not drop the forward heartbeat — a lost map item only sends
+  // this socket's $disconnect to TTL cleanup, a lost forward row evicts a live
+  // socket from the fan-out.
   await refresh({ PK: params.sessionId, SK: params.connectionId });
   await refresh({ PK: connectionMapPk(params.connectionId), SK: CONNECTION_MAP_SK }).catch(
     () => {},

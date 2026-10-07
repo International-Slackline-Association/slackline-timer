@@ -153,7 +153,7 @@ const frameFootprint = (frame: HTMLElement): number => {
 
 const held: LaneState = { phase: 'idle', budgetMs: 88_000, armedMs: BUDGET, breaksLeft: 2 };
 
-describe('CountdownControl state word (FREESTYLE_BOARD_UX §3/§6)', () => {
+describe('CountdownControl state word (freestyle-board-ux §3/§6)', () => {
   // The squint test: at 25 % scale the word, not the digits, names the state.
   it.each([
     ['idle', lane('idle'), 'READY'],
@@ -172,7 +172,7 @@ describe('CountdownControl state word (FREESTYLE_BOARD_UX §3/§6)', () => {
   });
 });
 
-describe('CountdownControl frame tiers (FREESTYLE_BOARD_UX §6)', () => {
+describe('CountdownControl frame tiers (freestyle-board-ux §6)', () => {
   it('strokes an armed lane thin and neutral', () => {
     render(<CountdownControl {...baseProps} lane={lane('idle')} />);
     const frame = window.getComputedStyle(clockFrame());
@@ -210,7 +210,7 @@ describe('CountdownControl frame tiers (FREESTYLE_BOARD_UX §6)', () => {
   });
 });
 
-describe('CountdownControl live-control contract (FREESTYLE_BOARD_UX §6)', () => {
+describe('CountdownControl live-control contract (freestyle-board-ux §6)', () => {
   const minHeight = (button: HTMLElement): number => px(window.getComputedStyle(button).minHeight);
 
   it('sizes Start and Stop at the 56 px race target and the aux controls at 44', () => {
@@ -266,7 +266,7 @@ describe('CountdownControl live-control contract (FREESTYLE_BOARD_UX §6)', () =
   });
 });
 
-describe('CountdownControl transport row geometry (FREESTYLE_BOARD_UX §6)', () => {
+describe('CountdownControl transport row geometry (freestyle-board-ux §6)', () => {
   /** §6's race target: the width half of `≥56 × 120`. */
   const RACE_RESERVE_PX = 120;
 
@@ -381,7 +381,7 @@ describe('CountdownControl aux slot (the green handset key, §4.14)', () => {
   });
 });
 
-describe('CountdownControl identity row (FREESTYLE_BOARD_UX §2)', () => {
+describe('CountdownControl identity row (freestyle-board-ux §2)', () => {
   const identity = () => screen.getByTestId('lane-identity');
 
   it('renders the assigned athlete name beside the player label', () => {
@@ -808,7 +808,7 @@ describe('CountdownControl battle mode', () => {
 const blockerOf = (button: HTMLElement): string | null =>
   button.parentElement?.getAttribute('title') ?? null;
 
-describe('CountdownControl interlocks (FREESTYLE_BOARD_UX §4.7)', () => {
+describe('CountdownControl interlocks (freestyle-board-ux §4.7)', () => {
   it('goes inert while a best-trick series is armed, Reset included', () => {
     render(<CountdownControl {...baseProps} lane={lane('idle')} bestTrickArmed />);
 

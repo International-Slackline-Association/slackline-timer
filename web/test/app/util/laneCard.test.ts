@@ -46,7 +46,7 @@ const ROWS: [label: string, lane: LaneState, expected: LaneCardState][] = [
   ],
 ];
 
-describe('laneCardState (FREESTYLE_BOARD_UX §3/§6)', () => {
+describe('laneCardState (freestyle-board-ux §3/§6)', () => {
   it.each(ROWS)('reads %s', (_label, lane, expected) => {
     expect(laneCardState(lane)).toEqual(expected);
   });

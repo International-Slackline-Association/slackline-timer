@@ -82,8 +82,8 @@ describe('db.refreshConnectionTtl', () => {
   });
 
   it('surfaces a failed forward refresh but tolerates a missing map item', async () => {
-    // Map item absent (a socket predating the mapping): the forward row is what
-    // the fan-out reads, so its heartbeat must still count as success.
+    // Map refresh failed or the map item is gone: the forward row is what the
+    // fan-out reads, so its heartbeat must still count as success.
     sendMock.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('condition failed'));
     await expect(
       db.refreshConnectionTtl({ sessionId: 's1', connectionId: 'conn-1' }),

@@ -527,7 +527,7 @@ describe('SpeedlineControlPage clocks on a down link', () => {
 // The live-path control contract the Freestyle board taught the operator
 // (freestyle-board-ux §6 + the §7 P3 sibling note): one dialect across both
 // desks, so a hand trained on one finds Start/Stop/Reset on the other.
-describe('SpeedlineControlPage live-control contract (FREESTYLE_BOARD_UX §6)', () => {
+describe('SpeedlineControlPage live-control contract (freestyle-board-ux §6)', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
     playAudioMock.mockReset();
@@ -603,7 +603,7 @@ describe('SpeedlineControlPage live-control contract (FREESTYLE_BOARD_UX §6)', 
 // C06 on the second desk: a dead control says what it is waiting for, printed
 // on the board rather than left to the operator to guess (freestyle-board-ux
 // §4.7 + §7's P3 sibling note).
-describe('SpeedlineControlPage lock why-lines (FREESTYLE_BOARD_UX §4.7)', () => {
+describe('SpeedlineControlPage lock why-lines (freestyle-board-ux §4.7)', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
     playAudioMock.mockReset();
@@ -693,7 +693,7 @@ describe('SpeedlineControlPage lock why-lines (FREESTYLE_BOARD_UX §4.7)', () =>
 // §4.8 on the second desk: while a question stands it owns the board, and the
 // handset — the one path that reaches the transport from behind a modal
 // backdrop — waits with everything else.
-describe('SpeedlineControlPage handset behind a question (FREESTYLE_BOARD_UX §4.8)', () => {
+describe('SpeedlineControlPage handset behind a question (freestyle-board-ux §4.8)', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
     playAudioMock.mockReset();

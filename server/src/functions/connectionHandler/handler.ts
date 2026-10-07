@@ -35,9 +35,9 @@ export const main: APIGatewayProxyHandler = async (event) => {
     try {
       const sessionId = await db.getConnectionSession(connectionId);
       if (!sessionId) {
-        // A socket predating the map, a duplicate $disconnect, or rows already
-        // expired/410-pruned: nothing is addressable by key, so the TTL is the
-        // backstop. Never an error — this route has no client to report one to.
+        // A duplicate $disconnect, rows already 410-pruned, or a map item that
+        // TTL-expired after failed heartbeats: nothing is addressable by key, so
+        // the TTL is the backstop. Never an error — this route has no client to report one to.
         console.log(`disconnect: no session mapping for ${connectionId}, leaving it to the TTL`);
         return { statusCode: 200, body: 'Disconnected.' };
       }
