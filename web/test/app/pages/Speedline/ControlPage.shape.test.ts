@@ -6,12 +6,11 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * The board reports one link, graded by the socket's owner (`useLinkPhase`, via
- * `useControlSession`). Nothing behavioural can catch a regression here — `open`
- * and `ReadyState.OPEN` are the same instant by construction — but a second
- * reading of the same socket is how the two boards' health surfaces drifted
- * apart in the first place (`fsux-followup-tally-plate-2`): a page that grades
- * `readyState` itself can gate its controls on a phase its own header never
- * reports.
+ * `useControlSession`). Nothing behavioural can catch a regression here —
+ * `open` and `ReadyState.OPEN` are the same instant by construction — but a
+ * second reading of the same socket lets the two boards' health surfaces drift:
+ * a page that grades `readyState` itself can gate its controls on a phase its
+ * own header never reports.
  */
 const SOURCE_PATH = 'src/app/pages/Speedline/ControlPage.tsx';
 

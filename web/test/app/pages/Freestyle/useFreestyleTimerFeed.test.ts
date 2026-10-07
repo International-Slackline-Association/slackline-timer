@@ -128,12 +128,12 @@ describe('nextRecovery', () => {
   });
 });
 
-// xmode-freestyle-preview-foreign-snapshot: `compId` doubles as BOTH modes'
-// relay session, so a Speedline control sharing the room answers this display's
-// `request_state` too — with a payload that is structurally none of the
-// countdown shapes. The discipline guard belongs to the feed, once, rather than
-// to each clock; the rendered consequence (both lane clocks holding their armed
-// budget) is pinned in FreestyleTimerDisplay.test.tsx.
+// `compId` doubles as BOTH modes' relay session, so a Speedline control sharing
+// the room answers this display's `request_state` too — with a payload that is
+// structurally none of the countdown shapes. The discipline guard belongs to
+// the feed, once, rather than to each clock; the rendered consequence (both
+// lane clocks holding their armed budget) is pinned in
+// FreestyleTimerDisplay.test.tsx.
 describe('clockFeedMessage', () => {
   const SESSION = 'worlds-2026';
 

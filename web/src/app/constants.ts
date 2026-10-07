@@ -21,20 +21,15 @@ const required = (name: string, value: string | undefined): string => {
   return value;
 };
 
-// Offline escape hatch (VITE_APP_LOCAL_DEV=true in web/.env.development): skips
-// Cognito sign-in / group checks and connects to the relay with a dummy token,
-// so the UI can be driven against the local backend (harnesses + LocalStack).
-// The real security boundary is the $connect authorizer, but this removes the
-// UI gate and sends a fake Authorization token — `vite build` refuses a bundle
-// with it set.
+// Offline escape hatch (VITE_APP_LOCAL_DEV=true in web/.env.development): the
+// `app/auth` seam swaps in a render-through gate and a dummy token the local
+// backend's offline authorizers accept. `vite build` refuses a bundle with it set.
 export const LOCAL_DEV = import.meta.env.VITE_APP_LOCAL_DEV === 'true';
 
 /**
- * LOCAL_DEV swaps out the whole Cognito path (`PassthroughGate` + a dummy
- * token — see `app/auth`), so a local run has no pool to name. The exemption
- * cannot reach a deployed bundle: `vite build` refuses both
- * VITE_APP_LOCAL_DEV=true and any missing key, so a real bundle always takes
- * the `required` branch.
+ * A LOCAL_DEV run never touches Cognito, so it has no pool to name. The
+ * exemption cannot reach a deployed bundle: `vite build` refuses both
+ * VITE_APP_LOCAL_DEV=true and any missing key.
  */
 const cognitoConfig = (name: string, value: string | undefined): string =>
   LOCAL_DEV ? (value ?? '') : required(name, value);
@@ -63,7 +58,7 @@ export const COGNITO_DOMAIN = cognitoConfig(
   import.meta.env.VITE_APP_COGNITO_DOMAIN,
 );
 
-// The group allowed to operate the timer. Must match COGNITO_TIMER_GROUP on the server.
+// The superadmin group (ADR 0045). Must match COGNITO_TIMER_GROUP on the server.
 export const TIMER_GROUP = cognitoConfig(
   'VITE_APP_COGNITO_TIMER_GROUP',
   import.meta.env.VITE_APP_COGNITO_TIMER_GROUP,

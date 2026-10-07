@@ -120,11 +120,11 @@ const laneAthletesMessage = (
   },
 });
 
-// A fresh display starts on the warm-up (athlete-display-warmup-default), which
-// on this band surface occupies lane 1's left-corner slot alone — the athlete
-// lane row only shows once warm-up ends. Stopping the warm-up channel (timerId
-// 0) hands off to the lanes without touching lane state, so tests that assert on
-// the lane band open past this first.
+// A fresh display starts on the warm-up, which on this band surface occupies
+// lane 1's left-corner slot alone — the athlete lane row only shows once
+// warm-up ends. Stopping the warm-up channel (timerId 0) hands off to the lanes
+// without touching lane state, so tests that assert on the lane band open past
+// this first.
 const endWarmupMessage: CountdownWSMessage = {
   sessionId: 'worlds-2026',
   type: 'stop_countdown',
@@ -154,7 +154,7 @@ describe('FreestyleTimerDisplay lane athlete banners', () => {
   });
 
   // The /stream/timer-freestyle OBS overlay mounts the same display via the
-  // `broadcast` variant — the banner path must light up there too (STATUS smoke).
+  // `broadcast` variant — the banner path must light up there too.
   it('renders the two lane banners on the broadcast overlay variant', () => {
     renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'broadcast');
 
@@ -178,8 +178,8 @@ describe('FreestyleTimerDisplay lane athlete banners', () => {
     expect(screen.queryByText('Jane')).not.toBeInTheDocument();
   });
 
-  // Lane athletes are intentionally NOT cleared on reset_countdown (the
-  // selection persists across runs of the same run).
+  // Lane athletes are NOT cleared on reset_countdown (the selection persists
+  // across runs of the same run).
   it('keeps the banners through a reset_countdown', () => {
     renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
 
@@ -295,10 +295,10 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
     );
   });
 
-  // STATUS athlete-display-warmup-default: the shared feed holds the warm-up
-  // phase until it finishes or a competition action takes over, so a display the
-  // room has seeded shows the pending warm-up (not only one that already
-  // started) — here off the operator's re-arm.
+  // The shared feed holds the warm-up phase until it finishes or a competition
+  // action takes over, so a display the room has seeded shows the pending
+  // warm-up (not only one that already started) — here off the operator's
+  // re-arm.
   it('shows the pending warm-up slot once the room seeds it', () => {
     renderDisplay();
     deliverFrames({
@@ -312,10 +312,10 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
     expect(screen.getByText('05:00')).toBeInTheDocument();
   });
 
-  // fsux-preview-warmup-seed: OPEN and preview-enabled, but nothing has arrived
-  // — no snapshot, no countdown message. The band paints EMPTY rather than the
-  // defaults' fabricated `WARM-UP 00:00`: on air a wrong number is worse than
-  // none, and the gap is what tells the operator to look.
+  // OPEN and preview-enabled, but nothing has arrived — no snapshot, no
+  // countdown message. The band paints EMPTY rather than the defaults'
+  // fabricated `WARM-UP 00:00`: on air a wrong number is worse than none, and
+  // the gap is what tells the operator to look.
   it('renders no clock at all while the surface is unseeded', () => {
     renderDisplay();
 
@@ -323,12 +323,12 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
     expect(screen.queryByText('00:00')).not.toBeInTheDocument();
   });
 
-  // broadcast-warmup-hero-shows-zero-precompetition: a late-joining display
-  // recovers the pending (armed, not-yet-started) warm-up budget from the
-  // control's state_snapshot and shows the real time-to-go — not "00:00", which
-  // on-air reads as an already-expired warm-up. The snapshot carries the idle
-  // warm-up's armed remainingMs (buildCountdownSnapshot with isRunning:false), the
-  // feed maps it into recovery[0], and the warm-up slot's Countdown renders it.
+  // A late-joining display recovers the pending (armed, not-yet-started)
+  // warm-up budget from the control's state_snapshot and shows the real
+  // time-to-go — not "00:00", which on-air reads as an already-expired warm-up.
+  // The snapshot carries the idle warm-up's armed remainingMs
+  // (buildCountdownSnapshot with isRunning:false), the feed maps it into
+  // recovery[0], and the warm-up slot's Countdown renders it.
   it('shows the armed warm-up budget from a pre-competition snapshot (not 00:00)', () => {
     renderDisplay();
 
@@ -352,8 +352,8 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
     expect(screen.queryByText('00:00')).not.toBeInTheDocument();
   });
 
-  // preview-warmup-only-clock: during warm-up the band shows ONLY the warm-up
-  // slot — the athlete lane row (clocks + banners) must not leak beside it.
+  // During warm-up the band shows ONLY the warm-up slot — the athlete lane row
+  // (clocks + banners) must not leak beside it.
   it('hides the athlete lane row while the warm-up slot is active', () => {
     renderDisplay('projector');
     deliverFrames({
@@ -389,8 +389,8 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
 
-  // STATUS athlete-display-post-warmup-handoff: the shared feed hands off to the
-  // lanes when the warm-up ENDS (stopped or run out), not only on the next run.
+  // The shared feed hands off to the lanes when the warm-up ENDS (stopped or
+  // run out), not only on the next run.
   it('drops the warm-up slot when the operator stops the warm-up', () => {
     renderDisplay();
     deliverFrames({
@@ -411,15 +411,14 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
     expect(screen.queryByText('Warm-up')).not.toBeInTheDocument();
   });
 
-  // The frozen-02:00 regression (realtime-recovery freestyle-family): a fresh
-  // preview recovers IDLE lane rows from the join-time snapshot while the
-  // warm-up slot owns the band (the lane clocks are unmounted). When the
-  // operator then starts a lane directly (warm-up never run — the everyday
-  // flow), the lane clock mounts on that very message; on mount BOTH inputs
-  // apply in declaration order — live message first, recovery last — so the
-  // stale idle row would clobber the live start and the clock sits frozen at the
-  // armed budget for the whole run. The feed must drop a lane's recovered row
-  // when a live lane message supersedes it.
+  // The frozen-02:00 regression: a fresh preview recovers IDLE lane rows from
+  // the join-time snapshot while the warm-up slot owns the band (the lane
+  // clocks are unmounted). When the operator then starts a lane directly
+  // (warm-up never run — the everyday flow), the lane clock mounts on that very
+  // message; on mount BOTH inputs apply in declaration order — live message
+  // first, recovery last — so the stale idle row would clobber the live start
+  // and the clock sits frozen at the armed budget for the whole run. The feed
+  // must drop a lane's recovered row when a live lane message supersedes it.
   it('mounts the lane clock ticking when a run starts under the warm-up slot (stale recovery dropped)', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -489,10 +488,9 @@ describe('FreestyleTimerDisplay warm-up band slot', () => {
   });
 });
 
-// fsux-preview-warmup-seed: snapshot-vs-live precedence is PER CHANNEL. One
-// board-wide "something spoke" flag threw the whole recovery away, so a
-// `Set both lanes` reset on a performance lane discarded the warm-up row that
-// was the only thing standing between the projector and a fabricated
+// Snapshot-vs-live precedence is PER CHANNEL: with one board-wide "something
+// spoke" flag, a `Set both lanes` reset on a performance lane would discard the
+// warm-up row — the only thing standing between the projector and a fabricated
 // `WARM-UP 00:00`.
 describe('FreestyleTimerDisplay per-channel snapshot seeding', () => {
   const resetLane = (timerId: number, remainingMs: number): CountdownWSMessage => ({
@@ -576,12 +574,12 @@ describe('FreestyleTimerDisplay per-channel snapshot seeding', () => {
   });
 });
 
-// fsux-preview-surface-peer-snapshot: `request_state` is answered to the WHOLE
-// room, so most snapshots a long-lived projector receives answer somebody else's
-// join. The SURFACE is therefore seeded once per socket, by the first evidence to
-// arrive, and only live messages move it thereafter — otherwise opening a second
-// control panel between matches (lanes pristine, so `competitionBusy` is false)
-// flips every projector in the venue back to `WARM-UP 05:00`.
+// `request_state` is answered to the WHOLE room, so most snapshots a long-lived
+// projector receives answer somebody else's join. The SURFACE is therefore
+// seeded once per socket, by the first evidence to arrive, and only live
+// messages move it thereafter — otherwise opening a second control panel
+// between matches (lanes pristine, so `competitionBusy` is false) flips every
+// projector in the venue back to `WARM-UP 05:00`.
 describe('FreestyleTimerDisplay surface seeding (once per socket)', () => {
   afterEach(() => {
     readyState.current = 1;
@@ -640,11 +638,11 @@ describe('FreestyleTimerDisplay surface seeding (once per socket)', () => {
   });
 });
 
-// fsux-preview-lane-remount-seed: the lane Countdowns are unmounted while the
-// warm-up hero holds the band, so the arm messages that precede the first Start
-// land with nothing to apply them to — and a fresh mount cannot replay them. The
-// feed keeps each lane's row refreshed from its own last message, the way the
-// try channel already does, so the mount seeds from it.
+// The lane Countdowns are unmounted while the warm-up hero holds the band, so
+// the arm messages that precede the first Start land with nothing to apply them
+// to — and a fresh mount cannot replay them. The feed keeps each lane's row
+// refreshed from its own last message, the way the try channel already does, so
+// the mount seeds from it.
 describe('FreestyleTimerDisplay lane row refresh', () => {
   const laneMessage = (
     type: 'start_countdown' | 'reset_countdown',
@@ -716,12 +714,12 @@ describe('FreestyleTimerDisplay best-trick band', () => {
     );
 
     // Both lanes' banners carry their own "Best Trick <tries>/<cap>" for the
-    // whole session (only the clock follows the turn); the old centre tally
-    // (which duplicated the athlete names) is gone.
+    // whole session (only the clock follows the turn); no centre tally
+    // duplicates the athlete names.
     expect(screen.getByText('Best Trick 2/5')).toBeInTheDocument();
     expect(screen.getByText('Best Trick 1/5')).toBeInTheDocument();
-    // The match band layout stays up — best trick no longer suppresses the
-    // banners the way the old full-screen hero did.
+    // The match band layout stays up — best trick does not suppress the
+    // banners.
     expect(screen.getByText('Jane')).toBeInTheDocument();
     expect(screen.getByText('John')).toBeInTheDocument();
   });
@@ -810,11 +808,11 @@ describe('FreestyleTimerDisplay best-trick band', () => {
     expect(screen.getByText('00:30')).toBeInTheDocument();
   });
 
-  // The QA-found remount race: the try clock REMOUNTS in the other lane's
-  // column when the turn flips, and the fresh mount can never replay the clock
-  // message that preceded it. The feed keeps recovery[3] refreshed from every
-  // live timerId-3 message (nextRecovery) so the remount seeds the frozen
-  // value instead of resting at the UNSEEDED 00:00.
+  // Remount race: the try clock REMOUNTS in the other lane's column when the
+  // turn flips, and the fresh mount can never replay the clock message that
+  // preceded it. The feed keeps recovery[3] refreshed from every live timerId-3
+  // message (nextRecovery) so the remount seeds the frozen value instead of
+  // resting at the UNSEEDED 00:00.
   it('keeps the try-clock value across a turn flip (remount reseeds from the row)', () => {
     renderPastWarmup(
       bestTrickMessage({ cap: 3, tries: { 1: 0, 2: 0 }, turn: 1, clockRunning: false, rev: 0 }),
@@ -853,10 +851,9 @@ describe('FreestyleTimerDisplay best-trick band', () => {
     expect(screen.queryByText('00:00')).not.toBeInTheDocument();
   });
 
-  // The QA-found reconciliation leak: without distinct keys React repurposes
-  // the try-clock Countdown instance into the lane clock on disarm (same
-  // element type + position), carrying the frozen try remaining across the
-  // timerId swap.
+  // Reconciliation leak: without distinct keys React repurposes the try-clock
+  // Countdown instance into the lane clock on disarm (same element type +
+  // position), carrying the frozen try remaining across the timerId swap.
   it('does not leak the try-clock state into the lane clocks on disarm', () => {
     renderPastWarmup(laneAthletesMessage('a1', 'a2'), 'projector');
 
@@ -908,7 +905,7 @@ describe('FreestyleTimerDisplay best-trick band', () => {
       vi.setSystemTime(2_000);
       vi.advanceTimersToNextTimer();
     });
-    // The expiry label was removed — a timed-out window shows the red 00:00 alone.
+    // A timed-out window shows the red 00:00 alone — no expiry label.
     expect(screen.getByText('00:00')).toBeInTheDocument();
     // The try window's own tone (§4.2 four-tone map), never the run-zero `long`.
     expect(playAudio.mock.calls.filter(([sound]) => sound === 'long')).toHaveLength(0);
@@ -1043,13 +1040,12 @@ describe('FreestyleTimerDisplay audio-muted badge (projector-only)', () => {
   });
 });
 
-// xmode-freestyle-preview-foreign-snapshot: `compId` doubles as BOTH modes'
-// relay session, so a Speedline control sharing the room answers this display's
-// `request_state` too — with a SpeedlineSnapshot, which has no per-lane
-// `remainingMs`. The feed already drops it for STATE (isCountdownSnapshot), but
-// it was still forwarded verbatim as `countdownMessage`, so it reached every
-// lane clock's `message` prop. Pinned here because the band is what the
-// `cross-mode-snapshot` driver leg reads.
+// `compId` doubles as BOTH modes' relay session, so a Speedline control sharing
+// the room answers this display's `request_state` too — with a
+// SpeedlineSnapshot, which has no per-lane `remainingMs`. The feed drops it for
+// STATE (isCountdownSnapshot) and must not forward it as `countdownMessage`
+// either, or it reaches every lane clock's `message` prop. Pinned here because
+// the band is what the `cross-mode-snapshot` driver leg reads.
 describe('FreestyleTimerDisplay cross-mode snapshot tolerance', () => {
   const armedLanes: CountdownWSMessage = {
     sessionId: 'worlds-2026',

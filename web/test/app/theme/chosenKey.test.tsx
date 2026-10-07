@@ -7,7 +7,7 @@ import { telemetryTheme } from 'app/theme/theme';
 import { colors } from 'app/theme/tokens';
 
 /**
- * "The mode toggle's chosen key" (FREESTYLE_BOARD_UX §6) — one pair, live and
+ * "The mode toggle's chosen key" (freestyle-board-ux §6) — one pair, live and
  * locked.
  *
  * MUI paints a selected `color="primary"` key in `primary.main` — the brand

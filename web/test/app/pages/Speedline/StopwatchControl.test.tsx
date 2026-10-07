@@ -63,7 +63,7 @@ describe('StopwatchControl lane labelling', () => {
 });
 
 // The Speedline board speaks the Freestyle board's control dialect
-// (FREESTYLE_BOARD_UX §6, the P3 sibling note).
+// (freestyle-board-ux §6, the P3 sibling note).
 describe('StopwatchControl live-control contract (FREESTYLE_BOARD_UX §6)', () => {
   it('sizes Stop at the 56 px race target', () => {
     render(<StopwatchControl id={1} laneState={{ kind: 'idle' }} stop={noop} lock={IDLE_LOCK} />);

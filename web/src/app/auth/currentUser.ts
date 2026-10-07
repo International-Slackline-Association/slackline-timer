@@ -15,7 +15,7 @@ export interface CurrentUser {
   loading: boolean;
   sub?: string;
   email?: string;
-  /** In the Cognito timer group → may create competitions and manage managers. */
+  /** In the `timeradmin` group (TIMER_GROUP) → may create competitions and manage managers. */
   isSuperadmin: boolean;
 }
 

@@ -1,15 +1,14 @@
 /**
- * The one-button ADVANCE router (FREESTYLE_BOARD_UX §4.1) — one pure decision
+ * The one-button ADVANCE router (freestyle-board-ux §4.1) — one pure decision
  * shared by every trigger and by the board that announces it.
  *
  * `advanceRoute` answers "what does the next press do?" as data: the machine to
  * dispatch into plus the event, or an explicit no-op with its reason.
  * `advanceLabel` renders that same decision for the operator. Because the press
  * and the plate read ONE function, the board cannot promise something the press
- * does not do — the failure the old split invited, where the page cued a beep
- * and then discovered there was nothing to advance.
+ * does not do (S12).
  *
- * Design notes (HSM rules):
+ * Design notes:
  *  - Pure and clock-free. Wall clock is not a routing input, so it stays off the
  *    decision: the caller stamps it with `battleAdvanceEvent` / `tryAdvanceEvent`
  *    on dispatch, and a render can ask for the label without inventing a `now`.

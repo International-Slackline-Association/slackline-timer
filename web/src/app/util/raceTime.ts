@@ -5,9 +5,8 @@ import { DNF_SENTINEL } from 'app/util/time';
 
 /**
  * Pure helpers for turning a live race into a persistable Time, used by the
- * Speedline timer console (`useRaceRecorder`). Kept free of React/IO so the
- * record-or-skip decision and the elapsed math are exhaustively testable — the
- * live control page can't be unit-tested (it opens real WebSocket connections).
+ * Speedline timer console (`useRaceRecorder`), so the record-or-skip decision
+ * and the elapsed math are exhaustively testable.
  */
 
 /** Elapsed milliseconds between race start and a lane stop, clamped to ≥ 0. */
@@ -87,8 +86,8 @@ export type LaneResult = number | null;
  * Which lanes a race start ignites. A solo run — exactly one lane with an
  * athlete assigned, the qualification pattern — starts only that lane, so the
  * empty lane's stopwatch stays dormant instead of ticking a meaningless time.
- * No athletes (warmup / untracked timing) or both assigned (a match) keep the
- * old both-lanes start.
+ * No athletes (warmup / untracked timing) or both assigned (a match) start both
+ * lanes.
  */
 export const activeStartLanes = (laneAthletes: Record<1 | 2, string>): Array<1 | 2> => {
   if (laneAthletes[1] && !laneAthletes[2]) return [1];
@@ -123,7 +122,7 @@ export const qualiAttemptCapReached = (
 
 /**
  * Strip the server-owned ids off a Match, leaving the create/update payload.
- * Mirrors `MatchForm`'s `toInput` exactly: the immutable sort-key fields
+ * Mirrors `MatchForm`'s submit payload: the immutable sort-key fields
  * (discipline/round/gender/position) and athlete ids must all ride along
  * because `useUpdateMatch` PUTs the full object as a transactional delete+put —
  * sending a partial body would corrupt the record. Optional fields are spread

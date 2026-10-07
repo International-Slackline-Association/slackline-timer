@@ -80,16 +80,14 @@ export const RaceRecorderControls = ({
   /**
    * The two rail presses that spend something the operator cannot get back —
    * persisted Times and the on-air best-of-3 — behind the board's one confirm
-   * shell (`speedline-void-run-reset-series-confirm`). Both had fired on a
-   * single press while the harmless Reset asked.
+   * shell.
    *
-   * Both follow §4.8's "nothing spent, no question": a void with no Time saved
-   * deletes nothing (the false-start rerun case, where the run never recorded)
-   * and a 0–0 series has no tally to lose, so each applies instantly there —
-   * the question exists for what it names, not as ceremony.
+   * Both follow freestyle-board-ux §4.8's "nothing spent, no question": a
+   * void with no Time saved (the false-start rerun case) and a 0–0 series apply
+   * instantly.
    *
-   * Each question CAPTURES what it is about (null = not asked), rather than
-   * re-deriving it: the answer clears the very state the words came from, and
+   * Each question CAPTURES what it is about (null = not asked), not re-derived:
+   * the answer clears the very state the words came from, and
    * MUI keeps the dialog mounted through its exit transition — a live read
    * would flicker to "Deletes ." / "Reset the 0–0 series?" on the way out.
    */
@@ -157,15 +155,10 @@ export const RaceRecorderControls = ({
 
   return (
     <Paper component="section" aria-label="Result recording" variant="outlined" sx={{ p: 2 }}>
-      {/* The gutter is load-bearing (`speedline-recording-rail-heading-gap`):
-          MUI floats the outlined Round label 9 px ABOVE its own field box, so a
-          heading sitting flush on the row is overprinted by it at every desk
-          width. Measured, not guessed — 8 px still left a 1 px overlap at
-          1920/1440/1280/1024; `mb: 2` clears the float by 7 px and is the
-          rail's own row rhythm (`Stack spacing={2}`), so the heading sits one
-          gap above the first field like every other gap in the card. The
-          caption dialect is the desk's (§6): the fix is the gap, not a heavier
-          heading. */}
+      {/* The gutter is load-bearing: MUI floats the outlined Round label 9 px
+          ABOVE its field box, overprinting a flush heading at every desk width
+          (8 px measured a 1 px overlap at 1920/1440/1280/1024). `mb: 2` clears
+          it by 7 px and matches the rail's `Stack spacing={2}` rhythm. */}
       <Typography variant="overline" component="div" sx={{ letterSpacing: '0.1em', mb: 2 }}>
         Result recording
       </Typography>
@@ -219,10 +212,10 @@ export const RaceRecorderControls = ({
           />
         )}
 
-        {/* Colourless chrome — no state to name, so no tone — but a press on
-            the desk all the same, and the wrapper is what carries the 44 px
-            target and the blur rule (§6/§4.4). The empty-selection disable
-            says itself in the lane pickers; only the race lock needs the line. */}
+        {/* Colourless (no state to name), but RaceButton still carries the
+            44 px target and the blur rule (freestyle-board-ux §6/§4.4). The
+            empty-selection disable says itself in the lane pickers; only the
+            race lock needs the why-line. */}
         <Stack sx={{ alignItems: 'flex-start' }}>
           <RaceButton
             variant="outlined"

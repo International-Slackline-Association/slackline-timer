@@ -21,7 +21,7 @@ import { type RecoveredLane } from './useFreestyleTimerFeed';
  * on the turn lane instead (`FreestyleTimerDisplay`).
  */
 
-// Screen-filling scale (clamp/vw, DESIGN_SYSTEM §4).
+// Screen-filling scale (clamp/vw, design-system §4).
 const TALLY_SIZES = {
   title: 'clamp(1.5rem, 5vw, 4rem)',
   row: 'clamp(2rem, 7vw, 6rem)',
@@ -98,8 +98,7 @@ export const BestTrickTally = ({
 
 /** BEST TRICK hero (battle part 2, rule F6): the tally + turn + try clock,
  * filling the screen. Present only while the board has best trick armed
- * (updateSelection.bestTrick). Athlete-display-only since the broadcast band
- * moved to the in-band layout (side try clock + centre pause tally). */
+ * (updateSelection.bestTrick). */
 export const BestTrickHero = ({
   isReady,
   bestTrick,
@@ -147,10 +146,9 @@ export const BestTrickHero = ({
 
 /** Warm-up hero (timerId 0): a single centered clock that fills the screen while
  * the warm-up is the session's current surface — pending (the default on a fresh
- * display) or running. The long beep fires on expiry via the shared Countdown
- * onExpire seam, which ALSO hands the surface off to the armed lanes
- * (post-warmup-handoff) — so the WARM-UP OVER label never lingers here (it stays
- * the operator board's affordance); the feed likewise drops it on an operator
+ * display) or running. The expiry beep fires via the shared Countdown onExpire
+ * seam, which ALSO hands the surface off to the armed lanes — so the WARM-UP
+ * OVER label never lingers here (it stays the operator board's affordance); the feed likewise drops it on an operator
  * stop or when a competition action takes over. Yields to the best-trick hero
  * when that phase is live. */
 export const WarmupHero = ({
@@ -223,9 +221,8 @@ const WARMUP_LABEL_HEIGHT = LANE_NAME_STRIP_HEIGHT;
  * (`FreestyleTimerDisplay`) rather than as the full-screen `WarmupHero`: the
  * left-corner "athlete" slot — a name-strip-style label plate (the
  * AthleteNameStrip look minus the flag, since warm-up has no nationality) over
- * the same white `plate` Countdown the performance lanes draw. `WarmupHero`
- * above still owns the full-screen athlete display; this is the in-band twin so
- * warm-up occupies a lane position instead of taking over the screen. */
+ * the same white `plate` Countdown the performance lanes draw, so warm-up
+ * occupies a lane position instead of taking over the screen. */
 export const WarmupBand = ({
   isReady,
   countdownMessage,

@@ -37,22 +37,9 @@ import {
 } from '../../hooks/useStartSignalTimer';
 
 /**
- * Shared Speedline timer display, mounted behind two thin route wrappers:
- *  - `projector` (/speedline/preview): defaults to the chroma-key ground for
- *    projector/keyed screens.
- *  - `broadcast` (/stream/timer): defaults to a transparent body so OBS/H2R
- *    composites the timer over live video, matching every other /stream/* overlay.
- * Each variant only sets the DEFAULT background; `?bg=` overrides it per the
- * shared overlay convention (see doc/dev/broadcast-overlays.md). The chroma key is
- * magenta, so the green GO light / winner numerals survive it. All
- * WS/sync/read-token wiring is identical so both authenticate correctly
- * (Cognito on /speedline/preview, read token on /stream/timer).
- */
-/**
- * Lane-scoped false-start callout (rules S2–S4): flashes over the lane's column
- * when the operator has flagged that lane. "2ND FALSE START" at the second flag
- * (the attempt-failing / forfeiting one). Uses the race.stop error color + the
- * shared broadcast protection halo, matching the centre abort callout.
+ * Lane-scoped false-start callout (rules S2–S4), shown in place of the lane's
+ * clock once flagged. "2ND FALSE START" at the second flag (the attempt-failing
+ * / forfeiting one).
  */
 const LaneFalseStartBadge = ({ count }: { count: number }) => {
   if (count < 1) return null;
@@ -85,14 +72,23 @@ const LaneFalseStartBadge = ({ count }: { count: number }) => {
  */
 const SIGNAL_HOUSING_BOTTOM = refVh(139);
 
+/**
+ * Shared Speedline timer display, mounted behind two thin route wrappers:
+ *  - `projector` (/speedline/preview): defaults to the chroma-key ground;
+ *    Cognito auth.
+ *  - `broadcast` (/stream/timer): defaults to a transparent body for OBS/H2R
+ *    compositing, like every other /stream/* overlay; read-token auth.
+ * The variant sets only the DEFAULT ground; `?bg=` overrides it
+ * (doc/dev/broadcast-overlays.md). The chroma key is magenta, so the green GO
+ * light survives it.
+ */
 export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'broadcast' }) => {
   const { bottomMargin, sideMargin } = useQueryParams();
   // Broadcast overlays are addressed by ?compId=, projectors by ?sessionId= — the
   // read-token WS $connect authorizer is scoped to compId, so resolve it here.
   const sessionId = useRelaySessionId();
   const { search } = useLocation();
-  // When mounted as the /stream/timer overlay the URL carries a read token
-  // instead of a Cognito session; on /speedline/preview it is undefined (no-op).
+  // Undefined on /speedline/preview (Cognito session).
   const readToken = useReadToken();
 
   const [isPreviewEnabled, setIsPreviewEnabled] = useState<boolean>(true);
@@ -102,7 +98,7 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
   // epoch — so the stopwatches leave zero with this display's own green light
   // instead of waiting out the relay latency on the authoritative `start`
   // (which still follows as an idempotent same-epoch confirmation). An abort
-  // cancels the mirror, so the ignition dies with it — no retraction needed.
+  // cancels the mirror, so the ignition dies with it.
   // `signalPhase` holds the static states the sequence doesn't run — a peer's
   // abort/reset echo (-1/0) and a snapshot's recovered phase (no anchor to seed).
   const [signalPhase, setSignalPhase] = useState<number>(0);
@@ -132,8 +128,6 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
     },
   });
   const mirrorAnchorRef = useRef<number>(0);
-  // The mirrored sequence drives the light while running; otherwise `signalPhase`
-  // holds the static states it doesn't run (abort/reset echo, snapshot recovery).
   const effectiveSignalPhase = mirrorPhase !== 0 ? mirrorPhase : signalPhase;
   const [textDisplay, setTextDisplay] = useState<string>('');
   // The lane athletes off the board's live selection (re-pushed on every socket
@@ -150,9 +144,8 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
   // message would false-alarm a reconnecting overlay.
   const [falseStarts, setFalseStarts] = useState<{ 1: number; 2: number }>({ 1: 0, 2: 0 });
   const prevFalseStartsRef = useRef<{ 1: number; 2: number }>({ 1: 0, 2: 0 });
-  // LWW seq (ADR 0038 §4), one hop out from the panels: drop the losing
-  // (stale-stamped) side of a crossed concurrent panel edit, whatever the
-  // arrival order — exactly like the control panels do.
+  // LWW seq (ADR 0038 §4), applied one hop out from the panels: drop the losing
+  // side of a crossed concurrent panel edit, whatever the arrival order.
   const selectionStampRef = useRef<SelectionStamp>(INITIAL_SELECTION_STAMP);
 
   // A snapshot must never overwrite newer live truth: if any live timer message
@@ -182,13 +175,10 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
   });
   const link = useLinkPhase(readyState);
 
-  // sessionId doubles as the compId; resolves the lane athletes for the banner.
-  // Works under both auth modes (Cognito on the projector, read token on the
-  // broadcast overlay), mirroring VsOverlay.
+  // sessionId doubles as the compId.
   const { byId: athleteById } = useAthleteLookup(sessionId, { readToken });
 
-  // The same body-style dance StreamLayout does for /stream/*; the variant only
-  // sets the DEFAULT ground and `?bg=` overrides it (see this file's JSDoc).
+  // StreamLayout's body-style setup, for a page mounted outside it.
   useEffect(() => applyOverlayBodyStyle(search, SURFACE_GROUND[variant]), [variant, search]);
 
   useEffect(() => {
@@ -212,10 +202,8 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
     ) {
       liveSinceOpenRef.current = true;
     }
-    // Receipt ack (debug telemetry, HWC 2026 missed-stop incident): confirm the
-    // timer-critical messages this display consumed, keyed by their own
-    // control-minted epoch, so CloudWatch can name the consumers a relayed
-    // message never reached. Logged + swallowed server-side — never fanned out.
+    // Receipt ack, keyed by the message's control-minted epoch: logged +
+    // swallowed server-side (doc/dev/architecture.md, the `ack` frame).
     if (type === 'start' || type === 'stop' || type === 'reset') {
       sendAck({
         of: type,
@@ -267,9 +255,8 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         playAudio('alert');
         break;
       case 'state_snapshot':
-        // Cross-mode crosstalk tolerance: a Freestyle control sharing this
-        // session also answers request_state, with a CountdownSnapshot; drop it
-        // rather than blank the start light off a foreign shape.
+        // A Freestyle control sharing this session also answers request_state,
+        // with a CountdownSnapshot.
         if (!isSpeedlineSnapshot(data)) {
           break;
         }
@@ -277,8 +264,8 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         // arrived since open outranks the snapshot for them. Lane TIMER state
         // always flows through (below): the stopwatches merge it newer-wins per
         // lane, so a snapshot generated AFTER a stop this display never received
-        // (operator-side connectivity loss, HWC 2026 race 2) freezes the lane
-        // instead of being discarded and leaving the timer running forever.
+        // (operator-side connectivity loss) freezes the lane instead of leaving
+        // it running forever.
         if (!liveSinceOpenRef.current) {
           setIsPreviewEnabled(data.isPreviewEnabled);
           setSignalPhase(data.signalPhase);
@@ -311,9 +298,8 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
       // The board re-pushes its selection on every change + socket OPEN; track
       // the per-lane false-start counts off it and alert on a fresh flag (S2–S4).
       case 'updateSelection': {
-        // Both disciplines share one relay room (compId = sessionId); a Freestyle
-        // board's selection must never drive the speed display. Drop it BEFORE the
-        // LWW stamp so a foreign seq can't shadow a real speed push.
+        // Both disciplines share one relay room (compId = sessionId). Drop a
+        // Freestyle push BEFORE the LWW stamp so its seq can't shadow a speed one.
         if (data.discipline !== 'speed') break;
         const stamp = acceptSelectionStamp(selectionStampRef.current, message);
         if (!stamp) break;
@@ -348,13 +334,10 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
     2: laneAthleteIds[2] ?? '',
   });
 
-  // One lane's timertimer-style lower-third: the flag+name banner
-  // (AthleteNameStrip), the false-start badge and the white TIME plate (drawn by
-  // the Stopwatch `plate` variant itself, around the time only) stacked,
-  // anchored to a bottom corner (`bottom-28 left/right-28` in the reference).
-  // Called as a function — NOT rendered as a component — so the two lanes keep
-  // stable element identity and the Stopwatch never remounts (which would reset
-  // its live tick). The banner shows only once an athlete is assigned to the lane.
+  // One lane's lower-third: the flag+name banner over the false-start badge or
+  // the Stopwatch's own TIME plate, anchored to a bottom corner. Called as a
+  // function, NOT rendered as a component, so the Stopwatch keeps stable
+  // element identity and never remounts (which would reset its live tick).
   const renderLane = (lane: 1 | 2, side: 'left' | 'right') => {
     const athleteId = laneAthleteIds[lane];
     const athlete = athleteId ? athleteById(athleteId) : undefined;
@@ -404,9 +387,8 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
       {/* Kept mounted regardless of ready state so the signal beeps always play. */}
       {audioElement}
 
-      {/* Centre layer: the false-start abort callout, centred in the frame. The
-          two lane lower-thirds sit at the bottom corners, so this never overlaps
-          them. */}
+      {/* Centre layer: the START ABORTED callout; clear of the corner
+          lower-thirds. */}
       {isReadyToDisplay && (
         <Box
           sx={{
@@ -423,15 +405,12 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
           <Typography
             component="div"
             sx={(theme) => ({
-              // race.stop token — the false-start state in the color contract.
               color: theme.palette.error.main,
               textAlign: 'center',
               fontWeight: 'bold',
-              // Viewport-relative so the false-start callout reads at distance.
               fontSize: 'clamp(2rem, 7vw, 7rem)',
               lineHeight: 1.1,
-              // Shared broadcast protection halo — the false-start callout keys /
-              // reads over chroma + busy footage (it sits on the ground, not a plate).
+              // On the bare ground, not a plate.
               textShadow: overlayTextShadow,
               '@keyframes flashAnimation': {
                 '0%, 100%': { opacity: 0.5 },
@@ -445,9 +424,8 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         </Box>
       )}
 
-      {/* The start-signal light sequence, anchored to the same bottom height as
-          the lane timer plates and centred between the two lower-thirds (which
-          hug the bottom corners), so the lights read on the timer's row. */}
+      {/* Centred between the corner lower-thirds, on the timer row
+          (`SIGNAL_HOUSING_BOTTOM`). */}
       {isReadyToDisplay && (
         <Box
           sx={{
@@ -464,8 +442,7 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         </Box>
       )}
 
-      {/* The lane lower-thirds at the bottom corners (blank until preview is
-          enabled and the socket is open). A solo lane keeps its own corner. */}
+      {/* A solo lane keeps its own corner. */}
       {isReadyToDisplay && (
         <>
           {shownLanes.includes(1) && renderLane(1, 'left')}

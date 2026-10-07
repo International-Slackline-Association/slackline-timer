@@ -1,8 +1,6 @@
-// Staged-file linting. A JS config (not the plain JSON map) because lint-staged
-// otherwise appends every staged path to ONE `eslint --fix` invocation, and a
-// wide commit blows the Windows ~32k command-line limit ("Die Befehlszeile ist
-// zu lang") — the hook then reverts and the commit fails for a reason that has
-// nothing to do with the code. Chunking keeps each argv short on every platform.
+// A JS config so paths can be chunked: lint-staged otherwise passes every staged
+// path to ONE invocation, and a wide commit overflows the Windows ~32k
+// command-line limit, failing the hook.
 const CHUNK = 40;
 
 const chunked = (command, files) =>

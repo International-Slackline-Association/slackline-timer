@@ -89,9 +89,8 @@ export const main: APIGatewayProxyHandlerV2WithLambdaAuthorizer<AuthContext> = a
       const tokenVersion = await competitionDb.bumpTokenVersion(compId);
       console.log(`read tokens for ${compId} revoked (tokenVersion=${tokenVersion})`);
 
-      // The version bump only blocks the next $connect. Cut the open overlay
-      // feeds too so revocation is instant, as documented (ADR 0026). The bump
-      // already persisted — a failure here must not fail the request.
+      // The bump only gates the next $connect; open overlay feeds are closed
+      // too (ADR 0026). Best-effort: the bump already persisted.
       const endpoint = process.env.WS_API_ENDPOINT;
       if (endpoint) {
         try {

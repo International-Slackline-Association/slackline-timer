@@ -37,11 +37,8 @@ export const athleteToItem = (a: Athlete): Item =>
 export const itemToAthlete = (item: Item): Athlete => {
   // Records authored before the name split (ADR 0016) carry only `name`; derive
   // firstName/lastName so old rows self-heal on read without a backfill.
-  // Computed unconditionally: gating it on `firstName === undefined` while the
-  // reads below use `??` left a hole for a row holding an explicit DynamoDB NULL
-  // — the gate said "present", `??` said "absent", and the fallback dereferenced
-  // nothing, 500-ing the whole athlete list off one legacy row. `splitName` is
-  // pure and cheap, so paying for it always is cheaper than the asymmetry.
+  // Computed unconditionally: the `??` below also treats an explicit DynamoDB
+  // NULL as absent, so a presence gate on `firstName` would leave no fallback.
   const split = splitName((item.name as string) ?? '');
   const firstName = (item.firstName as string | undefined) ?? split.firstName;
   const lastName = (item.lastName as string | undefined) ?? split.lastName;

@@ -7,22 +7,17 @@ import { telemetryTheme } from 'app/theme/theme';
 import { colors } from 'app/theme/tokens';
 
 /**
- * The alarm tones outside a contained fill (FREESTYLE_BOARD_UX §6).
+ * The alarm tones outside a contained fill (freestyle-board-ux §6).
  *
- * `fsux-race-tokens` moved every stop **fill** onto `stopDim` and left
- * `error.main` / `warning.main` standing wherever the tone paints as ink — the
- * "it is a mark, not a text pair" reading. The board's eyes-on pass
- * (`fsux-followup-race-tokens-3`) measured what that leaves on screen: a filled
- * `Not recording` chip at 3.59:1 beside the darkened `Recording` chip it shares
- * a row with, an outlined `DNF` / `FS Lane n` label at 3.34:1 on the canvas, and
- * an outlined `warning` chip at 1.94:1 — all of them words, all under the 4.5:1
- * floor their size owes.
+ * Stop **fills** sit on `stopDim`; where the tone paints as ink, `error.main` /
+ * `warning.main` measure a filled `Not recording` chip at 3.59:1, an outlined
+ * `DNF` / `FS Lane n` label at 3.34:1 on the canvas and an outlined `warning`
+ * chip at 1.94:1 — all words, all under their 4.5:1 floor.
  *
- * The tier is what changes, never the hue: an alarm that paints ink takes the
- * `*Text` tier of its state (`stopDim` / `setText`), exactly as the state words
- * in the lane cards do. Pinned here rather than per call site because MUI
- * resolves `color="error"` from the palette wherever the theme is silent, so
- * the next chip added to the header inherits the answer.
+ * The tier changes, never the hue: an alarm that paints ink takes the `*Text`
+ * tier of its state (`stopDim` / `setText`), as the lane cards' state words do.
+ * Pinned in the theme because MUI resolves `color="error"` from the palette
+ * wherever the theme is silent, so the next chip added inherits the answer.
  *
  * `contrast.test.ts` proves the tiers clear their floors; this proves the
  * controls land on them.

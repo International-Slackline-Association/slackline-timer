@@ -16,8 +16,7 @@ import {
  * `startedAt`, a session frame carrying `timerId: -1`). Unknown `type`s are
  * dropped — no consumer has a branch for them.
  *
- * Hand-rolled rather than a schema library: zod alone is ~13 kB gzip, and every
- * overlay bundle would carry it.
+ * Hand-rolled: zod alone is ~13 kB gzip, carried by every overlay bundle.
  */
 
 type Frame = Record<string, unknown>;

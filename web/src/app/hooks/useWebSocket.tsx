@@ -25,10 +25,10 @@ const useWebSocket = unwrapDefault(reactUseWebSocket);
 
 /**
  * What both boards' selections share: who/what is live now. The control page
- * re-sends on every selection change and on sender-socket OPEN, mirroring
+ * re-sends on every selection change and on socket OPEN, like
  * `updateLaneNames`. `round` is a `TimeRound` for speed and a `MatchRound` for
- * freestyle — kept as a string here, validated by the consuming query (the
- * recorder owns the enum).
+ * freestyle — a string here, validated by the consuming query (the recorder
+ * owns the enum).
  */
 interface SelectionCommon {
   round: string;
@@ -65,9 +65,8 @@ export interface SpeedSelection extends SelectionCommon {
 }
 
 /**
- * The Freestyle board's live selection. Every extra field here is relay-only +
- * web-only (no server/parity change) and optional, so a pre-feature overlay
- * simply ignores the ones it does not know.
+ * The Freestyle board's live selection. Every extra field is relay-only and
+ * optional; an overlay ignores the ones it does not know.
  */
 export interface FreestyleSelection extends SelectionCommon {
   discipline: 'freestyle';
@@ -75,8 +74,7 @@ export interface FreestyleSelection extends SelectionCommon {
    * The board's explicit Quali/Battle mode (ADR 0036 — not inferred from a
    * missing athlete 2). Quali collapses the preview/broadcast timer to a single
    * centred hero. Re-pushed on every OPEN like the rest of the selection, so
-   * late joiners recover it. Absent on a pre-0036 control page, which renders
-   * as battle — the old two-lane default.
+   * late joiners recover it. Absent (pre-0036 sender) renders as battle.
    */
   freestyleMode?: 'quali' | 'battle';
   /**
@@ -104,19 +102,17 @@ export interface FreestyleSelection extends SelectionCommon {
   /**
    * The **battle** next-up player — whom the next ADVANCE would start
    * (`advanceTarget`, ADR 0037), relayed so the audience athlete display can warn
-   * the next rider to get ready. The board's own pure suggestion is
-   * control-local; this rides the selection like `bestTrick`
-   * so the display shares the one source rather than re-deriving it from replayed
-   * timer messages. Populated only in battle mode while nothing runs / no try is
-   * armed (the changeover pause — exactly the board's own "Next:" hint window);
-   * `null`/absent otherwise (a live run, best trick, quali).
+   * the next rider. Rides the selection like `bestTrick`, so the display never
+   * re-derives it from replayed timer messages. Set only in battle mode while
+   * nothing runs and no try is armed (the board's own "Next:" hint window);
+   * `null`/absent otherwise.
    */
   nextUp?: 1 | 2 | null;
   /**
    * The **quali** next-up athlete, by id. Quali runs one athlete at a time, so
    * there is no idle slot for `nextUp` to point at and the order is not
-   * derivable from anything the board holds — the operator names it (owner call,
-   * 2026-09-19) and the app only shows the room. Consumers resolve the id to a
+   * derivable from anything the board holds — the operator names it and the
+   * app only shows the room. Consumers resolve the id to a
    * name the way the athlete pickers do, and render the marker the battle
    * `nextUp` marker renders. Session-only like the rest: a reload clears it.
    */
@@ -134,12 +130,9 @@ export type LiveSelection = SpeedSelection | FreestyleSelection;
 /**
  * The shared client-message envelope. `senderId` is the sending page's per-mount
  * id (ADR 0038 §4): the equal-`seq` tiebreak for the `updateSelection`
- * last-writer-wins stamp. Its original role — dropping the relay echo of a
- * control page's own sends off its second socket — died with the second socket
- * (ADR 0043): every page is single-socket now, and the relay excludes the
- * sending *connection* from the fan-out, so no page ever receives its own sends.
- * Additive and optional: the relay ignores it, and a message from a pre-feature
- * page simply arrives without one.
+ * last-writer-wins stamp — not a self-echo filter: the relay excludes the
+ * sending connection from the fan-out, so no page receives its own sends
+ * (ADR 0043). Optional; the relay ignores it.
  */
 export interface WSEnvelope {
   sessionId: string;
@@ -148,11 +141,9 @@ export interface WSEnvelope {
 
 /**
  * The five session-scoped (not lane-scoped) message variants, shared by both
- * mode unions. They address the whole session, never a single timer, so — unlike
- * the Countdown envelope's lane messages — they carry NO `timerId`. Lane
- * consumers filter on `timerId !== <lane id>`, so a session message (which has
- * no `timerId`) is filtered out exactly as the former `timerId: -1` sentinel
- * was: dropping the sentinel is wire-compatible (ws-session-message-family).
+ * mode unions. They address the whole session, so — unlike the Countdown lane
+ * messages — they carry NO `timerId`; lane consumers filter on
+ * `timerId !== <lane id>`, which drops them (and a legacy `timerId: -1` one).
  *
  * `state_snapshot`'s payload is the only mode-specific piece (Speedline vs
  * Countdown reconstruction), so the union is generic over it.
@@ -174,11 +165,9 @@ export type SessionWSMessage<Snapshot> = WSEnvelope &
            * Which discipline's board these names belong to — the `updateLaneNames`
            * analogue of `LiveSelection.discipline`. Both disciplines share one
            * relay room (`compId` = `sessionId`), so a freestyle preview must drop
-           * the speed board's names and vice versa; without this tag the names
-           * cross-talk (the speed board's `updateLaneNames` has no legitimate
-           * consumer — only the freestyle hero band reads them). Optional +
-           * additive: a pre-feature sender omits it and the consumer applies
-           * unconditionally, preserving the old behaviour.
+           * the speed board's names (only the freestyle hero band reads them).
+           * Optional: an untagged frame (pre-feature sender) applies
+           * unconditionally.
            */
           discipline?: Discipline;
         };
@@ -191,26 +180,20 @@ export type SessionWSMessage<Snapshot> = WSEnvelope &
          * panel or passive overlay/preview follower (`acceptSelectionStamp`) —
          * drops a selection at or below its last seen stamp: without it, two
          * edits crossing in flight swap panel values on every round trip forever,
-         * and a late-arriving loser rolls an overlay back. Optional and additive:
-         * an unstamped message (pre-feature page) applies unconditionally. */
+         * and a late-arriving loser rolls an overlay back. Unstamped (pre-feature
+         * sender) applies unconditionally. */
         seq?: number;
         /** A re-statement of a value this panel ADOPTED, carrying the stamp it
-         * adopted: it must lose every tie (ADR 0038 §4 addendum). A mirror
-         * re-pushes whatever its adoption rebuilt, and the forwarded stamp can
-         * only tie the panel that authored the value — so without this the tie
-         * fell to `senderId`, a per-mount UUID, and whether a mirror outranked
-         * its own author was a coin flip fixed for the life of the room. On the
-         * variant, not the envelope: the mirrored timer path emits no `ws`
-         * effect by construction (ADR 0038), so "echo" has no meaning on any
-         * other frame. Optional and additive — an omitted flag reads as
-         * authoritative, exactly as a pre-feature page's frames do. */
+         * adopted: it must lose every tie, or whether a mirror outranks its own
+         * author falls to the per-mount `senderId` UUIDs (ADR 0038 §4, 2026-09-22
+         * addendum). On the variant, not the envelope: the mirrored timer path
+         * emits no `ws` effect by construction, so "echo" means nothing on any
+         * other frame. Omitted reads as authoritative. */
         echo?: true;
       }
-    // State recovery (peer-to-peer): a late-joining / reconnecting page asks the
-    // session for the current snapshot; every control panel answers (converged
-    // panels agree — last writer wins at the consumer, ADR 0038). Control panels
-    // themselves request state on open too, to mirror an already-running peer.
-    // The relay stays stateless — it just forwards both.
+    // State recovery (peer-to-peer, ADR 0011/0038): a joining or reconnecting
+    // page — control panels included — asks; every control panel answers. The
+    // relay forwards both (`request_state` canonicalised, ADR 0050).
     | {
         type: 'request_state';
         data: Record<string, never>;
@@ -242,11 +225,10 @@ export type StopwatchWSMessage =
               stopTime: number;
             };
           }
-        // The undo of a mis-pressed `stop` (`speedline-resume-stopped-lane`):
-        // the lane's stop is withdrawn and its clock continues off the ORIGINAL
-        // GO epoch, which every surface still holds — so the frame carries only
-        // the lane. Re-sending `start` would not do: it re-ignites both lanes
-        // and moves the epoch the lights, beeps and every overlay anchor on.
+        // The undo of a mis-pressed `stop`: the lane's clock continues off the
+        // ORIGINAL GO epoch every surface still holds, so the frame carries only
+        // the lane. Not a re-sent `start` — that re-ignites both lanes and moves
+        // the epoch the lights, beeps and every overlay anchor on.
         | {
             type: 'resume';
             data: {
@@ -297,9 +279,8 @@ export interface SpeedlineSnapshot {
    * clock as the `startTime`/`stopTime` epochs beside it (all control-minted).
    * A display that already applied a live frame for a lane compares the two to
    * tell a genuinely newer snapshot from a stale one and un-freeze a lane whose
-   * `resume` it missed (`Stopwatch.mergeRecovery`). Optional + additive: a
-   * pre-feature sender omits it and the consumer keeps the old, never-un-freeze
-   * behaviour. */
+   * `resume` it missed (`Stopwatch.mergeRecovery`). Absent (pre-feature sender):
+   * never un-freezes. */
   at?: number;
   signalPhase: number;
   text: string;
@@ -324,18 +305,14 @@ export type CountdownWSMessage =
               remainingMs: number;
               /**
                * The control's `Date.now()` epoch when the clock began — a
-               * SHARED anchor on the wire, mirroring the stopwatch's absolute
-               * `startTime` (doc/dev/architecture.md → "What an overlay needs
-               * to stay in sync"). Every receiver derives `now − startedAt` off
-               * this one epoch, so overlays converge instead of each
-               * re-anchoring to its own receipt time — which spread them by
-               * delivery latency, and `formatClock`'s whole-second floor
-               * amplified any sub-second skew into a full 1 s on-screen
-               * difference. Optional + additive: a receiver of a message
-               * without it (a pre-feature sender) falls back to receipt-time
-               * `Date.now()`, preserving the old behaviour.
-               * `stop`/`reset`/`end_break` carry frozen values and need no
-               * anchor. Web-only — the relay is opaque.
+               * SHARED anchor, like the stopwatch's `startTime`
+               * (doc/dev/architecture.md → "What an overlay needs to stay in
+               * sync"). Receivers derive `now − startedAt` off it rather than
+               * their own receipt time, which spreads them by delivery latency
+               * — and `formatClock`'s whole-second floor turns sub-second skew
+               * into a full 1 s difference. Absent (pre-feature sender): falls
+               * back to receipt-time `Date.now()`. `stop`/`reset`/`end_break`
+               * carry frozen values and need no anchor.
                */
               startedAt?: number;
             };
@@ -357,8 +334,7 @@ export type CountdownWSMessage =
         // `breakMs` is the comp's `config.freestyle.breakMs`; `breaksLeft` is the
         // quali allowance; `startedAt` is the shared break-clock anchor (see
         // `start_countdown` above — optional, receipt-time fallback). At
-        // break-zero the lane holds for a manual Start. The relay stays opaque —
-        // a web-only union change, no server/parity change.
+        // break-zero the lane holds for a manual Start.
         | {
             type: 'start_break';
             data: {
@@ -393,8 +369,7 @@ export interface CountdownTimerRow {
   // off (`remainingFrom(remainingMs, startedAt, now)`). NOT the original
   // run-start: `remainingMs` stays the adjusted authority the late-joiner
   // rules in `useFreestyleTimerFeed` read (`remainingMs <= 0` = ran out). Both
-  // are optional/additive — absent on a pre-feature control page, where the
-  // receiver falls back to receipt-time `Date.now()` (the old behaviour).
+  // optional: absent (pre-feature sender) falls back to receipt-time `Date.now()`.
   startedAt?: number;
   breakStartedAt?: number;
   // Quali break recovery (ADR 0019/0036): an on-break lane holds the
@@ -424,8 +399,8 @@ export interface CountdownTimerRow {
  * is computed at send time (a running lane adjusted for wall-clock elapsed since
  * it started); `startedAt` carries the send-time epoch that adjusted value
  * applies to (see the `CountdownTimerRow` field notes) so a recovered running
- * lane anchors its tick to a shared wire epoch instead of its own receipt time —
- * every late joiner then converges rather than smearing (the former ~1s drift).
+ * lane anchors its tick to a shared wire epoch instead of its own receipt time,
+ * and late joiners converge.
  */
 export interface CountdownSnapshot {
   isPreviewEnabled: boolean;
@@ -435,8 +410,8 @@ export interface CountdownSnapshot {
 /**
  * Emitted server-side by the write Lambdas after every successful
  * competition-data write (the analogue of timertimer's "db" PubSub topic).
- * Consumers invalidate the matching React Query keys and re-fetch — the
- * payload deliberately carries ids only, never the data itself.
+ * Consumers invalidate the matching React Query keys and re-fetch; the payload
+ * carries ids only, never the data (ADR 0006).
  */
 export type DbUpdateWSMessage = WSEnvelope & {
   type: 'db_update';
@@ -451,10 +426,8 @@ export type WSMessage = StopwatchWSMessage | CountdownWSMessage | DbUpdateWSMess
 
 /**
  * `Omit` distributed over each union member. Plain `Omit<A | B, K>` collapses to
- * the members' *shared* keys, which would silently drop the Countdown lane
- * variants' `timerId` (session variants lack it after ws-session-message-family);
- * this keeps each variant's own keys so `sendWSMessage` still accepts a
- * lane-scoped `timerId`.
+ * the members' *shared* keys, which would drop the Countdown lane variants'
+ * `timerId` (the session variants lack it).
  */
 export type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
 
@@ -530,22 +503,16 @@ export const useWS = <T extends WSMessage>(params: {
   // LWW tiebreak (ADR 0038 §4; see the WSEnvelope doc).
   const [senderId] = useState<string>(() => crypto.randomUUID());
 
-  // Resolve the credential lazily, on every (re)connect. react-use-websocket
-  // re-invokes a function `url` each time it (re)opens the socket, so fetching
-  // the token here — rather than reading it once on mount — means a reconnect
-  // after the ~1h IdToken lifetime picks up a freshly refreshed token instead
-  // of replaying a stale one. Priority: an explicit read token (overlays) >
-  // the baseline credential from the `app/auth` seam (Cognito IdToken in prod,
-  // refreshed transparently by Amplify; a dummy token in local dev). The hook
-  // never branches on the environment — the seam does.
-  // Memoised so its identity only changes with sessionId/readToken — otherwise
-  // react-use-websocket (which keys its connect effect on the `url` arg) would
-  // tear down and reopen the socket on every render.
+  // Resolved on every (re)connect: react-use-websocket re-invokes a function
+  // `url` per (re)open, so a reconnect past the ~1h IdToken lifetime carries a
+  // fresh token. A read token (overlays) wins over the `app/auth` seam's
+  // baseline credential. Memoised: the library keys its connect effect on
+  // `url`, so a new identity per render would reopen the socket.
   const getUrl = useCallback(async (): Promise<string> => {
     const authToken = readToken ?? (await getBaseToken()) ?? '';
     const url = new URL(WS_URL);
-    // The $connect authorizer reads this query param and verifies it as a
-    // Cognito IdToken (operator group) or an event read token.
+    // Verified by the $connect authorizer: a Cognito IdToken (admin, or a
+    // manager granted this session) or an event read token.
     url.searchParams.set('Authorization', authToken);
     url.searchParams.set('sessionId', sessionId);
     return url.toString();
@@ -602,8 +569,7 @@ export const useWS = <T extends WSMessage>(params: {
       shouldReconnect: () => true,
       reconnectAttempts: Infinity,
       reconnectInterval: wsReconnectDelay,
-      // Unreachable under Infinity attempts — kept as a loud tripwire should a
-      // cap ever be reintroduced, so a give-up is never silent again.
+      // Unreachable under Infinity attempts — a tripwire should a cap return.
       onReconnectStop: (attempts) => {
         console.error(`WebSocket gave up reconnecting after ${attempts} attempts — reload`);
       },
@@ -613,9 +579,9 @@ export const useWS = <T extends WSMessage>(params: {
       },
       onClose: () => {
         // Closed before ever opening ⇒ the $connect authorizer rejected us
-        // (not a timeradmin, or an expired/invalid token). Overlays carry their
-        // own read token and are gated separately, so only flag operator
-        // sessions.
+        // (no admin role or grant on this session, or an expired/invalid
+        // token). Read-token overlays are gated separately, so only operator
+        // sessions are flagged.
         if (!everOpened.current && readToken == null) {
           setWsAuthDenied(true);
         }
@@ -635,9 +601,7 @@ export const useWS = <T extends WSMessage>(params: {
     return () => window.clearInterval(intervalId);
   }, [readyState, sendJsonMessage, sessionId]);
 
-  // Memoised so its identity is stable across renders: callers that send on a
-  // readyState transition (e.g. the overlay's request_state-on-OPEN) can list it
-  // as an effect dep without the effect re-firing on every render.
+  // Identity-stable: callers list it as an effect dep (e.g. request_state on OPEN).
   const sendWSMessage = useCallback(
     (message: DistributiveOmit<T, 'sessionId'>) => {
       const messageToSend = { ...message, sessionId, senderId };
@@ -649,9 +613,8 @@ export const useWS = <T extends WSMessage>(params: {
     [sendJsonMessage, sessionId, senderId],
   );
 
-  // Receipt ack (see AckWSMessage): outside the relayed union `T` on purpose —
-  // the server logs + swallows it, so it must never be shaped like a peer
-  // message. Stable identity for the same reason as sendWSMessage.
+  // Receipt ack (see AckWSMessage): outside the relayed union `T` — the server
+  // logs + swallows it, so it must never be shaped like a peer message.
   const sendAck = useCallback(
     (data: Omit<AckWSMessage['data'], 'ua'>) => {
       sendJsonMessage({

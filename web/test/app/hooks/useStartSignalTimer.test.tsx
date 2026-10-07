@@ -52,11 +52,11 @@ describe('useStartSignalTimer', () => {
     expect(onSignalComplete).toHaveBeenCalledTimes(1);
   });
 
-  // The drift fix: a throttled/backgrounded tab fires the scheduled timer well
-  // after its due time, so wall time has advanced past several steps by the time
-  // the callback runs. Anchoring off the stored epoch must catch the sequence up
-  // (past the SET lights, firing the race start) rather than stall a step behind
-  // the way a tick-counting interval would.
+  // A throttled/backgrounded tab fires the scheduled timer well after its due
+  // time, so wall time has advanced past several steps by the time the callback
+  // runs. Anchoring off the stored epoch must catch the sequence up (past the
+  // SET lights, firing the race start) rather than stall a step behind the way
+  // a tick-counting interval would.
   it('catches up and fires the race start once when the tab wakes late', () => {
     const onSignalComplete = vi.fn();
     vi.setSystemTime(0);
@@ -116,9 +116,9 @@ describe('useStartSignalTimer', () => {
     expect(result.current.signalAnchor).toBe(10_000);
   });
 
-  // `speedline-lock-says-aborted-after-a-clean-run`: the wire keeps ONE terminal
-  // value (-1) for both endings — changing it would be a protocol change — so
-  // the hook carries the distinction locally, as a latch the abort sets.
+  // The wire keeps ONE terminal value (-1) for both endings — changing it would
+  // be a protocol change — so the hook carries the distinction locally, as a
+  // latch the abort sets.
   it('latches `aborted` only for an aborted sequence, never a spent one', () => {
     const { result } = renderHook(() => useStartSignalTimer({ onSignalComplete: vi.fn() }));
     expect(result.current.signalAborted).toBe(false);

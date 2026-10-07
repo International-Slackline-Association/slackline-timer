@@ -1,6 +1,6 @@
 // Resolve a user by EXACT email and REMOVE them from a group (default:
-// $COGNITO_TIMER_GROUP) — revokes operator access. Takes effect on next login /
-// token refresh, not immediately.
+// $COGNITO_TIMER_GROUP) — revokes superadmin; their per-competition manager
+// grants stay (ADR 0045). Takes effect on next login / token refresh.
 //
 // Auth is your AWS CLI v2 session — see README.md.
 //

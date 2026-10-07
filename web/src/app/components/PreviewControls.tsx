@@ -16,18 +16,16 @@ interface Props {
    * display to the preview). */
   links: readonly ProjectorLink[];
   /** The switch and its links on one line — the Speedline setup strip, where a
-   * second line is a row of header height (`speedline-compact-fold-lane-dnf-1024`). */
+   * second line is a row of header height. */
   inline?: boolean;
 }
 
 /**
  * The preview toggle and its projector links, for both control consoles
- * (FREESTYLE_BOARD_UX §4.4 — `Preview ON · links`). The boards place it
- * differently (the Freestyle setup rail, the Speedline live column) but must
- * not paint it differently: the ON/OFF word, the switch's accessible name and
- * the blur rule are the contract, and Speedline had lost all three writing its
- * own — an unlabelled switch beside an `Enabled`/`Disabled` caption, both
- * keeping the focus of the click that pressed them.
+ * (freestyle-board-ux §4.4 — `Preview ON · links`). The boards place it
+ * differently (the Freestyle setup rail, the Speedline setup column or strip)
+ * but must not paint it differently: the ON/OFF word, the switch's accessible
+ * name and the blur rule are the contract.
  *
  * Space is the buzzer and a focused control owns it (§4.3), so every press here
  * leaves the keyboard where it found it: a clicked link cannot activate on

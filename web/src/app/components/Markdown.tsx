@@ -26,7 +26,7 @@ import remarkGfm from 'remark-gfm';
  * TELEMETRY typography and palette instead of browser defaults.
  *
  * Kept generic (it takes markdown + a link resolver) rather than manual-specific,
- * but it is deliberately NOT a general-purpose renderer: the input is repo-authored
+ * but it is NOT a general-purpose renderer: the input is repo-authored
  * markdown reviewed like source, never user input, which is why raw HTML stays
  * disabled (react-markdown's default) and no sanitizer is wired in.
  */

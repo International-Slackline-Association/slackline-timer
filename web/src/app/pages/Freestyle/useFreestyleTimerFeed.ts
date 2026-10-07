@@ -114,12 +114,10 @@ const rowFromMessage = (message: CountdownLaneMessage, at: number): RecoveredLan
  * unmounted behind the warm-up hero and swapped out for the try clock in best
  * trick; the try clock remounts on the other side at every turn flip), and a
  * fresh mount can never replay what preceded it — the kept-current row is its
- * only seed, else it rests at the UNSEEDED 00:00
- * (fsux-preview-lane-remount-seed). Being message-derived, the row is
- * idempotent when re-applied over the very message it came from — a mount
- * applies both, live message first, recovery last — so it cannot freeze a live
- * start at the armed budget the way a STALE row would (the realtime-recovery
- * frozen-02:00 regression).
+ * only seed, else it rests at the UNSEEDED 00:00. Being message-derived, the
+ * row is idempotent when re-applied over the very message it came from — a
+ * mount applies both, live message first, recovery last — so it cannot freeze a
+ * live start at the armed budget the way a STALE row would.
  *
  * Warm-up drops its row instead (see `isRefreshedChannel`), as does any channel
  * whose message carries no face to hold (a best-trick disarm).
@@ -169,8 +167,7 @@ export const clockFeedMessage = (
  * rules) mounted behind every audience-facing Freestyle surface — the
  * bottom-anchored broadcast band (`FreestyleTimerDisplay`) and the full-screen
  * athlete display (`FreestyleAthleteDisplay`). Extracted as a hook so the render
- * trees can differ without forking the data surface (a copied feed is a drift
- * liability — the stream-best-trick-standalone-overlay precedent).
+ * trees can differ without forking the data surface.
  *
  * The clocks behind it are wall-clock-anchored and never decremented: each tick
  * re-derives the numeral off the epoch the message carried (`countdownClock`),
@@ -206,15 +203,15 @@ export const useFreestyleTimerFeed = () => {
     null,
   );
   // The board's explicit Quali/Battle mode (ADR 0036), also off updateSelection:
-  // quali collapses to a single hero (lane 1). Absent (a pre-0036 control page /
-  // speed board) renders the two-lane battle default.
+  // quali collapses to a single hero (lane 1). Absent renders the two-lane
+  // battle default.
   const [freestyleMode, setFreestyleMode] = useState<'quali' | 'battle' | null>(null);
   // The battle next-up player (ADR 0037 `advanceTarget`, relayed on the
   // selection). The display warns the next rider off it;
   // absent (a live run / quali / speed board) clears it. Recovered for late
   // joiners by the selection re-push on OPEN, like freestyleMode/bestTrick.
   const [nextUp, setNextUp] = useState<1 | 2 | null>(null);
-  // The QUALI next-up athlete, by id (`freestyle-quali-next-up`): quali has one
+  // The QUALI next-up athlete, by id: quali has one
   // clock, so the board names WHO comes after it rather than which slot. Same
   // channel and same recovery as `nextUp`; the surface resolves the id to a name
   // the way the board's own pickers do.
@@ -229,29 +226,21 @@ export const useFreestyleTimerFeed = () => {
     2: null,
   });
 
-  // Audio plays on BOTH surfaces (DECISIONS 0015 §3): short beep when a warm-up
-  // start_countdown / lane break arrives, long beep on any local Countdown's
-  // onExpire — the warm-up hero and both performance lanes at run-zero (rule F7),
-  // plus onBreakExpire — so the venue PA feed sounds every period end.
+  // Audio plays on BOTH surfaces (ADR 0015 §3; one tone per channel, ADR 0046
+  // §3): a short beep when a warm-up/try start or a lane break arrives, and each
+  // local Countdown crossing (run-zero, rule F7; break-over; warm-up; try end)
+  // plays its channel's tone — so the venue PA feed sounds every period end.
   const { audioElement, playAudio, audioBlocked } = useSignalAudio();
 
   const [recovery, setRecovery] = useState<RecoveredLanes>({});
-  // Snapshot-vs-live precedence, PER CHANNEL (ADR 0011 newer-wins, made
-  // stricter): the channels that have spoken since this socket opened. A
-  // board-wide flag let one lane's `reset_countdown` discard the whole
-  // snapshot — including the warm-up row that was the only thing standing
-  // between the projector and a fabricated hero (fsux-preview-warmup-seed).
+  // The channels that have spoken since this socket opened: live-beats-snapshot
+  // is per channel, not board-wide (architecture.md "What an overlay needs to
+  // stay in sync").
   const liveChannelsRef = useRef<Set<number>>(new Set());
-  // The SURFACE is seeded once per socket, by the first evidence to arrive, and
-  // only live messages move it thereafter (fsux-preview-surface-peer-snapshot).
-  // `request_state` is answered to the whole room, so most snapshots a long-lived
-  // projector receives answer somebody ELSE's join — and between matches, with
-  // the lanes pristine, re-deriving off one would resurrect the warm-up hero over
-  // the lane clocks on every screen in the venue until the next message, which
-  // can be minutes away. Invariant, per socket:
-  // `surfaceSeededRef.current === (warmupSurface !== 'unseeded')` — except across
-  // a reconnect, where the on-air surface deliberately stands (no mid-outage
-  // blanking) while the flag resets, so exactly one fresh seed is taken per OPEN.
+  // One surface seed per socket OPEN; peer snapshots never re-derive it. Per
+  // socket, `surfaceSeededRef.current === (warmupSurface !== 'unseeded')`,
+  // except across a reconnect, where the surface stands while the flag resets
+  // (architecture.md "What an overlay needs to stay in sync").
   const surfaceSeededRef = useRef(false);
   // LWW seq (ADR 0038 §4), one hop out from the panels: drop the losing
   // (stale-stamped) side of a crossed concurrent panel edit, whatever the
@@ -278,7 +267,7 @@ export const useFreestyleTimerFeed = () => {
       surfaceSeededRef.current = false;
       // Pull the operator's current countdown state so a fresh / reconnected
       // preview is not blank until the next operator action. `request_state` is
-      // session-scoped (no timerId, ws-session-message-family).
+      // session-scoped (no timerId).
       sendWSMessage({ type: 'request_state', data: {} });
     }
   }, [readyState]);
@@ -309,7 +298,7 @@ export const useFreestyleTimerFeed = () => {
       );
       // The beeps are effects, not the surface rule: a warm-up start (timerId 0)
       // and a best-trick try start (timerId 3) beep short on the preview surface
-      // too, as does a lane break opening (DECISIONS 0015 §3).
+      // too, as does a lane break opening (ADR 0015 §3).
       if (
         type === 'start_break' ||
         (type === 'start_countdown' &&
@@ -350,8 +339,8 @@ export const useFreestyleTimerFeed = () => {
           void queryClient.invalidateQueries({ queryKey });
         }
         break;
-      // Names persist across runs of the same run (the recorder selection is not
-      // cleared on reset), so they are intentionally NOT cleared on reset_countdown.
+      // Names persist across runs (the recorder selection is not cleared on
+      // reset), so reset_countdown does not clear them.
       case 'updateLaneNames':
         // Same discipline crosstalk guard as updateSelection: the speed board's
         // lane names have no legitimate consumer here (only the freestyle hero
@@ -367,7 +356,7 @@ export const useFreestyleTimerFeed = () => {
         if (!isCountdownSnapshot(data)) {
           break;
         }
-        // Ungated on purpose: a board-wide flag every panel converges on, not
+        // Ungated: a board-wide flag every panel converges on, not
         // folded state — whoever the snapshot answers, its value is current.
         setIsPreviewEnabled(data.isPreviewEnabled);
         // Re-derive the surface for a late joiner — the same one rule the live
@@ -381,10 +370,9 @@ export const useFreestyleTimerFeed = () => {
         // Seed only the channels that are still silent (see liveChannelsRef): a
         // live message is newer truth for ITS lane and nothing else. Rows the
         // snapshot omits are left unseeded rather than defaulted to a dead
-        // 00:00 — an absent clock beats an invented one. Deliberately NOT joined
-        // to the surface gate above: refreshing a still-silent channel's row off
-        // a peer's snapshot is free, and now invisible too, since the surface no
-        // longer moves under it.
+        // 00:00 — an absent clock beats an invented one. Not joined to the
+        // surface gate above: refreshing a still-silent channel's row off a
+        // peer's snapshot is free and invisible (the surface does not move).
         setRecovery((lanes) => {
           const next = { ...lanes };
           for (const row of data.timers) {
@@ -401,9 +389,9 @@ export const useFreestyleTimerFeed = () => {
   };
 
   // The warm-up ran out on a display surface (its hero's Countdown crossed zero):
-  // hand off to the armed lanes, exactly as an operator stop does
-  // (post-warmup-handoff). Stable so the surfaces wire it straight into the
-  // WarmupHero onExpire beside the long beep. It deliberately does NOT set
+  // hand off to the armed lanes, exactly as an operator stop does. Stable so the
+  // surfaces wire it straight into the warm-up clock's onExpire beside its tone. It
+  // does NOT set
   // `surfaceSeededRef`: a locally-derived expiry is not evidence about the room,
   // so after a reconnect the room's snapshot must still win.
   const endWarmup = useCallback(() => setWarmupSurface('lanes'), []);
@@ -411,7 +399,7 @@ export const useFreestyleTimerFeed = () => {
   // The try window crossed zero on THIS surface (no wire message rides a
   // TRY_TIMEOUT — bestTrickSeries): rest the try row at zero so a turn-flip
   // remount seeds the spent window instead of replaying the running anchor
-  // (which would re-fire the long beep ~1s after the remount). A spent row
+  // (which would re-fire the expiry beep ~1s after the remount). A spent row
   // recovers as `expired` (clockFromRecovery), so the refresh landing on the
   // still-mounted clock keeps the TIME face rather than clobbering it.
   const endTryWindow = useCallback(

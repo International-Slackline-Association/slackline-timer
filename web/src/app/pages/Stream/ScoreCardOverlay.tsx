@@ -23,19 +23,10 @@ import { useFitToWidth } from 'app/pages/Stream/useFitToBox';
 
 /**
  * `/stream/scorecard/:round/:gender?compId=&token=` — the freestyle judged
- * score card (`LAAX 2026_freestyle_scoreCard.svg`): the round's ranked field
- * with the full component breakdown — TOTAL, TRICK DIFFICULTY, COMBO, STYLE,
- * CONTROL PENALTY, BEST TRICK — one row per scored athlete. Inherently
- * freestyle (there is nothing to break down on the speed plane), so the fetch
- * pins `discipline=freestyle` regardless of the URL's `?discipline=`. Built for
- * the battle rounds (quarter / half / small final / final); any match round is
- * accepted and the field caps at the art's 8 rows. Titleless, transparent
- * background; refreshes on `db_update`.
- *
- * The **qualification** round is judged without a control penalty or best trick,
- * so its card drops those two columns and spreads the freed width across the
- * surviving component boxes (see {@link layoutColumns}); every other round keeps
- * the full six-column art.
+ * score card: the round's ranked field with the full component breakdown, one
+ * row per scored athlete, capped at the art's 8 rows. The fetch pins
+ * `discipline=freestyle` regardless of the URL's `?discipline=`. Qualification
+ * drops two columns (see {@link layoutColumns}).
  */
 export const ScoreCardOverlay = () => {
   const { round, gender } = useParams();
@@ -53,10 +44,9 @@ export const ScoreCardOverlay = () => {
 };
 
 /**
- * Reference geometry measured off the `LAAX 2026_freestyle_scoreCard.svg`
- * master — a provenance label, not a file in this repo; the measurement record
- * is `doc/dev/design-system/design-system.md` §7 "Freestyle score card". Px on
- * the 1920×1080 capture frame, carried to any capture size by `refVw`/`refVh`.
+ * Reference px measured off the client's `LAAX 2026_freestyle_scoreCard.svg`
+ * master (not part of this repo; see design-system §7 "Freestyle score card"),
+ * carried to any capture size by `refVw`/`refVh`.
  */
 const ART = {
   rowHeight: 56.79,
@@ -79,12 +69,9 @@ const ART = {
 
 /**
  * The value columns in art order. `gap` is the measured distance from the
- * previous box's right edge — the master's inter-column gaps are deliberately
- * irregular, so each column carries its own; `kind` selects the shared cell chrome (`ScoreCell`)
- * — the solid near-black TOTAL box, the two-tier component boxes, and the solid
- * CONTROL PENALTY box. The art washes that penalty box at ~28% alpha; it is
- * drawn solid here, as the VS table already does, so the white digits sit on a
- * saturated ground over bright footage (one penalty language, two surfaces).
+ * previous box's right edge — the master's gaps are irregular, so each column
+ * carries its own; `kind` selects the `ScoreCell` chrome (the solid CONTROL
+ * PENALTY box departs from the art — see `ScoreCell`).
  */
 const COLUMNS = [
   { key: 'total', header: ['TOTAL'], gap: 39.66, width: 194.82, kind: 'total' },
@@ -107,9 +94,7 @@ const COLUMNS = [
   { key: 'bestTrick', header: ['BEST', 'TRICK'], gap: 35.89, width: 166.88, kind: 'component' },
 ] as const;
 
-// The displayed column keys ARE the shared freestyle cell keys — the master's
-// six columns cover every cell — so the layout speaks `freestyleScore`'s
-// vocabulary directly.
+// The master's six columns cover every shared freestyle cell.
 type ColumnKey = FreestyleCellKey;
 
 /** A displayed column: the master's spec with a mutable `gap` so a reduced-
@@ -265,8 +250,8 @@ const HeaderRow = ({ columns, rankColumn }: { columns: DisplayColumn[]; rankColu
 );
 
 /** The populated name plate: solid white + near-black ink per the two-tier rule
- *  (the art's translucent boxes are the EMPTY placeholder state), with the
- *  square flag strip and shrink-to-fit name of the ranking recipe. */
+ *  (design-system §3; the art's translucent boxes are the EMPTY state), with the
+ *  ranking recipe's square flag and shrink-to-fit name. */
 const NamePlate = ({ entry }: { entry: { athlete: Athlete } }) => {
   const { slotRef, nameRef, fit } = useFitToWidth();
   return (

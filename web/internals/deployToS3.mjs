@@ -146,11 +146,10 @@ function main() {
   );
 
   console.log('Invalidating cloudfront cache...');
-  // The leading-slash `--paths /*` is safe here: execFileSync passes argv
-  // straight to the aws executable with NO intervening MSYS/Git-Bash shell, so
-  // MSYS path-conversion never mangles `/*` into `C:/Program Files/Git/*`. The
-  // old .sh needed MSYS_NO_PATHCONV=1 for this — do NOT reintroduce a shell
-  // (sh/PowerShell) around the call.
+  // The leading-slash `--paths /*` is safe only because execFileSync passes
+  // argv straight to aws: an MSYS/Git-Bash shell would mangle `/*` into
+  // `C:/Program Files/Git/*`. Do NOT reintroduce a shell (sh/PowerShell) around
+  // the call.
   aws(
     // prettier-ignore
     ['cloudfront', 'create-invalidation', '--distribution-id', distributionId, '--paths', '/*', '--no-cli-pager'],

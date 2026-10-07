@@ -2,11 +2,10 @@ node_modules
 cdk.out
 .DS_Store
 .env
-# Deployment config (AWS profile, cost-alert address) — template: .env.deploy.example
+# Deployment config (ADR 0048) — template: .env.deploy.example
 .env.deploy
 dist
-# `npm run test:coverage` output in both packages (CI uploads web/coverage as an
-# artifact). Unignored, a coverage run left ~300 files staged for accidental commit.
+# `npm run test:coverage` output in both packages (CI uploads web/coverage as an artifact).
 coverage
 
 # Editor directories and files

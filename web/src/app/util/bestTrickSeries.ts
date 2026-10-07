@@ -1,10 +1,9 @@
 /**
  * The Freestyle battle **part-2 best-trick** series (rule F6) — a pure machine in
- * the `battleMachine.ts` idiom, but a *separate* one (two machines, two charts:
- * ADR 0032's battle reducer is left untouched). During best trick both lanes are
- * already finished/idle, so the battle machine's `runningLane` is null and its
- * expiry never arms — this additive layer owns its own clock, on the vacant wire
- * channel `timerId 3` (was battle-elapsed, deleted by ADR 0019 §3).
+ * the `battleMachine.ts` idiom, but a *separate* one (two machines, two charts).
+ * During best trick both lanes are already finished/idle, so the battle
+ * machine's `runningLane` is null and its expiry never arms — this layer owns
+ * its own clock, on wire channel `timerId 3`.
  *
  * The rule: after the two timed runs, each athlete gets a fixed number of
  * best-trick tries (3, or **5 in the final**), alternating, participant A first
@@ -12,14 +11,14 @@
  * A try is *consumed on start* — opening a 30 s window is the attempt — so
  * landed/missed are transition-identical (no per-try outcome is modelled here;
  * the steal-halving stays judge arithmetic on the entered `bestTrick` Score
- * component, compliance §4.3).
+ * component, `doc/dev/laax-2026-compliance.md` §4 item 3).
  *
  * Turn enforcement is advisory: `suggestedNext` proposes who is up (software
  * advises, the operator decides — judges reorder tries in the field), and the
- * panel lets the operator start either side. No new persisted entity and no
- * server/parity change — the relay is opaque and `LiveSelection` is web-only.
+ * panel lets the operator start either side. Nothing persists: the series lives
+ * on the relay only (`LiveSelection` is web-only).
  *
- * Design (per the HSM rules): state is a discriminated `clock` union (a running
+ * Design: state is a discriminated `clock` union (a running
  * clock carries its anchor + window, an idle clock carries nothing), the reducer
  * is pure `(state, event) -> { state, effects }` (no I/O, no `Date.now()` — wall
  * clock rides in on `at`), exhaustively switched, and side-effects (relay sends,
@@ -45,7 +44,7 @@ export const DEFAULT_CAP = 3;
 export const FINAL_CAP = 5;
 
 /** A running clock carries its wall-clock anchor + window so the live remaining
- * is derived, never accumulated (rule 6). A resting clock carries `endedMs` —
+ * is derived, never accumulated. A resting clock carries `endedMs` —
  * the last try's frozen remaining (0 = the window expired, renders "TIME"), or
  * null when no try has run since the last arm/reset (the display then rests at
  * the armed window). It exists purely so the controlled display can derive the
@@ -147,9 +146,9 @@ export const bestTrickWire = (state: TrySeriesState | null): FreestyleSelection[
       };
 
 /**
- * The try clock's controlled display, derived from the series (rule 2 — the
- * reducer state drives the control-page Countdown; no message replay, no
- * recovery side channel). Running derives from the anchor; at rest the numeral
+ * The try clock's controlled display, derived from the series (the reducer
+ * state drives the control-page Countdown; no message replay, no recovery side
+ * channel). Running derives from the anchor; at rest the numeral
  * holds the last try's frozen remaining (`endedMs`, 0 = expired → "TIME"), or
  * the armed window when no try has run since arm/reset.
  */
@@ -184,7 +183,7 @@ const resetCountdown = (remainingMs: number): TimerEffect => ({
 /**
  * The pure transition. `(state, event) -> { state, effects }`, exhaustive and
  * `never`-checked, no I/O. The try clock is anchored to the event wall clock so
- * both surfaces derive the same remaining off it (rule 6).
+ * both surfaces derive the same remaining off it.
  */
 const transition = (state: TrySeriesState, event: TrySeriesEvent): TrySeriesResult => {
   switch (event.type) {
@@ -379,8 +378,8 @@ export const trySeriesReducer = (
       // preview hero shows the full window the moment it appears. Queued behind
       // whatever is still pending (the edge drains once per render, so a disarm
       // and the re-arm that replaces it can land in one tick) — the ordered
-      // queue then ends on this window, where discarding lost the disarm's own
-      // reset and left the preview hero on the previous match's clock.
+      // queue then ends on this window; discarding would drop the disarm's own
+      // reset and leave the preview hero on the previous match's clock.
       //
       // A fresh series has no rev to bump from once a disarm has dropped the
       // last one, so ARM anchors its rev at the wall clock (the selection seq's
@@ -414,14 +413,13 @@ export const trySeriesReducer = (
       //
       // The peer's `bestTrick` still decides the outcome — the `PEER_SELECTION`
       // riding the SAME frame re-arms this store when the peer's phase survived
-      // — it just no longer has to ARRIVE for the stale series to go. That is
-      // what makes the mirror proof against the frame order (the acting panel
-      // sends its selection and its drained `timerId 3` clock as two
-      // unordered frames): the clock frames then find nothing to keep or
-      // re-arm whichever side of the selection they land on, and this panel can
-      // never re-push an armed `bestTrick` stamped with the peer's NEW match —
-      // the push that re-armed the acting panel on the series it had just left
-      // (`peer-match-disarm-reorder-race`).
+      // — it just does not have to ARRIVE for the stale series to go. That makes
+      // the mirror proof against the frame order (the acting panel sends its
+      // selection and its drained `timerId 3` clock as two unordered frames):
+      // the clock frames find nothing to keep or re-arm whichever side of the
+      // selection they land on, and this panel can never re-push an armed
+      // `bestTrick` stamped with the peer's NEW match, which would re-arm the
+      // acting panel on the series it had just left.
       //
       // The FIRST context is adopted silently for the same reason as `CONTEXT`:
       // a mount observation has nothing armed to lose.
@@ -455,8 +453,8 @@ export const trySeriesReducer = (
       // corrects a running one's SIDE — the one fact PEER_TRY_START has to
       // guess. It may NOT stop one: every panel re-pushes this payload, so a
       // `clockRunning: false` echo is usually a peer that has not applied our
-      // start_countdown yet, and stopping on it killed the acting panel's own
-      // try (peer-mirroring smoke). A real stop rides reset/stop_countdown, or
+      // start_countdown yet, and stopping on it would kill the acting panel's
+      // own try. A real stop rides reset/stop_countdown, or
       // — for a window that runs out — each surface's own expiry off the
       // shared anchor.
       const clock: TryClock =
@@ -467,11 +465,11 @@ export const trySeriesReducer = (
           ? { ...current.clock, side: bt.turn }
           : current.clock;
       // A wire tally nothing has been spent on has no history to reconstruct:
-      // `turn` there is a suggestion, and reading `otherLane` out of it invented
-      // a `lastSide` on a freshly armed mirror. PEER_TRY_START then guessed that
-      // side for the acting panel's first try, and the side correction above fed
-      // the guess back — flipping the acting panel onto the wrong side and
-      // stranding its consumed try (both panels stuck at 0 / 3, peer-mirroring).
+      // `turn` there is a suggestion, and reading `otherLane` out of it would
+      // invent a `lastSide` on a freshly armed mirror. PEER_TRY_START would then
+      // guess that side for the acting panel's first try, and the side
+      // correction above would feed the guess back — flipping the acting panel
+      // onto the wrong side and stranding its consumed try.
       const noTriesYet = bt.tries[1] === 0 && bt.tries[2] === 0;
       const lastSide = clock.running
         ? clock.side

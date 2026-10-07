@@ -16,7 +16,6 @@ const REQUIRED_ENV = [
   'VITE_APP_COGNITO_TIMER_GROUP',
 ];
 
-// https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
   // loadEnv merges the prefixed vars from process.env, which is how the deploy
   // tooling's resolved values reach this guard, the CSP and the bundle. Only
@@ -65,16 +64,9 @@ export default defineConfig(({ command, mode }) => {
     build: {
       rollupOptions: {
         output: {
-          // Split the heavy vendor deps into their own chunks so the app entry
-          // stays small and these rarely-changing bundles cache well. Match by
-          // path so the transitive tree of each lib lands in its own chunk.
-          //   - amplify: aws-amplify plus its `@aws-amplify/*` + AWS SDK
-          //              (`@aws-sdk/*`, `@smithy/*`) transitive tree.
-          //   - mui:     the MUI/emotion cluster, the next-largest group.
-          // (Flags used to be the biggest dep — react-world-flags inlined every
-          //  country SVG into one ~3.7 MB module. They're now the vendored
-          //  flag-icons artwork in `src/app/flag-icons`: CSS + per-country SVG
-          //  assets fetched on demand, no JS vendor chunk.)
+          // The two heaviest, rarely-changing vendor clusters get their own
+          // long-cached chunks, matched by path so each lib's transitive tree
+          // (AWS SDK / @smithy under amplify) lands with it.
           manualChunks(id) {
             if (/node_modules\/(aws-amplify|@aws-amplify|@aws-sdk|@smithy)\//.test(id)) {
               return 'amplify';

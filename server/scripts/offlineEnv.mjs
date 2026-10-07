@@ -1,8 +1,7 @@
-// The offline env the data-plane + relay handlers read directly — no SSM/STS,
-// no AWS account. Injected by the dev scripts (devApi.mjs) and the in-process
-// harnesses (localHttpHarness.mjs / localWsHarness.mjs), which run the handlers
-// in the host process, so 127.0.0.1 reaches the LocalStack container directly.
-// CDK resolves {{resolve:ssm:…}} only at deploy, never locally (ADR 0023).
+// The offline env the data-plane + relay handlers read — no SSM/STS, no AWS
+// account. Applied by devApi.mjs and both in-process harnesses, so 127.0.0.1
+// reaches the LocalStack container. Secrets are direct values, which
+// core/secrets.ts prefers over the deployed *_PARAM fetch (ADR 0025).
 export const OFFLINE_ENV = {
   IS_OFFLINE: 'true',
   READ_TOKEN_SECRET: 'local-dev-read-token-secret-change-me',
@@ -10,22 +9,16 @@ export const OFFLINE_ENV = {
   AWS_ACCESS_KEY_ID: 'local',
   AWS_SECRET_ACCESS_KEY: 'local',
   AWS_ACCOUNT_ID: '000000000000',
-  // Must match the deployed CloudFormation TableName (Stage=prod) / createLocalTables.
+  // Must match createLocalTables (the CDK tableName at stage prod).
   SPEEDLINE_TIMER_TABLE: 'slackline-timer-v1-relay-prod',
   COMPETITION_TABLE: 'slackline-timer-v1-competition-prod',
-  // Placeholders: local dev bypasses Cognito entirely (the authorizers accept
-  // the web's `local-dev` dummy token under IS_OFFLINE), and a real pool id is
-  // account-scoped — a laptop carrying one is a stray AWS_PROFILE away from
-  // acting on real users.
+  // Placeholders: under IS_OFFLINE the authorizers accept the `local-dev`
+  // dummy, and a real pool id on a laptop is a stray AWS_PROFILE away from
+  // acting on real users. The pool id must still match `<region>_<id>`:
+  // `CognitoJwtVerifier.create()` validates it at module load.
   //
-  // The pool id must still LOOK like one: the real httpAuthorizer/authorizer
-  // run in-process here and `CognitoJwtVerifier.create()` validates the
-  // `<region>_<id>` shape at module load, so a free-form string kills the
-  // harness at startup.
-  //
-  // An already-set value always wins, here and in applyOfflineEnv, so local can
-  // still point at a real pool (e.g. to replay a genuine IdToken):
-  // `node --env-file=../.env.deploy scripts/devApi.mjs`.
+  // An already-set value wins, so local can point at a real pool (e.g. to
+  // replay a genuine IdToken): `node --env-file=../.env.deploy scripts/devApi.mjs`.
   COGNITO_USER_POOL_ID: process.env.COGNITO_USER_POOL_ID ?? 'eu-central-1_LOCALDEVPOOL',
   COGNITO_CLIENT_ID: process.env.COGNITO_CLIENT_ID ?? 'local-dev-app-client',
   COGNITO_TIMER_GROUP: process.env.COGNITO_TIMER_GROUP ?? 'local-dev-operators',

@@ -35,7 +35,7 @@ export interface MatchSelectionConfig<R extends TimeRound> {
  * consoles (`useRaceRecorder` / `useScoreRecorder`), parameterized on the round
  * vocabulary — speed records into `TimeRound`, freestyle into `MatchRound`.
  * Owns the cascading filters (round scopes the match list, gender the athlete
- * pool), the confirm-guarded round/gender changes (ADR 0033), the two athlete
+ * pool), the confirm-guarded round/gender changes (ADR 0033/0042), the two athlete
  * slots, and the per-selection seed guard; all recording/POST logic stays in
  * each recorder, wired in through the config callbacks.
  */

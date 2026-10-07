@@ -1,15 +1,10 @@
 /**
  * The Freestyle cross-lane battle state machine (ADR 0032, respec'd by 0036).
  *
- * A single pure reducer that owns the two performance lanes' state, replacing
- * the triple-copied state that used to be smeared across the page
- * (`runningTimerId` + `laneStateRef`), each `CountdownControl` (local
- * `isRunning`/`remainingMs`/`startTime`/`breaksLeft` + a self-echo effect that
- * re-consumed the lane's own looped-back relay messages), and each `Countdown`
- * tick copy. Here the state lives in exactly one place; the controls and the
+ * A single pure reducer owns both performance lanes' state; the controls and the
  * relay snapshot are derived from it.
  *
- * Design (per the HSM rules):
+ * Design:
  *  - Lane state is a discriminated union on `phase` — illegal states (e.g. a
  *    break clock on an idle lane, a stop-time on a running lane) are
  *    unrepresentable.
@@ -17,12 +12,12 @@
  *    `Date.now()` (wall-clock arrives on the event as `at`), exhaustively
  *    switched with a `never` check. Side-effects (relay sends, audio) are
  *    returned as data for the edge to perform, never fired here.
- *  - It reuses `breakState.ts` verbatim (`takeBreak`, `canTakeBreak`) as its
- *    guard/transition helpers for the quali advisory break.
+ *  - The quali advisory break's guard/transition helpers are `breakState.ts`'s
+ *    (`takeBreak`, `canTakeBreak`).
  *
  * Per-athlete active budgets are first-class (ADR 0019 §6): each lane carries a
  * `budgetMs` that persists across its turns (frozen on stop, resumed on the
- * next start), rather than being reconstructed from a held-remaining mirror.
+ * next start).
  *
  * Battle has NO break clock (ADR 0036): a STOP (fall) / TIMEOUT just ends the
  * turn, and `pauseStartedAt` anchors the judge-facing changeover count-up —
@@ -79,7 +74,7 @@ export type LaneState =
  * A lane with nothing to lose: idle at exactly the budget it was last armed to,
  * so no turn has been run off it since. The re-arm paths key off this — a
  * pristine lane can be re-armed without asking, a held one (idle *below* its
- * armed budget: a fall mid-turn) never silently (brief §4.5/§4.6).
+ * armed budget: a fall mid-turn) never silently (freestyle-board-ux §4.5/§4.6).
  */
 export const isPristine = (lane: LaneState): boolean =>
   lane.phase === 'idle' && lane.budgetMs === lane.armedMs;
@@ -93,7 +88,7 @@ export const isPristine = (lane: LaneState): boolean =>
  * whenever a lane is re-armed (RESET, or a SET_BUDGETS that re-armed something —
  * a re-armed board restarts the cycle at lane 1). Like the pause anchor it is
  * control-local: never relayed, not in the snapshot — a panel joining mid-match
- * rebuilds it from PEER_SNAPSHOT / PEER_HINT instead (brief §4.11).
+ * rebuilds it from PEER_SNAPSHOT / PEER_HINT instead (freestyle-board-ux §4.11).
  */
 export type BattleState = {
   1: LaneState;
@@ -126,7 +121,7 @@ export type BattleState = {
  * from, so two transitions rebuild `lastRan` from what IS relayed: PEER_SNAPSHOT
  * (a lane running in the snapshot is the lane that last started) and PEER_HINT,
  * which inverts the `LiveSelection.nextUp` every board already broadcasts —
- * alternation recovers with no wire change (brief §4.11). */
+ * alternation recovers with no wire change (freestyle-board-ux §4.11). */
 export type BattleEvent =
   | { type: 'START'; lane: PlayerId; at: number }
   | { type: 'STOP'; lane: PlayerId; at: number }
@@ -213,24 +208,21 @@ export const laneRemainingMs = (lane: LaneState, now: number): number => {
 
 /**
  * One lane's contribution to a `request_state` snapshot (ADR 0011). The reducer
- * state IS the snapshot source (replacing the old `laneStateRef`): the builder
- * (`buildCountdownSnapshot`) adjusts a running lane for wall-clock elapsed at
- * send, so a running lane hands over its budget + anchor unadjusted here. An
- * `onBreak` lane hands over the paused budget plus the break clock so a quali
- * mid-break reconnect resumes (gotcha §4.3). The pause anchor is deliberately
- * NOT here — it is control-local judge information (ADR 0036).
+ * state IS the snapshot source: the builder (`buildCountdownSnapshot`) adjusts a
+ * running lane for wall-clock elapsed at send, so a running lane hands over its
+ * budget + anchor unadjusted here. An `onBreak` lane hands over the paused
+ * budget plus the break clock so a quali mid-break reconnect resumes. The pause
+ * anchor is not here — it is control-local judge information (ADR 0036).
  *
  * The row shape is the canonical `CountdownControlRow` (timerSnapshot) — the
  * same pre-send builder-input shape `buildCountdownSnapshot` consumes, so this
  * producer and that consumer share one definition.
  */
 export const laneSnapshot = (timerId: PlayerId, lane: LaneState): CountdownControlRow => {
-  // Every phase hands over `breaksLeft` AND `armedMs` (not only onBreak / not
-  // only idle), so a panel joining mid-quali-run adopts the true remaining
-  // allowance instead of assuming the full one until the next relayed
-  // start_break, and adopts the room's armed budget instead of its own format
-  // default — a joiner that kept its default would read a mirrored lane as held
-  // and re-arm the whole room to that default on its next Reset (ADR 0046 §2).
+  // Every phase hands over `breaksLeft` AND `armedMs`, so a panel joining
+  // mid-quali-run adopts the true remaining allowance instead of assuming the
+  // full one until the next relayed start_break, and the room's armed budget
+  // (see `LaneState`).
   switch (lane.phase) {
     case 'idle':
       return {
@@ -274,7 +266,7 @@ export const laneSnapshot = (timerId: PlayerId, lane: LaneState): CountdownContr
   }
 };
 
-/** One lane's controlled display, derived from its machine state (rule 2). */
+/** One lane's controlled display, derived from its machine state. */
 export const laneDisplay = (lane: LaneState): CountdownDisplayState => {
   switch (lane.phase) {
     case 'idle':
@@ -544,11 +536,10 @@ export const reduce = (state: BattleState, event: BattleEvent): BattleResult => 
 
     case 'SET_BUDGETS': {
       // Re-arm to a new default budget (the "Set both lanes" action / the mode
-      // switch), but only where nothing is lost: a **pristine** lane. "Idle" was
-      // not enough — a lane held after a fall is idle too (`stoppedLane`), so
-      // the old re-arm silently discarded a run the operator had to re-time.
-      // Live, on-break and spent lanes are likewise left alone, which makes the
-      // guard the reducer's own rather than the caller's.
+      // switch), but only where nothing is lost: a **pristine** lane. "Idle" is
+      // not enough — a lane held after a fall is idle too (`stoppedLane`).
+      // Live, on-break and spent lanes are likewise left alone; the guard is
+      // the reducer's own, not the caller's.
       // Each re-armed lane broadcasts the `reset_countdown` RESET already sends,
       // so peers apply PEER_RESET and the preview mirrors — no wire change.
       const reArmed: PlayerId[] = ([1, 2] as const).filter((lane) => isPristine(state[lane]));
@@ -664,7 +655,7 @@ export const reduce = (state: BattleState, event: BattleEvent): BattleResult => 
       const hydrated = { ...state, 1: hydrate(1), 2: hydrate(2) };
       // ...except the one `lastRan` the snapshot does imply: a lane running in
       // it is the lane that last started, so the joiner's next press after that
-      // turn ends alternates instead of re-targeting lane 1 (brief §4.11).
+      // turn ends alternates instead of re-targeting lane 1 (freestyle-board-ux §4.11).
       const live = runningLane(hydrated);
       return {
         state: live === null ? hydrated : { ...hydrated, lastRan: live },
@@ -675,7 +666,7 @@ export const reduce = (state: BattleState, event: BattleEvent): BattleResult => 
     case 'PEER_HINT': {
       // The room's `nextUp` names the lane that has NOT run, so its other lane
       // is `lastRan` — the whole of the rejoin recovery, off a field the board
-      // already relays. Three guards (brief §4.11): a room with nothing to
+      // already relays. Three guards (freestyle-board-ux §4.11): a room with nothing to
       // suggest says `null`; quali has no alternation to reproduce; and a live
       // turn already owns `lastRan` locally (the mirrored START set it), so a
       // hint minted before that START must not walk it back.
@@ -705,15 +696,12 @@ export const reduce = (state: BattleState, event: BattleEvent): BattleResult => 
  * way. The wire `breaksLeft` is authoritative in every phase (the snapshot
  * source carries it whether or not the lane is on break); only a pre-feature
  * peer omits it, in which case the local allowance stands until the next
- * relayed break. The wire `armedMs` is authoritative the same way (ADR 0046 §2):
- * the room owns the armed budget, and a joiner that kept its own format default
- * would read a mirrored lane as held — locking its format controls, and, worse,
- * broadcasting THAT default on its next Reset, which every peer applies as
- * PEER_RESET. A pre-feature peer omits it, and only an **idle** lane has a safe
- * fallback: its remaining IS an armed budget, so the lane reads pristine rather
- * than inventing a held turn. Running / on-break / finished carry a spent-down
- * remaining (0 when finished), which says nothing about the armed value, so
- * there the local one stands until the next re-arm.
+ * relayed break. The wire `armedMs` is authoritative the same way (the room
+ * owns it — see `LaneState`). A pre-feature peer omits it, and only an **idle**
+ * lane has a safe fallback: its remaining IS an armed budget, so the lane reads
+ * pristine rather than inventing a held turn. Running / on-break / finished
+ * carry a spent-down remaining (0 when finished), which says nothing about the
+ * armed value, so there the local one stands until the next re-arm.
  */
 const laneFromSnapshot = (
   timer: CountdownSnapshot['timers'][number],
@@ -772,8 +760,7 @@ export const peerBattleEvent = (message: CountdownWSMessage, at: number): Battle
       return {
         type: 'PEER_START',
         lane,
-        // Prefer the shared wire anchor; a pre-feature sender omits it, so fall
-        // back to receipt (`at`) — the old ~RTT-anchored behaviour.
+        // A pre-feature sender omits the wire anchor: fall back to receipt (`at`).
         startedAt: message.data.startedAt ?? at,
         remainingMs: message.data.remainingMs,
       };
@@ -795,13 +782,8 @@ export const peerBattleEvent = (message: CountdownWSMessage, at: number): Battle
   }
 };
 
-/**
- * `useReducer` adapter. The store carries the pure `battle` state plus a queue of
- * pending `effects` for the edge to drain (effects-as-data, so the transition
- * itself stays pure and the drain is order-independent even if several events
- * land before a render). A `DRAIN` action clears the queue after the edge has
- * performed it.
- */
+/** `useReducer` adapter: the pure `battle` state plus the pending-effects queue
+ * (see `effectStore.ts`). */
 export interface BattleStore {
   battle: BattleState;
   effects: TimerEffect[];

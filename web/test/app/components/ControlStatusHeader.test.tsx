@@ -59,11 +59,10 @@ describe('ControlStatusHeader', () => {
   });
 
   it('names the link plate, so the phase reading is addressable on its own', () => {
-    // The health rows stopped being MUI Chips ("uses status lines" above), which
-    // left the link phase — the one reading an operator checks before every run —
-    // with nothing to address it by, while its own detail line under it kept a
-    // handle. Off-screen probes (the local puppeteer driver) then read the whole
-    // slot and saw the audio/peer rows too.
+    // The health rows are not MUI Chips ("uses status lines" above), so the link
+    // phase — the reading an operator checks before every run — needs a handle of
+    // its own; an off-screen probe reading the whole slot sees the audio/peer rows
+    // too.
     const { rerender } = render(<ControlStatusHeader {...baseProps} />);
     expect(screen.getByTestId('control-link-status')).toHaveTextContent('Connected');
 
@@ -145,12 +144,11 @@ describe('ControlStatusHeader', () => {
     expect(screen.getByTestId('control-link-detail')).toHaveAttribute('title', all);
   });
 
-  // `control-health-slot-height`: the detail caption reserves ONE row
-  // (`minHeight: 1.2em`) but was free to wrap, so the down-phase sentence took a
-  // second line at the narrower desks — 59.2 px of health slot against 77.3 —
-  // and moved both desks under it on a link change. The reserved row is the fold
-  // budget `5a69ad8` won, so the line is clipped to it and the full sentence
-  // stays readable through the title instead of being given a second row.
+  // The detail caption reserves ONE row (`minHeight: 1.2em`); free to wrap, the
+  // down-phase sentence takes a second line at the narrower desks (59.2 px of
+  // health slot against 77.3) and moves both desks under it on a link change.
+  // The reserved row is part of the fold budget, so the line is clipped to it and
+  // the full sentence stays readable through the title.
   it('holds the detail line to its one reserved row, whatever the reading', () => {
     const phases: LinkPhase[] = ['connecting', 'unreachable', 'open', 'reconnecting', 'lost'];
     const { rerender } = render(<ControlStatusHeader {...baseProps} />);
@@ -174,10 +172,9 @@ describe('ControlStatusHeader', () => {
     }
   });
 
-  // ftt-followup-speedline-desk-fold-2: the caption is a flex child of the
-  // shrink-to-fit health Stack, so its own max-content width helped SIZE the
-  // plate row above it — a longer sentence measurably narrowed the row
-  // (77.3 → 57.3 px at 1440x720) and re-laid it. `width: 0` + a percentage
+  // The caption is a flex child of the shrink-to-fit health Stack, so its own
+  // max-content width would help SIZE the plate row above it — a longer sentence
+  // narrowed the row (77.3 → 57.3 px at 1440x720) and re-laid it. `width: 0` + a percentage
   // floor contributes nothing intrinsic and still fills the settled column, so
   // the row's geometry is the viewport's alone.
   it('contributes no intrinsic width to the health column it sits under', () => {
@@ -240,10 +237,9 @@ describe('ControlStatusHeader', () => {
     expect(screen.queryByText(/^Recording$/)).not.toBeInTheDocument();
   });
 
-  // fsux-desk-fold-budget: the health block used to be a 2x2 plate grid over a
-  // full-width sound button, and the ~125 px it cost is what pushed the lane
-  // transport off a 1440x900 desk. jsdom applies no `@media`, so the fold is
-  // read off the rule the element carries.
+  // fsux-desk-fold-budget: a 2x2 plate grid over a full-width sound button costs
+  // ~125 px, enough to push the lane transport off a 1440x900 desk. jsdom
+  // applies no `@media`, so the fold is read off the rule the element carries.
   it('folds the health block into one row of cells at the desk widths', () => {
     render(
       <ControlStatusHeader
@@ -261,16 +257,15 @@ describe('ControlStatusHeader', () => {
     expect(deskMediaValue(grid, 'grid-template-columns', MD_MEDIA)).toBe(
       'repeat(2, minmax(0, auto))',
     );
-    // Link · Audio · peer · sound — four cells, and the sound toggle is one of
-    // them rather than the row it used to span.
+    // Link · Audio · peer · sound — four cells, the sound toggle one of them.
     expect(grid.children).toHaveLength(4);
     expect(window.getComputedStyle(grid.children[3]).gridColumn).not.toBe('1 / -1');
   });
 
-  // speedline-compact-fold-lane-dnf-1024: below the Speedline desk the setup
-  // strip took a row of its own under a header whose plates and recording line
-  // left ~60 px of empty column beside the two-row health block — the ~100 px
-  // that put `Lane n DNF` on the 768 px fold. The strip now takes that column.
+  // Below the Speedline desk the header's plates and recording line leave ~60 px
+  // of empty column beside the two-row health block; the setup strip takes that
+  // column instead of a row of its own, the ~100 px that would put `Lane n DNF`
+  // on the 768 px fold.
   describe('with a setup slot', () => {
     const renderWithSetup = () =>
       render(
@@ -331,13 +326,11 @@ describe('ControlStatusHeader', () => {
     });
   });
 
-  // The live desk pass (driver `realtime-recovery`, link-chip leg) read the
-  // health slot at two different heights across the five readings at 1440x900:
-  // the row sits right on its wrap threshold there, so a longer alarm label
-  // ("Connection lost" over "Connecting…") took the few px the AUDIO LOCKED
-  // plate beside it needed and tipped it into a second line — pushing the whole
-  // desk down a row exactly when the operator is reading an alarm (§4.12, and
-  // the above-the-fold promise of design-system §9 "Responsive contract"). Reserving the widest
+  // At 1440x900 the health row sits right on its wrap threshold, so a longer
+  // alarm label ("Connection lost" over "Connecting…") takes the few px the
+  // AUDIO LOCKED plate beside it needs and tips it into a second line — pushing
+  // the whole desk down a row exactly when the operator is reading an alarm
+  // (§4.12, and design-system §9 "Responsive contract"). Reserving the widest
   // label makes the row's geometry a function of the viewport, not of the phase.
   // Only a real layout can see the height; what jsdom can hold is the reserve.
   it('reserves the widest link label, so the reading cannot reflow the health row', () => {

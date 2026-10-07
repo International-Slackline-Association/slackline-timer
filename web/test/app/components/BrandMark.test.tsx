@@ -42,8 +42,8 @@ describe('BrandMark', () => {
   });
 
   it('draws the span before the masses so they clip it flush at both corners', () => {
-    // Ordering is the whole reason the line meets the rock without a gap and lands
-    // on the block without lying over it — see the note on BrandMark.
+    // Ordering is what lets the line meet the rock without a gap and land on the
+    // block without lying over it — see the note on BrandMark.
     const { container } = render(<BrandMark />);
     const drawn = [...container.querySelectorAll('path[d]')].map((n) => n.getAttribute('d'));
     expect(drawn.indexOf(MARK_PATHS.span)).toBeLessThan(drawn.indexOf(MARK_PATHS.rock));

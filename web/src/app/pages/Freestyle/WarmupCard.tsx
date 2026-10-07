@@ -8,7 +8,7 @@ import { formatClock } from 'app/util/time';
 import { boardGeometry, colors, controlTargets, fieldWidths, fonts } from 'app/theme/tokens';
 import { Countdown } from './Countdown';
 
-/** The §6 on-light text tier of each card state. `armed` is the quiet one — a
+/** The freestyle-board-ux §6 on-light text tier of each card state. `armed` is the quiet one — a
  * warm-up waiting to be started is the board's resting state, so it takes the
  * neutral ink rather than a race hue nothing is doing yet; `held` takes the
  * lane cards' own held ink, because it is the same fact. `over` is not here:
@@ -31,7 +31,7 @@ const WORD_SX = {
 
 /** The one reserved row the transport and the expiry re-arm share (§4.12): a
  * 44 px control swaps for a 44 px control, so the warm-up running out moves
- * nothing on the board (audit S19). */
+ * nothing on the board (§9 S19). */
 const SLOT_SX = {
   minHeight: controlTargets.live,
   alignItems: 'center',
@@ -45,17 +45,16 @@ interface Props {
 }
 
 /**
- * The warm-up card (FREESTYLE_BOARD_UX §3/§6). Warm-up is the only clock on the
- * board that is not a competition result, so it reads at the `secondary`
- * half-scale beside the lane clocks rather than as a fourth equal peer
- * (audit S27) — same on-light hues, same frame tiers, half the numeral.
+ * The warm-up card (§3/§6). Warm-up is the only clock on the board that is not
+ * a competition result, so it reads at the `secondary` half-scale beside the
+ * lane clocks rather than as a fourth equal peer (§9 S27) — same on-light hues,
+ * same frame tiers, half the numeral.
  *
  * It is presentational: `warmupCardState` supplies the always-rendered state
  * word, the embedded `Countdown` runs controlled off `warmup.display`, and the
- * transport dispatches into the channel's reducer. The board's warm-up used to
- * COLLAPSE to a chip on expiry — a whole card's worth of layout shift at the
- * exact moment the operator reaches for the next press. Now the transport slot
- * simply swaps its three buttons for the one that re-arms, in place.
+ * transport dispatches into the channel's reducer. On expiry the transport
+ * slot swaps its three buttons for the one that re-arms, in place — no layout
+ * shift at the moment the operator reaches for the next press.
  */
 export const WarmupCard = ({ warmup }: Props) => {
   const card = warmup.card;
@@ -122,7 +121,7 @@ export const WarmupCard = ({ warmup }: Props) => {
               {/* Only an armed (idle) clock starts — a spent one re-arms first,
                   never a zero-length broadcast. A held one resumes what is
                   left, which is why the transport stands through `held`
-                  rather than collapsing the way expiry does. */}
+                  rather than swapping for the re-arm the way expiry does. */}
               <RaceButton
                 tone="goOutline"
                 aria-label="Start warm-up"

@@ -11,11 +11,11 @@ import type { MatchWinner } from 'app/util/scoreInput';
  * the Speedline and Freestyle recording consoles; the caller owns the
  * match-selected guard.
  *
- * The freestyle board adds the three §4.9 optionals: WHERE the id came from
- * (a fresh derivation vs the winner already on the Match — the two are
- * different claims and the operator has to be able to tell them apart), what
- * the line is still waiting for while nothing is resolved, and the failed
- * Match PUT with its retry. The write lands here rather than in a panel-level
+ * The freestyle board adds the three freestyle-board-ux §4.9 optionals:
+ * WHERE the id came from (a fresh derivation vs the winner already on the
+ * Match — different claims the operator must tell apart), what the line is
+ * still waiting for while nothing is resolved, and the failed Match PUT with
+ * its retry. The write lands here rather than in a panel-level
  * alert because this line is the value that write stores.
  */
 export const MatchWinnerLine = ({

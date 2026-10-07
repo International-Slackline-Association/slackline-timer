@@ -3,14 +3,10 @@
 # Paths are relative to this file (docker/). Managed from the repo root via
 # `npm run db:up` / `npm run db:down`. See doc/dev/local-dev.md.
 #
-# One LocalStack container emulates the AWS data services the offline backend
-# needs — DynamoDB (competition + relay tables) and S3 (athlete photos) — on the
-# single edge port :4566. The relay + data-plane Lambdas themselves run on the
-# host via the in-process harnesses (scripts/localWsHarness.mjs +
-# localHttpHarness.mjs), not inside LocalStack: WebSocket + Lambda-asset
-# emulation needs LocalStack Pro (ADR 0023, phase 2). The app's S3/DynamoDB
-# clients point here under IS_OFFLINE (core/aws/clients.ts); create the tables +
-# photo bucket with `npm run db:init`.
+# LocalStack emulates DynamoDB + S3 on :4566. The Lambdas run on the host in the
+# in-process harnesses (server/scripts/local*Harness.mjs): WebSocket +
+# Lambda-asset emulation needs LocalStack Pro (ADR 0023, phase 2). Tables +
+# photo bucket: `npm run db:init`.
 
 services:
   localstack:
@@ -19,7 +15,7 @@ services:
     # a LOCALSTACK_AUTH_TOKEN (exit 55, "License activation failed"), even for
     # community services. Phase 2 (LocalStack Pro) revisits image + token.
     # Same reference as the CI service in .github/workflows/ci.yml; Dependabot
-    # bumps neither: manual bump of both together (digest of 3.8.1).
+    # bumps neither, so bump both together (server/test/repo/localstack-pin.test.ts).
     image: localstack/localstack:3.8.1@sha256:b279c01f4cfb8f985a482e4014cabc1e2697b9d7a6c8c8db2e40f4d9f93687c7
     container_name: slackline-localstack
     ports:

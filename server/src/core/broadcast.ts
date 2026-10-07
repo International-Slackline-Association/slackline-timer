@@ -7,13 +7,9 @@ import {
 import { db } from './db';
 
 /**
- * Max PostToConnection/DeleteConnection posts in flight per fan-out. Firing an
- * entire room at once bursts straight into the WS stage's default-route throttle
- * (ADR 0031 §2) and exhausts the SDK socket pool — the HWC 2026 reconnect storm
- * tripped exactly this (failed=59/67 for ~6s). Capping the burst draws the room
- * down at a steady rate the throttle can absorb; the 429 retry below recovers the
- * few that still bounce. 25 sits well under both the 50-socket SDK default and,
- * ×(reserved-concurrency broadcasters), the 2000 rps stage bucket.
+ * Max posts in flight per fan-out: a whole-room burst trips the WS stage
+ * throttle (ADR 0031 §2) and exhausts the SDK socket pool; the 429 retry
+ * recovers the rest. 25 sits under the SDK's 50-socket default.
  */
 export const FANOUT_CONCURRENCY = 25;
 
@@ -36,20 +32,10 @@ const backoffMs = (attempt: number, random: () => number): number => {
 };
 
 /**
- * One ApiGatewayManagementApi client per endpoint, reused across invocations
- * (module scope survives a warm Lambda container). Constructing a fresh client
- * per fan-out gave every span a brand-new keep-alive agent, so a warm invocation
- * still opened cold sockets and re-resolved the @connections hostname from
- * scratch. Under a reconnect storm the burst of parallel `getaddrinfo` lookups
- * saturated the resolver and threw `EBUSY` (errno -16) — which `sendWithRetry`
- * drops as non-retryable (it's not a 429/5xx), silently losing the relay (HWC
- * 2026: 24.6k `getaddrinfo EBUSY` → 24.6k dropped posts in one 30-min burst).
- * Caching the client keeps its socket pool + resolved DNS warm for the whole
- * container lifetime (with AWS_NODEJS_CONNECTION_REUSE_ENABLED=1 keep-alive), so
- * steady-state fan-outs reuse sockets and issue ~no fresh lookups. Keyed by
- * endpoint so the prod callback URL and the offline harness URL stay distinct.
- * `maxAttempts: 1` disables the SDK's own retry so `sendWithRetry` remains the
- * single delivery authority (see its docblock).
+ * One client per endpoint for the container's life, keeping sockets + resolved
+ * DNS warm; per-fan-out clients threw non-retryable EBUSY under a storm
+ * (ADR 0031, Consequences). `maxAttempts: 1` leaves `sendWithRetry` the single
+ * delivery authority.
  */
 const clientsByEndpoint = new Map<string, ApiGatewayManagementApi>();
 const apiClient = (endpoint: string): ApiGatewayManagementApi => {
@@ -126,9 +112,9 @@ const mapSettled = async <T, R>(
 };
 
 /**
- * The relay fan-out, extracted from the messageHandler Lambda so write
- * Lambdas can publish too: deliver a payload to every connection of a
- * session, excluding the sender, pruning stale (HTTP 410) connections. Posts run
+ * The relay fan-out, shared by messageHandler and the write Lambdas: deliver a
+ * payload to every connection of a session, excluding the sender, pruning stale
+ * (HTTP 410) connections. Posts run
  * at `FANOUT_CONCURRENCY` with a 429/5xx retry (see the tuning notes above), and
  * the returned counts are the true outcome — `retried` surfaces throttle pressure
  * before it becomes `failed`.
@@ -251,10 +237,8 @@ export type DbUpdateAction = 'created' | 'updated' | 'deleted';
  * Server-side `db_update` notification — the analogue of timertimer's `"db"`
  * PubSub topic. Emitted by every write Lambda after a successful write so
  * live pages re-fetch; emission is best-effort and must never fail the write.
- * The fan-out outcome is logged (not discarded): a non-zero `failed`/`retried`
- * is how a db_update delivery problem shows up in CloudWatch at all — previously
- * these counts were dropped, so a throttled db_update fan-out was invisible (the
- * HWC 2026 blind spot).
+ * The fan-out counts are logged: a non-zero `failed`/`retried` is the only
+ * CloudWatch trace of a throttled db_update fan-out.
  */
 export const publishDbUpdate = async (params: {
   compId: string;

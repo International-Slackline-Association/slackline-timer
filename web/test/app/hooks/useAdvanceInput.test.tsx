@@ -256,7 +256,7 @@ describe('useAdvanceInput — the press it hands back', () => {
   });
 });
 
-// FREESTYLE_BOARD_UX §4.3/§4.8: one predicate for all three ADVANCE triggers,
+// freestyle-board-ux §4.3/§4.8: one predicate for all three ADVANCE triggers,
 // and a press behind a confirm IS that confirm's safe action.
 describe('advanceBlocked / useConfirmGuard', () => {
   it('is null with nothing open', () => {

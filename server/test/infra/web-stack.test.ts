@@ -68,8 +68,9 @@ describe('web frontend stack', () => {
   });
 });
 
-// M6 slice 1: security headers on every web response. The enforced CSP is
-// deployment-free; the full policy is Report-Only until the build-time CSP lands.
+// Security review M6 slice 1: security headers on every web response. The header
+// enforces only deployment-free directives; the full policy stays Report-Only and
+// exact origins are enforced by the build-time meta CSP (ADR 0054).
 describe('web security headers', () => {
   const policy = () => {
     const policies = template.findResources('AWS::CloudFront::ResponseHeadersPolicy');

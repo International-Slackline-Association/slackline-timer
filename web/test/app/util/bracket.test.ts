@@ -238,10 +238,10 @@ describe('nameTreeLayout', () => {
   });
 
   it('sits inside the 5% title-safe band, vertically centred (bracket-tree-fit)', () => {
-    // The art frame reserved an empty top quarter for an event logo that no
-    // longer exists, so the tree hung bottom-heavy with 3RD PLACE in the bottom
-    // 1.5%. One shared recentre lifts the whole tree — relative geometry
-    // untouched — onto the canvas midline, inside the title-safe frame (§7.5).
+    // The art frame reserves an empty top quarter for an event logo, which hangs
+    // the tree bottom-heavy with 3RD PLACE in the bottom 1.5%. One shared recentre
+    // lifts the whole tree — relative geometry untouched — onto the canvas
+    // midline, inside the title-safe frame (design-system §7.5).
     expectTitleSafeAndCentred(verticalBands(layout.plates, layout.labels));
   });
 
@@ -326,7 +326,7 @@ describe('profileTreeLayout without the quarter round', () => {
 
   it('drops the two quarter C-elbows + stubs per side (17 → 9 runs)', () => {
     expect(layout.connectors).toHaveLength(9);
-    // No run reaches out to the quarter column any more.
+    // No run reaches out to the quarter column.
     const semiLeft = layout.boxes.find((b) => b.boxId === 'box_q_1_3')!.leftPct;
     for (const run of layout.connectors) {
       for (const [x] of run) {
@@ -479,7 +479,7 @@ describe('profileTreeLayout', () => {
   it('sets the SMALL FINAL label centered below the pair, on the canvas', () => {
     // The art wedged a two-line caption into the pair's 94.94px gap; Oswald
     // runs wider than the art's Placard Next, so it collided with (or scaled
-    // illegibly between) the card frames. The label now sits under the pair —
+    // illegibly between) the card frames. So the label sits under the pair —
     // the one region the tree keeps clear — with no width cap needed.
     const label = layout.labels.find((l) => l.text === 'SMALL FINAL')!;
     expect(label.xPct).toBeCloseTo(50, 5);

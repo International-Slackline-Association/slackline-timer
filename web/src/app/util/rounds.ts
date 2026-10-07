@@ -8,10 +8,10 @@ import {
 
 /**
  * Human-friendly labels for Time rounds (plus the derived standings
- * pseudo-rounds), used in the times admin and rankings. These are the per-row
- * singular forms; `server/src/core/types.ts` `roundDisplayName` keeps the
- * plural header forms ("quarter-finals") used by ranking titles — keep both in
- * mind when wording overlay copy.
+ * pseudo-rounds), used in the times admin and rankings. These are the
+ * capitalised row/picker forms; `server/src/core/types.ts` `roundDisplayName`
+ * keeps the lowercase forms ("quarter-finals") used by ranking titles — keep
+ * both in mind when wording overlay copy.
  */
 const ROUND_LABELS: Record<TimeRound | StandingsView, string> = {
   test: 'Test',

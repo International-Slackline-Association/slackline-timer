@@ -5,7 +5,7 @@ import type { WarmupAction, WarmupClock } from 'app/util/warmupChannel';
 
 /**
  * Arm a single wall-clock timeout for the warm-up window's zero-crossing,
- * driven by the machine's own clock (HSM rule 4) — the `useLaneExpiry` /
+ * driven by the machine's own clock (ADR 0032, effects as data) — the `useLaneExpiry` /
  * `useTryExpiry` shape, keyed on the computed deadline so a re-render
  * re-derives the same one — and a wire correction that moves the crossing
  * without moving the anchor re-arms it.

@@ -213,8 +213,8 @@ describe('warmupChannel — PEER_SNAPSHOT hydration', () => {
   });
 
   // ADR 0046 §2, one channel over: the room owns the armed budget. A joiner that
-  // kept its own `defaultSeconds` read a HELD window as ARMED (the card compares
-  // the remaining against the default it holds) and would then re-arm the whole
+  // kept its own `defaultSeconds` would read a HELD window as ARMED (the card
+  // compares the remaining against the default it holds) and re-arm the whole
   // room to that default on its next RESET.
   it("adopts the room's armed budget, so a held window does not read ARMED", () => {
     const joiner = initialWarmupState(120); // a 2-min format default...
@@ -319,7 +319,7 @@ describe('warmupChannel — derived views', () => {
       armedMs: DEFAULT_MS,
     });
     // A window stopped part-way keeps the armed budget it was stopped out of —
-    // the distance between the two is the whole point.
+    // the distance between the two is what reads it as held.
     expect(warmupSnapshotRow(stopped(60_000))).toEqual({
       timerId: WARMUP_TIMER_ID,
       lastRemainingMs: DEFAULT_MS - 60_000,

@@ -8,8 +8,7 @@ import type { Athlete, Discipline } from 'app/types';
  * Graphics' local API on `:4001`.
  *
  * H2R is **push-only** (see doc/dev/broadcast-overlays.md): we set its text-variable
- * slots and feed its HTTP-listener data source — H2R never pulls from us. This
- * module is the documented fixed mapping (no server change, no new protocol); a
+ * slots and feed its HTTP-listener data source — H2R never pulls from us. A
  * producer points their H2R project's variables/data-source ids at these names.
  */
 
@@ -38,7 +37,7 @@ export interface SideSlots {
 /**
  * The default, documented slot ids per side. A producer either renames their H2R
  * variables/data-sources to match, or retunes this map. Side 1/2 mirror the
- * control board's two lanes/players (`updateSelection.athlete{1,2}Id`).
+ * control board's two lanes (`updateSelection.athlete{1,2}Id`).
  */
 export const H2R_VARIABLE_MAP: Record<1 | 2, SideSlots> = {
   1: { name: 'name_1', country: 'country_1', result: 'result_1', photo: 'photo_1' },

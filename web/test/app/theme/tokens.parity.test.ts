@@ -22,9 +22,8 @@ import {
 /**
  * tokens.ts ↔ tokens.css parity. The TELEMETRY tokens have two hand-kept
  * copies: the canonical TS objects (consumed by the MUI theme) and the
- * `--tl-*` CSS custom properties in tokens.css (for non-MUI surfaces). The sync
- * is convention-only (DESIGN_SYSTEM §9), so this test guards against silent
- * drift: every `colors`/`fonts`/`overlayArt` token must have a matching CSS
+ * `--tl-*` CSS custom properties in tokens.css (for non-MUI surfaces). Nothing
+ * but this test keeps them in sync (design-system §9): every `colors`/`fonts`/`overlayArt` token must have a matching CSS
  * var, and their values must agree. Fix the drift, never the test.
  *
  * Two parity shapes exist:
@@ -35,10 +34,9 @@ import {
  *    translucent plates for the chroma ground; see tokens.css). Drift is then
  *    impossible by construction; the var must still exist in :root.
  *
- * The CSS var naming is irregular by design (surfaces carry a `bg-` sub-prefix
- * except borders; brand/race drop their group segment), so the pairing is an
- * explicit table rather than a derived rule — that keeps it auditable and means
- * a new token is a deliberate two-line addition here, not a silent omission.
+ * The CSS var naming is irregular (surfaces carry a `bg-` sub-prefix except
+ * borders; brand/race drop their group segment), so the pairing is an explicit
+ * table: a new token is a two-line addition here, never a silent omission.
  */
 
 // Maps each leaf path in `colors` to its tokens.css custom property.

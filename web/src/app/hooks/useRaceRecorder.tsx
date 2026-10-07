@@ -80,10 +80,8 @@ export interface Toast {
  * nothing) for unassigned lanes or a race that never started, so the panel can
  * be ignored entirely and timing is unaffected. `compId` is the relay sessionId.
  *
- * Recording is no longer fire-and-forget: each lane carries a `laneFeedback`
- * entry (pending → saved/error with the recorded value) and a successful save
- * raises a `toast`, so the operator gets positive confirmation rather than only
- * seeing the silence-or-Alert of before.
+ * Each lane carries a `laneFeedback` entry (pending → saved/error with the
+ * recorded value) and every save outcome raises a `toast`.
  *
  * Optionally an operator picks a speed Match (gender + match select); once BOTH
  * lanes of that Match have a result this run, the recorder derives `winnerId`
@@ -177,8 +175,8 @@ export const useRaceRecorder = (compId: string) => {
   };
 
   // Round/gender/match/athlete selection — the machinery shared with the
-  // freestyle console (useMatchSelection owns ADR 0033's confirm-guarded
-  // cascading filters); the speed-specific cascades hang off the callbacks.
+  // freestyle console (useMatchSelection owns the confirm-guarded cascading
+  // filters, ADR 0033/0042); the speed-specific cascades hang off the callbacks.
   const {
     round,
     setRound,
@@ -249,8 +247,8 @@ export const useRaceRecorder = (compId: string) => {
   }, [selectedMatchId, matches.data, times.data]);
 
   /**
-   * Put an athlete on a lane. The lane's saved feedback deliberately stays
-   * bound to the athlete its Time was POSTed under: a re-pick may be
+   * Put an athlete on a lane. The lane's saved feedback stays bound to the
+   * athlete its Time was POSTed under: a re-pick may be
    * exploratory, and clearing the chip would throw away the only pointer to a
    * mis-attributed record. The console names that athlete on the chip and
    * offers `moveTime` as the explicit one-tap re-attribution.
@@ -582,7 +580,7 @@ export const useRaceRecorder = (compId: string) => {
    *
    * Deletion (not a flag) keeps the data model simple: the Time SK is the stable
    * identity, so the delete path removes the record cleanly and rankings/overlays
-   * re-derive with no special-casing (see ADR 0012).
+   * re-derive with no special-casing (void semantics: ADR 0017 §3).
    */
   const discardRunTimes = (): SeriesWins => {
     ([1, 2] as const)
@@ -624,8 +622,8 @@ export const useRaceRecorder = (compId: string) => {
 
   /**
    * Withdraw everything ONE lane's stop recorded — the recorder half of a lane
-   * resume (`speedline-resume-stopped-lane`); the clock half is the page's
-   * (it drops the stop and keeps the GO epoch). Local state only, so the peer
+   * resume; the clock half is the page's (it drops the stop and keeps the GO
+   * epoch). Local state only, so the peer
    * mirror reuses it whole. Returns the tally after the undo.
    *
    * A run that had RESOLVED credited a run-win, and a resumed lane un-resolves
@@ -657,8 +655,7 @@ export const useRaceRecorder = (compId: string) => {
    * Undo a mis-pressed Stop on `lane`: the athlete is still crossing, so the
    * Time the stop POSTed is deleted (a save still in flight is marked stale and
    * deleted the moment its id exists) and the lane is re-opened for its real
-   * finish. The escape hatch this replaces was Void — which discards BOTH
-   * lanes' Times over one lane's mis-press.
+   * finish — without Void's cost of discarding BOTH lanes' Times.
    */
   const resumeLane = (lane: LaneId): void => {
     const timeId = laneFeedback[lane]?.saved?.timeId;
@@ -794,8 +791,8 @@ export const useRaceRecorder = (compId: string) => {
     if (laneResults.current[lane] === DNF_SENTINEL) return;
     if (laneFeedback[lane]?.saved) {
       recordLaneResult(lane, DNF_SENTINEL);
-      // Deliberately ahead of the attempt cap: the cap guards a NEW record, and
-      // the row this rewrites is one the lane already spent an attempt on.
+      // Ahead of the attempt cap: the cap guards a NEW record, and the row this
+      // rewrites is one the lane already spent an attempt on.
       editLaneTime(lane, DNF_SENTINEL);
       return;
     }
@@ -818,7 +815,7 @@ export const useRaceRecorder = (compId: string) => {
     round,
     setRound,
     // Confirm-guarded round/gender changes + the round-scoped match list
-    // (ADR 0033 + the cascading-filters extension).
+    // (ADR 0033/0042).
     requestRound,
     requestGender,
     pendingChange,
@@ -843,7 +840,7 @@ export const useRaceRecorder = (compId: string) => {
     editLaneTime,
     moveTime,
     voidRun,
-    // The per-lane undo of a mis-pressed Stop (`speedline-resume-stopped-lane`).
+    // The per-lane undo of a mis-pressed Stop.
     resumeLane,
     // Per-lane false-start attribution (rules S2–S4).
     fsCounts,

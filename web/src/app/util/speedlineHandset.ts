@@ -1,11 +1,11 @@
 /**
  * The Speedline desk's handset mapping and what a press just did — the second
- * board's half of FREESTYLE_BOARD_UX §4.14, over the shared readout.
+ * board's half of freestyle-board-ux §4.14, over the shared readout.
  *
- * Both halves live here together on purpose: the rows are what the operator is
- * shown, the verdicts are what the pad handler in `Speedline/ControlPage` does,
- * and a mapping listed apart from the guard it describes is how the two drift
- * (audit S18). The verdicts read the page's own `speedlineLocks` map rather
+ * Both halves live together: the rows are what the operator is shown, the
+ * verdicts are what the pad handler in `Speedline/ControlPage` does, and a
+ * mapping listed apart from the guard it describes drifts from it (S18). The
+ * verdicts read the page's own `speedlineLocks` map rather
  * than re-deciding anything — so a dead key and the why-line under its
  * on-screen twin are the same sentence.
  */

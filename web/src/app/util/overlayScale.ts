@@ -3,12 +3,8 @@
  * `/stream/*` overlay at HD 1920×1080 — exactly the frame the LAAX art metrics
  * are measured on — so widths derive off 1920 (`refVw`) and heights / font sizes
  * off 1080 (`refVh`): a 1080p capture lands pixel-for-pixel on the mock, and
- * every other 16:9 resolution scales cleanly (no hard-pinned canvas).
- *
- * The single source for the `refVw`/`refVh` math that was copied verbatim across
- * the overlay files (Competitor, VsOverlay, RankingsOverlay) and that
- * WinnerOverlay/RoundsSummaryOverlay now use in place of fixed `rem`
- * (ADR 0034 §4).
+ * every other 16:9 resolution scales cleanly (no hard-pinned canvas). The one
+ * overlay scale (ADR 0034 §4).
  *
  * Three decimals keep each emission a plain `vw`/`vh` length that jsdom and
  * `test/util/computedUnits.ts` resolve; a `calc(px * 100vw / 1920)` form would

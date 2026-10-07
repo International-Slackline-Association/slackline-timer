@@ -37,7 +37,7 @@ const BEST_TRICK_LABEL_SIZE = refVh(24);
 const MARKER_ROW_ALLOWANCE = 27;
 const BAND_BOTTOM = refVh(OVERLAY_LANE.inset + MARKER_ROW_ALLOWANCE);
 
-// The clamp/vw numeral (DESIGN_SYSTEM §4) sizes itself; the band only sets a floor.
+// The clamp/vw numeral (design-system §4) sizes itself; the band only sets a floor.
 const BAND_MIN_HEIGHT = refVh(120);
 
 /**
@@ -48,9 +48,8 @@ const BAND_MIN_HEIGHT = refVh(120);
  *    OBS/H2R composites the countdown over live video, matching every other
  *    /stream/* overlay.
  * Each variant only sets the DEFAULT background; `?bg=` overrides it per the
- * shared overlay convention (see doc/dev/broadcast-overlays.md). The chroma key is
- * magenta, so the green GO light / winner numerals survive it. All WS/read-token
- * wiring lives in the shared feed (`useFreestyleTimerFeed`) so both authenticate
+ * shared overlay convention (see doc/dev/broadcast-overlays.md; the key colour
+ * is `tokens.ts chromaKey`). All WS/read-token wiring lives in the shared feed (`useFreestyleTimerFeed`) so both authenticate
  * correctly (Cognito on /freestyle/preview, read token on
  * /stream/timer-freestyle); the full-screen athlete display
  * (`FreestyleAthleteDisplay`) mounts the same feed under a different render.
@@ -105,13 +104,13 @@ export const FreestyleTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
   // On this scoreboard-band surface warm-up is NOT a full-screen takeover (that
   // stays the athlete display's `WarmupHero`): it rides the band as a left-corner
   // "athlete" slot — the `WarmupBand` label plate + plate clock in lane 1's
-  // position. Best trick keeps the match band layout (side try clock under the
-  // turn athlete's banner, centre tally on pause); a live best trick still
-  // shadows a stale warm-up (the athlete-display precedence rule), so the
-  // warm-up slot yields to it — and it is itself evidence of a live room, so it
-  // reveals the band even while the clock channels are still unseeded.
-  // `none` is the unseeded fail-safe (fsux-preview-warmup-seed): nothing has
-  // arrived, so the band paints EMPTY rather than the defaults' dead
+  // position. Best trick keeps the match band layout (the try clock under the
+  // turn athlete's banner); a live best trick still shadows a stale warm-up
+  // (the athlete-display precedence rule), so the warm-up slot yields to it —
+  // and it is itself evidence of a live room, so it reveals the band even while
+  // the clock channels are still unseeded.
+  // `none` is the unseeded fail-safe: nothing has arrived, so the band paints
+  // EMPTY rather than the defaults' dead
   // `WARM-UP 00:00` — on air a wrong number is worse than none, and the operator
   // reads the gap as "not seeded yet" while the reconnect fills it.
   const band: 'none' | 'warmup' | 'lanes' =
@@ -180,9 +179,8 @@ export const FreestyleTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
             twin) over its plate clock; the Countdown's own name row stays off (the
             banner owns the name). Best trick (rule F6) keeps this match layout:
             the lane run clocks yield to the shared try clock (timerId 3), which
-            follows the turn athlete's side under a BEST TRICK label, and the tries
-            tally paints the centre only between tries (the running window shows
-            the side clock alone). */}
+            follows the turn athlete's side, and each banner carries its own
+            BEST TRICK tries count. */}
         <Box
           sx={{
             display: 'flex',
@@ -204,7 +202,7 @@ export const FreestyleTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
                     recovery={recovery[0]}
                     onExpire={() => {
                       // Per-channel tone, the same one the control board plays
-                      // (§4.2): the room hears which clock ended, not just that
+                      // (freestyle-board-ux §4.2): the room hears which clock ended, not just that
                       // one did.
                       playAudio('alert');
                       endWarmup();
@@ -226,8 +224,7 @@ export const FreestyleTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
                         // Best trick: BOTH lanes' banners carry the round count
                         // (each player's own tries so far / cap, e.g. "BEST TRICK
                         // 2/5") for the whole session — only the try clock below
-                        // follows the turn. Moved here from the removed centre tally,
-                        // which mostly repeated the names the strips already show.
+                        // follows the turn.
                         bestTrick ? (
                           <Typography
                             component="div"
@@ -292,9 +289,8 @@ export const FreestyleTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
                           onBreakExpire={() => playAudio('alert2')}
                           // Reserve the hidden break rows ONLY in quali, where a lane
                           // can go on break (advisory breaks, ADR 0036) and the layout
-                          // must not jump. Battle has no breaks, so reserving there just
-                          // injected dead space that pushed the clock ~32px below its
-                          // name strip — off vs the Speedline twin's tight 16px gap.
+                          // must not jump. In battle the dead rows would push the clock
+                          // ~32px below its name strip, off the Speedline twin's 16px gap.
                           // The band carries no expiry caption (the best-trick smoke
                           // pins that), so the caption row follows the break rows here.
                           reserveBreakRows={freestyleMode === 'quali'}

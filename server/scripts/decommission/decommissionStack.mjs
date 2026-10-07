@@ -68,8 +68,7 @@ runMain(async () => {
   const rp = { profile, region }; // region-scoped calls
   const bp = { profile }; // bucket/CloudFront calls (not region-scoped)
 
-  // Mirrors PowerShell's ShouldProcess (hence the message wording): under
-  // --what-if, print the action and return false so the caller skips the mutation.
+  // Under --what-if, print the action and return false so the caller skips it.
   const shouldProcess = (target, action) => {
     if (whatIf) {
       console.log(`   What if: Performing the operation "${action}" on target "${target}".`);

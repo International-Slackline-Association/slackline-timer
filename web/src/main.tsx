@@ -12,11 +12,10 @@ Amplify.configure({
       userPoolId: COGNITO_USER_POOL_ID,
       userPoolClientId: COGNITO_CLIENT_ID,
       loginWith: {
-        // Sign-in happens on the shared ISA Hosted UI (signInWithRedirect in
-        // AuthGate), not an embedded form. Cognito only redirects to URLs
-        // registered on the app client, so every origin the app is served
-        // from (http://localhost:5173 for dev + the prod CloudFront URL) must
-        // be in the client's callback and sign-out URL lists.
+        // Sign-in is the shared ISA Hosted UI (signInWithRedirect in
+        // CognitoGate). Cognito only redirects to URLs registered on the app
+        // client, so every origin that runs the Cognito path must be in the
+        // client's callback and sign-out URL lists.
         oauth: {
           domain: COGNITO_DOMAIN,
           scopes: ['openid', 'email'],

@@ -58,18 +58,15 @@ const TONE: Record<RaceTone, ToneSkin> = {
   },
   // Save and DNF take their pair from the theme's own variants — `tealDark` +
   // `ink.onBrand` (4.61:1) and the `stopDim` outlined alarm (5.01:1), §6 — so
-  // the tone only names it. They are tones all the same, because the colour is
-  // the half a call site got right on its own: the presses these replaced were
-  // `size="small"` `Button`s, under the aux floor and holding the focus that
-  // the next handset press needs.
+  // the tone only names it; being tones still buys the aux target floor and
+  // the blur rule.
   save: { variant: 'contained', color: 'primary' },
   dnf: { variant: 'outlined', color: 'error' },
 };
 
 interface Props extends Omit<ButtonProps, 'size'> {
   /** Overrides `variant`/`color`. Omit it and the wrapper is behaviour + target
-   * size only — the score rail and the setup chrome keep their own skin until
-   * their slice repaints them. */
+   * size only (the score rail and the setup chrome keep their own skin). */
   tone?: RaceTone;
   size?: RaceButtonSize;
 }
@@ -100,7 +97,7 @@ export const blurOnClickProps = <E extends HTMLElement>({
 });
 
 /**
- * Every control in the live column (FREESTYLE_BOARD_UX §4.4). Space is the
+ * Every control in the live column (freestyle-board-ux §4.4). Space is the
  * buzzer and a focused button owns it (§4.3), so a mouse press on a race
  * control must leave the keyboard where it found it — otherwise clicking Stop
  * swallows the next buzzer press. The tone/size props carry the §6 contract so

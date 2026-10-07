@@ -9,7 +9,7 @@ import { FINAL_RUNS, buildFinalResults } from '../../scripts/lib/finalResults.mj
  * Guards the demo seed's final-round result builder
  * (scripts/lib/finalResults.mjs). The VS overlays read their stats tables off
  * the match round's Times (speed RUN 1/2/3) and Scores (freestyle breakdown), so a
- * seed that writes neither certifies an empty table — this pins the two things
+ * seed that writes neither certifies an empty table — this pins the three things
  * that silently break it: run ORDER (the overlay sorts by `startTime`, so a flat
  * timestamp scrambles RUN 1/2/3), VALIDITY (every row goes through the real
  * validators, the same ones the POST would 400 on) and AGREEMENT (a decided

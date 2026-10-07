@@ -172,7 +172,7 @@ describe('ScoresPage', () => {
   });
 
   // The Freestyle board's locked panel is the one correction path
-  // (FREESTYLE_BOARD_UX §4.9): it links here mid-competition for ONE row, so
+  // (freestyle-board-ux §4.9): it links here mid-competition for ONE row, so
   // the link's filters are applied on arrival instead of being re-set by hand.
   describe('a correction link', () => {
     it('lands on the athlete and round it names', async () => {

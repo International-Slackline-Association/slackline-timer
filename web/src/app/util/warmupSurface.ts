@@ -1,10 +1,8 @@
 /**
  * The ONE "which surface does the session show" rule, shared by the two paths
- * that must agree — the live incremental message stream
- * and a late joiner's snapshot recovery. It used to be encoded twice inside
- * `useFreestyleTimerFeed`, and the copies drifted once already
- * (warmup-hold-late-joiner-post-expiry-divergence); one pure predicate keeps
- * the rule in exactly one place, table-tested off the untestable realtime hook.
+ * that must agree — the live incremental message stream and a late joiner's
+ * snapshot recovery (both in `useFreestyleTimerFeed`) — so the two cannot
+ * drift.
  *
  * The rule: a display that has heard NOTHING yet is `unseeded` and shows no
  * clock at all — a broadcast surface with the wrong number on it is worse than
@@ -88,8 +86,7 @@ export const nextWarmupSurface = (evidence: WarmupSurfaceEvidence): SeededWarmup
     // the surface over from a pending warm-up. Its quieter messages (a lane
     // stop / reset / break end) leave the surface alone — but they still seed
     // an unseeded one to the LANES: a competition channel spoke, so a warm-up
-    // hero would be pure fabrication (the `Set both lanes` join,
-    // fsux-preview-warmup-seed).
+    // hero would be pure fabrication (e.g. joining on a `Set both lanes`).
     return action.type === 'start_countdown' || action.type === 'start_break'
       ? 'lanes'
       : stand(current, 'lanes');
@@ -102,13 +99,13 @@ export const nextWarmupSurface = (evidence: WarmupSurfaceEvidence): SeededWarmup
   // still flags it running — the control's own onExpire hand-off may not have
   // landed at the instant it was built — so the late joiner matches the
   // already-connected viewers whose hero Countdown fired onExpire, never a
-  // resurrected WARM-UP OVER hold
-  // (warmup-hold-late-joiner-post-expiry-divergence).
+  // resurrected WARM-UP OVER hold.
   // A RESTING warm-up is pending only while it is PRISTINE — holding exactly the
-  // budget it was armed to (`armedMs`, ADR 0046 §2, which the warm-up row now
+  // budget it was armed to (`armedMs`, ADR 0046 §2, which the warm-up row
   // carries too). Stopping the window part-way is the normal way a warm-up ends,
   // and a window already in use must not read as the next pair's fresh one. A
-  // pre-feature sender omits the field and keeps the older, coarser reading.
+  // pre-feature sender omits the field and gets the coarser reading (no
+  // pristine check).
   const warmup = evidence.timers.find((t) => t.timerId === WARMUP_TIMER_ID);
   const pristine =
     warmup != null && (warmup.armedMs == null || warmup.remainingMs === warmup.armedMs);

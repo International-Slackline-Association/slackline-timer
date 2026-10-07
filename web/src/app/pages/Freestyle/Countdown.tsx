@@ -26,7 +26,7 @@ import { colors, fonts, overlayTextShadow, radii } from 'app/theme/tokens';
 import { refVh } from 'app/util/overlayScale';
 
 // Size variants of the hero numeral, mirroring the Speedline Stopwatch.
-// `projector` fills a projector/broadcast screen via clamp/vw (DESIGN_SYSTEM §4)
+// `projector` fills a projector/broadcast screen via clamp/vw (design-system §4)
 // rather than a fixed MUI h3 — two player clocks sit side by side, so the vw
 // factor leaves room for both. `control` is the contained variant for the
 // operator's ControlPage, where the clock lives in a narrow grid column.
@@ -43,10 +43,8 @@ import { refVh } from 'app/util/overlayScale';
 // clock plus its on-dark frame must still clear 1920px wide — so it is tuned to
 // fill FHD without overflow.
 // `secondary` is the control variant's half-scale sibling: the warm-up card
-// (FREESTYLE_BOARD_UX §6 "Clock scales"). Four clocks at one scale said all
-// four mattered equally (audit S27) — the warm-up is the only one that is not a
-// competition result, so it reads as secondary by SIZE alone (same panel skin)
-// and stops competing with the lane clocks for the operator's eye.
+// (freestyle-board-ux §6 "Clock scales", §9 S27) — the one clock that is not a
+// competition result, so it reads as secondary by SIZE alone (same panel skin).
 // `plate` is the timertimer-style white lower-third (FreestyleTimerDisplay,
 // the Speedline Stopwatch twin): the clock draws its OWN solid white plate
 // around the time only, with the name and break rows outside it on the bare
@@ -109,7 +107,7 @@ interface CommonProps {
   isNext?: boolean;
   /**
    * Who performs AFTER this clock's athlete, as a resolved name — the QUALI
-   * twin of `isNext` (`freestyle-quali-next-up`). Quali runs one athlete at a
+   * twin of `isNext`. Quali runs one athlete at a
    * time, so the next rider has no clock of their own to mark: the same on-deck
    * arrow carries their name under this one instead. Rendered only when the
    * board has named someone; battle leaves it unset and marks the idle lane.
@@ -117,12 +115,12 @@ interface CommonProps {
   nextUpName?: string;
   /**
    * Fired exactly once when a running countdown crosses to zero (not on a stop
-   * above zero). The warm-up channel uses it for the long beep + label swap; a
-   * performance lane reaching 0 fires it too. See DECISIONS 0015 §3.
+   * above zero). The warm-up channel uses it for its `alert` tone + label swap; a
+   * performance lane reaching 0 fires it too. See ADR 0015 §3.
    */
   onExpire?: () => void;
   /**
-   * Fired exactly once when a quali break clock crosses to zero (DECISIONS
+   * Fired exactly once when a quali break clock crosses to zero (ADR
    * 0019/0036). Both surfaces beep off it; the control side holds the lane
    * paused for a manual Start.
    */
@@ -150,7 +148,7 @@ interface CommonProps {
    * but invisible while no break runs, so the numeral — and everything laid out
    * under it (the control buttons) — does not jump when a break opens/closes.
    * A break is a QUALI thing (ADR 0036): battle has none, so reserving it there
-   * is a dead row the lane transport pays for (`fsux-battle-fold-margin`).
+   * is a dead row the lane transport pays for.
    */
   reserveBreakRows?: boolean;
   /**
@@ -164,7 +162,7 @@ interface CommonProps {
    * The owner holds a partly-spent budget: this clock is idle because a turn
    * was taken off it, not because it is armed. `phase` alone cannot tell the
    * two apart (a fall returns the lane to `idle`), so the owner passes it —
-   * `countdownSkin` breaks the frame for it (§6, audit S02) and the lane's
+   * `countdownSkin` breaks the frame for it (§6, §9 S02) and the lane's
    * state word carries the same distinction redundantly.
    */
   held?: boolean;
@@ -179,7 +177,7 @@ interface CommonProps {
  * drive the clock through `display`, applied on every change. The wall-clock
  * ticks stay internal (display timing only), derived from the state's anchors.
  *
- * There is no `isReady` here BY DESIGN (brief §9 S10): a controlled clock reads
+ * There is no `isReady` here (freestyle-board-ux §9 S10): a controlled clock reads
  * local state, so the relay being down or reconnecting must never blank it —
  * the operator's lane, warm-up and try clocks keep rendering and ticking with
  * the socket closed. And no `message`/`recovery`: one state path, no message
@@ -253,7 +251,7 @@ export const Countdown: React.FC<Props> = (props) => {
   const message = props.mode === 'feed' ? props.message : undefined;
   const timerId = props.mode === 'feed' ? props.timerId : undefined;
   const recovery = props.mode === 'feed' ? props.recovery : undefined;
-  // Feed-only readiness gate (brief §9 S10) — a controlled clock is never
+  // Feed-only readiness gate (§9 S10) — a controlled clock is never
   // blanked by the transport.
   const gated = props.mode === 'feed' && !props.isReady;
   const sizes = COUNTDOWN_SIZES[size];
@@ -284,9 +282,7 @@ export const Countdown: React.FC<Props> = (props) => {
   }, [display]);
 
   useEffect(() => {
-    // Session-scoped messages carry no `timerId` (ws-session-message-family) and
-    // are not this lane's business — the `in` check filters them out just as the
-    // former `timerId: -1` sentinel did.
+    // Session-scoped messages carry no `timerId` and are not this lane's business.
     if (!message || !('timerId' in message) || message.timerId !== timerId) {
       return;
     }
@@ -298,9 +294,8 @@ export const Countdown: React.FC<Props> = (props) => {
   // reducer hydration covers its mid-join catch-up). The recovered remaining is
   // epoch-adjusted by the control page to the send epoch it carries
   // (`startedAt`/`breakStartedAt`); anchoring to that shared epoch makes a
-  // late joiner derive the SAME remaining as every already-connected viewer
-  // instead of re-anchoring to its own receipt (which spread joiners by
-  // delivery latency — the ~1s recovery drift).
+  // late joiner derive the SAME remaining as every already-connected viewer;
+  // re-anchoring to its own receipt would spread joiners by delivery latency.
   useEffect(() => {
     if (!recovery) {
       return;
@@ -367,9 +362,10 @@ export const Countdown: React.FC<Props> = (props) => {
 
   // The main clock slot's chrome — the name/break/caption rows stay outside it
   // on the bare ground. The plate variant wraps the TIME in the solid white
-  // broadcast plate — the lane family's fixed width, never the name's; the framed grounds wrap it in the §6 state frame, stroke
-  // ONLY: any fill lightens the ground exactly behind the digits and eats the
-  // contrast the frame exists to protect.
+  // broadcast plate (the lane family's fixed width, never the name's); the
+  // framed grounds wrap it in the §6 state frame, stroke ONLY: any fill lightens
+  // the ground exactly behind the digits and eats the contrast the frame exists
+  // to protect.
   const boxed = (clock: React.ReactNode) => {
     if (skin.ground === 'plate') {
       return (
@@ -437,7 +433,7 @@ export const Countdown: React.FC<Props> = (props) => {
             fontWeight: 'bold',
             // Freestyle is judged, not raced — no per-player winner/loser hue, so
             // the name is plain white over the slate-backed overlay scrim, the
-            // §7 rules 4/6 legibility treatment that survives chroma + busy video.
+            // design-system §7 rules 4/6 treatment that survives chroma + busy video.
             color: 'common.white',
             textShadow: overlayTextShadow,
           }}
@@ -448,7 +444,7 @@ export const Countdown: React.FC<Props> = (props) => {
           {name}
         </Typography>
       )}
-      {/* On-break layout (DECISIONS 0019/0036, quali advisory): the break clock
+      {/* On-break layout (ADR 0019/0036, quali advisory): the break clock
           takes the main slot in the amber caution tier; the held active budget
           sits above it a tier down (it is paused), with the allowance caption.
           With reserveBreakRows the held-run row stays mounted (hidden)

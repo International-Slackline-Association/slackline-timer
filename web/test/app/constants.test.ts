@@ -7,9 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 /**
  * The rule these pin (ADR 0048): the browser bundle carries no endpoint of its
  * own. Every value comes from the environment, and a missing one is a hard
- * failure — not `import.meta.env.X ?? '<prod literal>'`, which made the env var
- * an override and shipped our production endpoints to anyone who built without
- * one.
+ * failure — never `import.meta.env.X ?? '<prod literal>'`, which makes the env
+ * var an override and ships the production endpoints to anyone who builds
+ * without one.
  */
 
 const FULL_ENV: Record<string, string> = {

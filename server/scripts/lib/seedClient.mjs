@@ -58,7 +58,7 @@ export const makeCall =
 
 /**
  * Upload one photo file and return its server `photoKey` — mirrors
- * app/api/photoUpload.ts: SHA-256 → presigned POST → direct-to-S3 multipart POST
+ * web/src/app/api/photoUpload.ts: SHA-256 → presigned POST → direct-to-S3 multipart POST
  * (the policy fields carry the signature; the file part comes last; no auth
  * header on the S3 POST). Works offline (LocalStack S3) and against a deployed
  * stage (S3 + CloudFront) unchanged.

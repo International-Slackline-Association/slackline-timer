@@ -1,21 +1,16 @@
 import { colors } from 'app/theme/tokens';
 
-/** Resolve an overlay's CSS background from the `?bg=` query param. Default
- *  transparent (alpha) for browser-source compositing; aliases map to the
- *  reserved chroma-key colours; a plain colour (`PLAIN_COLOUR`) passes through.
- *  See doc/dev/broadcast-overlays.md. */
+/** `?bg=` aliases → the reserved chroma-key colours (doc/dev/broadcast-overlays.md). */
 const ALIASES: Record<string, string> = {
   transparent: 'transparent',
   key: 'var(--tl-chroma-key)', // the magenta `chromaKey` — recommended chroma
   magenta: 'var(--tl-chroma-key)',
   green: colors.chromaKeyGreen,
   blue: colors.chromaKeyBlue,
-  // Colour-adaptation mode: transparent ground + the measured per-rig colour
-  // compensation (`KEY_COMPOSITE_CLASS` below). For rigs where the transparent
-  // overlay is flattened onto a chroma ground UPSTREAM of the keyer — an H2R
-  // Graphics output chain keyed at its own pink — and the chain measurably
-  // shifts colours on the way; the override block in tokens.css
-  // pre-compensates them (currently the active-timer teal only).
+  // Colour-adaptation mode: transparent ground + `KEY_COMPOSITE_CLASS`, for rigs
+  // that flatten the overlay onto a chroma ground UPSTREAM of the keyer (an H2R
+  // output chain keyed at its own pink) and shift colours on the way
+  // (doc/dev/broadcast-overlays.md "The colour-adaptation mode").
   h2r: 'transparent',
 };
 
@@ -64,6 +59,8 @@ export const CHROMA_GROUND_CLASS = 'tl-chroma-ground';
 const PLAIN_COLOUR =
   /^(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|(?:rgba?|hsla?)\([\d\s.,%/+-]+\)|[a-z]+)$/i;
 
+/** An overlay's CSS background from `?bg=`: an alias, a plain colour
+ *  (`PLAIN_COLOUR`), else `fallback` (transparent for browser-source alpha). */
 export const resolveOverlayBackground = (search: string, fallback = 'transparent'): string => {
   const raw = new URLSearchParams(search).get('bg');
   if (raw == null || raw === '') return fallback;
@@ -89,10 +86,9 @@ export const isKeyCompositeOverlay = (search: string): boolean =>
 
 /**
  * Apply the `?bg=`-resolved background and its mode class (colour adaptation
- * or chroma ground) to `document.body`; returns the restore cleanup.
- * The one holder of the capture/restore dance shared by StreamLayout and the
- * timer/athlete display pages — use the `background` shorthand consistently so
- * a `transparent` resolution also clears any stale `backgroundColor`.
+ * or chroma ground) to `document.body`; returns the restore cleanup. Uses the
+ * `background` shorthand so a `transparent` resolution also clears any stale
+ * `backgroundColor`.
  */
 export const applyOverlayBodyStyle = (search: string, fallback = 'transparent'): (() => void) => {
   const prev = document.body.style.background;

@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 
-/** How long a peer-applied change stays labelled on this panel (brief §3). Long
- * enough to catch an operator's eye returning from the athletes, short enough
- * to be gone before the next turn. */
+/** How long a peer-applied change stays labelled on this panel
+ * (freestyle-board-ux §3). Long enough to catch an operator's eye returning
+ * from the athletes, short enough to be gone before the next turn. */
 export const PEER_FLASH_MS = 2_000;
 
 /**
  * Turns a `useControlSession` peer-event token into the brief on-screen "by
- * other panel" cue (FREESTYLE_BOARD_UX §3/§4.10, rubric C17).
+ * other panel" cue (freestyle-board-ux §3/§4.10, rubric C17).
  *
  * Peer panels are mirroring peers (ADR 0038): the board simply becomes true on
  * its own, which is right — and silent, which is not. This lights a surface's

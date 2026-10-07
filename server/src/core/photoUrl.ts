@@ -7,8 +7,8 @@ import { getPhotoPrivateKey } from 'core/secrets';
  *
  * The photo bucket is never public — it is only reachable through a
  * CloudFront behavior restricted to a trusted key group, so every read needs
- * a signed URL. Read Lambdas embed these in their responses (athletes,
- * rankings, vs-cards); signing is a local RSA operation, no S3 round trip.
+ * a signed URL. The athletes and rankings Lambdas embed these in their
+ * responses; signing is a local RSA operation, no S3 round trip.
  *
  * Why CloudFront signing instead of S3 presigned GETs: presigned URLs from a
  * Lambda role are capped at the role-session lifetime, which would make the
@@ -57,11 +57,10 @@ export const createPhotoUrlSigner = (config: {
 };
 
 /**
- * Offline (LocalStack S3) signer: the local S3 emulator bucket is public-read, so there
- * is no signing — emit the direct path-style object URL. CloudFront signing has
- * no local analogue (it is an edge operation over a private origin), so this is
- * the one accepted prod-vs-local divergence (see doc/dev/decisions.md 0023 §2). The
- * `expiresAtMs` arg is kept for signature parity with the prod signer and ignored.
+ * Offline signer: the LocalStack bucket is public-read, so emit the unsigned
+ * path-style object URL. CloudFront signing has no local analogue, making this
+ * the one accepted prod-vs-local divergence (ADR 0023 §2). `expiresAtMs` is
+ * ignored.
  */
 const createOfflinePhotoUrlSigner = (config: {
   bucket: string;

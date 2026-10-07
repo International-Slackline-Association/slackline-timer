@@ -7,8 +7,8 @@ describe('RecorderToast', () => {
   it('ignores a clickaway — the next operator tap must not swallow the toast it raises', async () => {
     // The one-tap award fires while the save toast is still open: the same click
     // bubbles to the Snackbar's ClickAwayListener, whose 'clickaway' close would
-    // clear the confirmation that click just set (surfaced by the
-    // false-start-rules driver smoke). Only timeout / the X may close.
+    // clear the confirmation that click just set. Only timeout / the X may
+    // close.
     const onClose = vi.fn();
     render(
       <RecorderToast open message="Round awarded to lane 2" severity="success" onClose={onClose} />,
@@ -47,9 +47,9 @@ describe('RecorderToast', () => {
   });
 
   it('anchors top-right, off the clocks and the lane buttons', () => {
-    // Audit S22: bottom-centre put the confirmation over the live column of the
+    // Audit S22: bottom-centre puts the confirmation over the live column of the
     // control board — a toast may never cover a clock or a lane button
-    // (FREESTYLE_BOARD_UX §4.12).
+    // (freestyle-board-ux §4.12).
     const { container } = render(
       <RecorderToast open message="Athlete 1 score saved" severity="success" onClose={vi.fn()} />,
     );

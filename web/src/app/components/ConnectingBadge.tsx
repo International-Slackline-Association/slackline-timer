@@ -23,10 +23,8 @@ const CONNECTING_LABEL: Record<LinkPhase, string | null> = {
  * two plates and never goes quiet on a link that is down.
  *
  * A handshake and a drop are different reports (`useHasEverOpened`): the first
- * has lost nothing — every projector reload and every OBS source refresh lands
- * on it — the second has taken the preview off the air for however long it
- * lasts. Reading them as one is what an operator would report as the badge
- * saying `Connecting` over a screen that had been live all evening.
+ * has lost nothing — every projector reload and OBS source refresh lands on it
+ * — the second has taken the preview off the air for however long it lasts.
  *
  * Like `ConnectionLostBadge` it never paints over a chroma-keyed ground — the
  * keyer would pass the plate through onto air — so it is a cue for the

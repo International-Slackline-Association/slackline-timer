@@ -58,7 +58,7 @@ export interface Toast {
  * via `matchId`, and — once BOTH slots' scores are PERSISTED — derives
  * `winnerId` from the recorded overalls (`deriveFreestyleMatchWinner`) and PUTs
  * it onto the Match. That write is the entry machine's one effect, drained here
- * (HSM rule 4): the winner follows the saves rather than racing them, and a
+ * (ADR 0032, effects as data): the winner follows the saves rather than racing them, and a
  * corrected re-save re-resolves (and can flip) it. Picking "— no match —" keeps
  * the Scores-only behavior and never touches a Match.
  *
@@ -96,9 +96,9 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
   };
 
   // Round/gender/match/athlete selection — the machinery shared with the speed
-  // console (useMatchSelection owns ADR 0033's confirm-guarded cascading
-  // filters); every freestyle cascade is the same "fresh entry panels" reset,
-  // which also drops the per-match results (they live in the panels).
+  // console (useMatchSelection owns the confirm-guarded cascading filters,
+  // ADR 0033/0042); every freestyle cascade is the same "fresh entry panels"
+  // reset, which also drops the per-match results (they live in the panels).
   const {
     round,
     setRound,
@@ -165,7 +165,7 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
    * Put an athlete on a slot. The panel unlocks and starts a fresh entry — a
    * saved slot is locked, and the operator moving to the next athlete is the
    * signal they're done with the previous one — but the Score that slot
-   * persisted deliberately stays on it (`SavedScore`), bound to the athlete it
+   * persisted stays on it (`SavedScore`), bound to the athlete it
    * was POSTed under: a re-pick may be exploratory, and dropping the row would
    * throw away the only pointer to a mis-filed record. The console names that
    * athlete on the status slot and offers `moveScore` as the one-tap
@@ -368,7 +368,7 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
     round,
     setRound,
     // Confirm-guarded round/gender changes + the round-scoped match list
-    // (ADR 0033 + the cascading-filters extension).
+    // (ADR 0033/0042).
     requestRound,
     requestGender,
     pendingChange,

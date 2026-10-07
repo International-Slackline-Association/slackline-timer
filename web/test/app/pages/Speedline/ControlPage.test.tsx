@@ -246,10 +246,9 @@ describe('SpeedlineControlPage peer mirroring (ADR 0038)', () => {
     }
   });
 
-  // The other half of that rule, and the one the operator reaches for: the panel
-  // that did NOT abort clears the board from its own Reset. Without it this
-  // panel's Start stays dead until someone resets the OTHER one — which is where
-  // the `peer-mirroring` driver leg stranded panel A.
+  // The other half of that rule, and the one the operator reaches for: the
+  // panel that did NOT abort clears the board from its own Reset. Without it
+  // this panel's Start stays dead until someone resets the OTHER one.
   it('clears a mirrored abort latch on its own Reset', () => {
     const { deliver } = renderPage();
     deliver({
@@ -452,7 +451,7 @@ describe('SpeedlineControlPage peer mirroring (ADR 0038)', () => {
 });
 
 // The Speedline console shares the Freestyle board's health slot: one dialect
-// across the two desks (FREESTYLE_BOARD_UX §2, the P3 sibling note).
+// across the two desks (freestyle-board-ux §2, the P3 sibling note).
 describe('SpeedlineControlPage health chips', () => {
   beforeEach(() => {
     sockets.senderSend = vi.fn();
@@ -478,10 +477,10 @@ describe('SpeedlineControlPage health chips', () => {
 });
 
 /**
- * `ftt-followup-control-session-self-restore-unreachable-1`: the lane clocks are
- * the board's own state (ADR 0027), so a down relay costs the audience screens,
- * never the timekeeper's view of a still-running run — the header's caption
- * promises exactly that. Only the preview's plates wait on the socket.
+ * The lane clocks are the board's own state (ADR 0027), so a down relay costs
+ * the audience screens, never the timekeeper's view of a still-running run —
+ * the header's caption promises exactly that. Only the preview's plates wait on
+ * the socket.
  */
 describe('SpeedlineControlPage clocks on a down link', () => {
   beforeEach(() => {
@@ -526,7 +525,7 @@ describe('SpeedlineControlPage clocks on a down link', () => {
 });
 
 // The live-path control contract the Freestyle board taught the operator
-// (FREESTYLE_BOARD_UX §6 + the §7 P3 sibling note): one dialect across both
+// (freestyle-board-ux §6 + the §7 P3 sibling note): one dialect across both
 // desks, so a hand trained on one finds Start/Stop/Reset on the other.
 describe('SpeedlineControlPage live-control contract (FREESTYLE_BOARD_UX §6)', () => {
   beforeEach(() => {
@@ -587,9 +586,7 @@ describe('SpeedlineControlPage live-control contract (FREESTYLE_BOARD_UX §6)', 
   });
 
   // The projector slot is the same object on both desks (`PreviewControls`):
-  // the switch is named by the word beside it and the state is a word, where
-  // this board used to hang an unnamed switch off an `Enabled`/`Disabled`
-  // caption of its own.
+  // the switch is named by the word beside it and the state is a word.
   it('carries the shared preview slot, named and stated', () => {
     renderPage();
 
@@ -604,7 +601,7 @@ describe('SpeedlineControlPage live-control contract (FREESTYLE_BOARD_UX §6)', 
 });
 
 // C06 on the second desk: a dead control says what it is waiting for, printed
-// on the board rather than left to the operator to guess (FREESTYLE_BOARD_UX
+// on the board rather than left to the operator to guess (freestyle-board-ux
 // §4.7 + §7's P3 sibling note).
 describe('SpeedlineControlPage lock why-lines (FREESTYLE_BOARD_UX §4.7)', () => {
   beforeEach(() => {
@@ -634,9 +631,8 @@ describe('SpeedlineControlPage lock why-lines (FREESTYLE_BOARD_UX §4.7)', () =>
   });
 
   // The rail's swap is interlocked by the race like any lane button, so it
-  // reads the same map and prints in the same slot — it used to go dark on a
-  // boolean of the page's own, in the one place the manual sends an operator
-  // who has the athletes on the wrong sides.
+  // reads the same map and prints in the same slot — the manual sends an
+  // operator with the athletes on the wrong sides here.
   it('says why the lane swap is dead while a run is live', () => {
     const { deliver } = renderPage();
     deliver({
@@ -654,10 +650,9 @@ describe('SpeedlineControlPage lock why-lines (FREESTYLE_BOARD_UX §4.7)', () =>
   });
 
   /**
-   * `speedline-lock-says-aborted-after-a-clean-run`: the schedule's terminal
-   * phase and the abort latch are the SAME wire value (-1), so the board used to
-   * blame a start abort after every clean run. The two endings now read as what
-   * they are — both still waiting on the same Reset.
+   * The schedule's terminal phase and the abort latch are the SAME wire value
+   * (-1); the two endings must still read as what they are — both waiting on
+   * the same Reset.
    */
   it('words a clean, finished sequence as spent — never as an abort', () => {
     vi.useFakeTimers();
@@ -754,10 +749,9 @@ describe('SpeedlineControlPage handset behind a question (FREESTYLE_BOARD_UX §4
 });
 
 /**
- * `speedline-live-run-reset-confirm-and-abort-lock`: the run used to lock the
- * on-screen Reset while handset 1 still raised the confirm, and left Abort
- * Start live past GO, where it only re-labelled the board. One lock now reads
- * the same on both paths: Reset is live and confirm-guarded, Abort ends at GO.
+ * One lock reads the same on screen and handset: during a run Reset is live and
+ * confirm-guarded, and Abort Start ends at GO (past it, it would only re-label
+ * the board).
  */
 describe('SpeedlineControlPage live-run Reset and Abort', () => {
   beforeEach(() => {
@@ -860,9 +854,9 @@ describe('SpeedlineControlPage live-run Reset and Abort', () => {
 });
 
 /**
- * The desk (`speedline-desk-layout`): the lane's athlete and its Saved chip
- * stand IN the lane column beside that lane's clock, and the cross-lane rail
- * sits to the side — not in a panel under the whole board.
+ * The desk: the lane's athlete and its Saved chip stand IN the lane column
+ * beside that lane's clock, and the cross-lane rail sits to the side — not in a
+ * panel under the whole board.
  */
 describe('SpeedlineControlPage desk', () => {
   beforeEach(() => {
@@ -870,8 +864,8 @@ describe('SpeedlineControlPage desk', () => {
     apiFetchMock.mockReset().mockResolvedValue([]);
   });
 
-  // `ftt-followup-speedline-board-run-interlocks-1`: the bulbs sit above Start,
-  // so a light that left the flow on clear lifted the whole strip mid-run.
+  // The bulbs sit above Start, so a light leaving the flow on clear would lift
+  // the whole strip mid-run.
   it('keeps the start light in flow, unlit, once the sequence clears', () => {
     vi.useFakeTimers();
     try {
@@ -930,10 +924,9 @@ describe('SpeedlineControlPage desk', () => {
   });
 
   /**
-   * `speedline-locked-control-parity`: the board printed its lock reasons in the
-   * why-lines and nowhere else, so a reader pointed at a dead control was told
-   * only that it was dead. Each press now carries the SAME sentence as its
-   * accessible description — one map, three surfaces.
+   * Each locked press carries its why-line sentence as its accessible
+   * description too, so a screen reader on a dead control hears why — one map,
+   * three surfaces.
    */
   it('gives every locked race control its reason as an accessible description', () => {
     renderPage();
@@ -963,10 +956,9 @@ describe('SpeedlineControlPage desk', () => {
   });
 
   /**
-   * `speedline-handset-card`: the button map used to be checkable only by
-   * opening the reference sheet — which owns the board while it stands, so the
-   * check cost the presses being checked. The card reports the last press
-   * inline instead, in the same words the interlock table gives the buttons.
+   * The reference sheet owns the board while it stands, so checking the button
+   * map there would cost the presses being checked; the card reports the last
+   * press inline, in the interlock table's words.
    */
   it('reports the last handset press inline, verdict included', () => {
     const { pressPad } = renderPage();
@@ -989,14 +981,11 @@ describe('SpeedlineControlPage desk', () => {
 });
 
 /**
- * `speedline-compact-setup-strip`: below the desk gate the three columns stack,
- * and desk-left went first as a full column — the Preview switch over a ~220 px
- * handset card — which at 1024x768 pushed `False start` (bottom 789) and `DNF`
- * (839) under the fold, against both design-system §9 "Responsive contract"
- * ("setup chrome collapses before the live path") and the manual's promise that
- * the clocks come first. The order stays (setup -> race -> rail, nothing moves
- * between widths); what changes is that setup collapses to ONE wrapping row
- * there.
+ * Below the desk gate the three columns stack; a full-column desk-left (the
+ * Preview switch over a ~220 px handset card) would push `False start` and
+ * `DNF` under the 1024x768 fold, against design-system §9 "Responsive contract"
+ * ("setup chrome collapses before the live path"). The order stays (setup ->
+ * race -> rail at every width); setup collapses to ONE wrapping row.
  *
  * The card owns a gamepad listener and a once-a-second ticker, so the variant is
  * ONE render chosen by the same `deskMedia.speedline` the desk grid gates on —
@@ -1037,11 +1026,9 @@ describe('SpeedlineControlPage setup strip', () => {
     );
   });
 
-  // speedline-compact-fold-lane-dnf-1024: in a row of its own the strip put the
-  // live deck ~100 px lower than on the desk, and `Lane n DNF` on the 768 px
-  // fold. It rides in the header's empty column beside the health block
-  // instead, with the switch and its link on one line, so the live deck is the
-  // first thing in the desk grid.
+  // In a row of its own the strip would drop the live deck ~100 px and put
+  // `Lane n DNF` on the 768 px fold; it rides in the header's empty column
+  // beside the health block, switch and link on one line.
   it('lays the strip into the header, one line high, below the desk gate', () => {
     pinLayoutWidth(COMPACT_PX, COMPACT_HEIGHT_PX);
     renderPage();
@@ -1071,10 +1058,10 @@ describe('SpeedlineControlPage setup strip', () => {
 });
 
 /**
- * `speedline-resume-stopped-lane`: a mis-pressed Stop froze a lane and POSTed
- * its Time while the athlete was still crossing, and the only way back was Void
- * (which discards BOTH lanes). The lane clock is epoch-anchored, so the undo is
- * exact — drop the stop, keep the GO epoch, and the clock continues.
+ * A mis-pressed Stop freezes a lane and POSTs its Time while the athlete is
+ * still crossing, and Void discards BOTH lanes. The lane clock is
+ * epoch-anchored, so the undo is exact — drop the stop, keep the GO epoch, and
+ * the clock continues.
  */
 describe('SpeedlineControlPage lane resume', () => {
   beforeEach(() => {
@@ -1098,9 +1085,9 @@ describe('SpeedlineControlPage lane resume', () => {
       data: { startTime: Date.now() - 1000, lanes: [1, 2] },
     });
 
-  // A reserved slot, not a control that appears on the stop
-  // (`speedline-lane-post-stop-layout-shift`) — so it says why it is dead
-  // instead of vanishing, and nothing under it moves when a lane freezes.
+  // A reserved slot, not a control that appears on the stop — so it says why it
+  // is dead instead of vanishing, and nothing under it moves when a lane
+  // freezes.
   it('stands in every state, live only for a lane that has actually stopped', () => {
     const { deliver } = renderPage();
     expect(resumeButton(1)).toBeDisabled();
@@ -1197,7 +1184,7 @@ describe('SpeedlineControlPage lane resume', () => {
     }
   });
 
-  // Screen-only by design: a lane judge's buzzer must never un-stop a lane.
+  // Screen-only: a lane judge's buzzer must never un-stop a lane.
   it('is not bound to the handset', () => {
     const { deliver, pressPad } = renderPage();
     startRace(deliver);
@@ -1210,9 +1197,8 @@ describe('SpeedlineControlPage lane resume', () => {
 });
 
 /**
- * `speedline-dnf-corrects-and-freezes-the-lane`: a fall ends that lane's race,
- * so the DNF press is the stop as well — one press for one event, in either
- * order.
+ * A fall ends that lane's race, so the DNF press is the stop as well — one
+ * press for one event, in either order.
  */
 describe('SpeedlineControlPage lane DNF', () => {
   beforeEach(() => {

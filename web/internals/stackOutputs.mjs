@@ -4,9 +4,9 @@
 // `s3 sync --delete` against whatever bucket now answers to that name — so
 // nothing here falls back to a literal.
 //
-// Shells out to the AWS CLI v2 rather than adding @aws-sdk/client-cloudformation:
-// the web package carries no AWS SDK at all, and every ops script in this repo
-// goes through the CLI. Conventions mirror server/scripts/lib/awsCli.mjs —
+// Shells out to the AWS CLI v2: the web package carries no AWS SDK, and every
+// ops script in this repo goes through the CLI. Conventions mirror
+// server/scripts/lib/awsCli.mjs —
 // profile/region appended as flags, `--output json`, the CLI's own stderr
 // surfaced verbatim (an expired SSO session is the usual cause).
 

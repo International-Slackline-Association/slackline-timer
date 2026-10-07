@@ -374,10 +374,9 @@ describe('MatchesPage', () => {
   });
 
   it('keeps the toolbar to two wrapping rows, seeding beside the filter it acts on', async () => {
-    // Title + discipline + view + Add match crowded the header row off the page
-    // at 1024/1280 (the h4 collapsed into the toggles, the buttons broke over two
-    // lines). The seeding actions belong with the gender they seed, and both rows
-    // wrap rather than squeeze.
+    // Title + discipline + view + Add match in one row would crowd the header
+    // off the page at 1024/1280. The seeding actions belong with the gender
+    // they seed, and both rows wrap rather than squeeze.
     wireApi({ male: [match('m1')] }, () => undefined);
     renderPage(COMP);
     await screen.findByText('Final 1');

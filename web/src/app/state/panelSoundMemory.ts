@@ -6,10 +6,9 @@
  * presence — so an expiry sounds on the panel whose own clock crossed zero. At
  * a judges' desk where the PA hangs off the panel that is NOT the one pressing,
  * that is the wrong panel, and only the operator knows which one it is. This is
- * that answer, made a visible control (the header's `Sound on this panel` chip)
- * rather than a silent default.
+ * that answer, made a visible control (the header's `Sound on this panel` chip).
  *
- * Device-local, deliberately NOT keyed by competition: it describes which box
+ * Device-local, NOT keyed by competition: it describes which box
  * is wired to the speakers, which survives the event on it. Venue surfaces
  * (preview / athlete display) are unaffected — they always sound every channel
  * (ADR 0015 §3).

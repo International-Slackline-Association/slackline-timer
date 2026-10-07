@@ -7,7 +7,7 @@ import { telemetryTheme } from 'app/theme/theme';
 import { colors } from 'app/theme/tokens';
 
 /**
- * "Locked is a muted well, in every tone" (FREESTYLE_BOARD_UX §6) — pinned on
+ * "Locked is a muted well, in every tone" (freestyle-board-ux §6) — pinned on
  * what the theme actually paints, not on the tokens it names.
  *
  * `contrast.test.ts` proves the locked pair clears 4.5:1; this proves the

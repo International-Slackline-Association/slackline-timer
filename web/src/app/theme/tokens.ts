@@ -53,7 +53,7 @@ export const colors = {
   // ceiling before the hue reads pink). Only the states that actually paint
   // on dark grounds carry a Bright, mirroring the Dim precedent.
   // *Text = the third tier, for state WORDS under 24 px on light grounds
-  // (FREESTYLE_BOARD_UX §6): the Dims were tuned for numerals at >=24 px and
+  // (freestyle-board-ux §6): the Dims were tuned for numerals at >=24 px and
   // sit at 3.6-4.1:1, under the 4.5:1 body-text floor. `stopDim` already
   // clears it (5.01 canvas / 5.39 panel), so stop needs no *Text; `goDim` and
   // `setDim` stay numeral-only. Pinned pair by pair in test/app/theme/contrast.test.ts.
@@ -78,8 +78,7 @@ export const colors = {
     idle: '#8A939D', // neutral / not started
   },
   // Streaming overlays (transparent OBS/H2R surfaces composited over live video).
-  // Two-tier colour language (verified against the full-colour LAAX refs — the
-  // brief's earlier "all text white" rule was a misread of the dark composites):
+  // Two-tier colour language (per the full-colour LAAX refs):
   //   1. STRUCTURAL marks are white — section labels (`SEMI FINALS`, `FINALS`,
   //      `{GENDER}'S {DISCIPLINE}`…), bracket connectors, empty slot plates.
   //   2. FILLED NAME plates flip to solid white with near-black name text — every
@@ -89,8 +88,8 @@ export const colors = {
   // carries TWO measured plate alphas (the opacity audit): the profile-language
   // files (Profile top 4/Brackets, vs) fill at 30%, the names-language files
   // (Names top 4/8, Name Brackets) at 35% — hence the plate/plateName pair. Caps
-  // labels use fonts.display, numbers fonts.numerals. See DESIGN_SYSTEM §3
-  // (overlay plates & chroma key) + §7 (broadcast/overlay rules).
+  // labels use fonts.display, numbers fonts.numerals. See design-system §3
+  // "Overlay plates & chroma key" + §7.
   // The three translucent fills resolve through their vars (alphas in
   // tokens.css :root) so a chroma `?bg=` ground can flatten them to opaque
   // neutrals — the tl-chroma-ground override block in tokens.css.
@@ -108,7 +107,7 @@ export const colors = {
     label: '#FFFFFF', // structural / section labels (= ink.onBrand)
     // Slate legibility backing for white overlay text/captions: void (#333C4E)
     // at high alpha — caption-strip gradient + per-text shadow on transparent
-    // overlays, so white survives over bright/busy footage (DESIGN_SYSTEM §7).
+    // overlays, so white survives over bright/busy footage (design-system §7).
     scrim: 'rgba(51, 60, 78, 0.9)',
     // Full-bleed darkening layer behind an overlay composition — the LAAX
     // `2026_60_ Black.svg` layer (#231f20 at .6). Distinct from `scrim`, the
@@ -143,8 +142,8 @@ export const fonts = {
 } as const;
 
 // Overlay art metrics — non-color constants measured on the LAAX 2026 master
-// art's 1920×1080 frame (the surviving measurement record is DESIGN_SYSTEM §7;
-// the art itself is the client's and is not in this repo). Components derive
+// art's 1920×1080 frame (not part of this repo; see design-system §7 "Overlay
+// reference geometry"). Components derive
 // sizing from a 1080p baseline (vw/vh + clamp), so these are the reference
 // values, not hard pins.
 export const overlayArt = {
@@ -154,7 +153,7 @@ export const overlayArt = {
   nameTracking: '0.01em', // athlete names + initials, every plate and card
 } as const;
 
-// The broadcast "protection halo" (DESIGN_SYSTEM §7): a tight slate outline plus
+// The broadcast "protection halo" (design-system §7): a tight slate outline plus
 // a soft drop so overlay text survives BOTH the bright magenta chroma-key ground
 // and busy broadcast footage. The four offset shadows raise contrast for the dark
 // slate idle/loser hues against the key ground — a single soft drop alone left
@@ -170,10 +169,8 @@ export const overlayTextShadow = [
 ].join(', ');
 
 // The SVG-`filter` analogue of overlayTextShadow, for vector marks that can't take
-// a text-shadow — the white UnknownAthlete "?" placeholder on the empty overlay
-// plate. Chained slate drop-shadows give the same protection halo so the white
-// mark survives BOTH the magenta chroma-key ground and bright/busy footage (where
-// white-on-translucent-white would otherwise wash out). Slate = ink.hi #333C4E.
+// a text-shadow — the white UnknownAthlete "?" on the empty plate, which washes
+// out white-on-translucent-white without it.
 export const overlayMarkHalo = [
   'drop-shadow(0 0 3px rgba(51,60,78,0.95))',
   'drop-shadow(0 0 6px rgba(51,60,78,0.6))',
@@ -186,17 +183,14 @@ export const overlayMarkHalo = [
 // shrink the narrow name and the smallest profile-ranking result numeral to
 // ~13px. `max(<cqh>, the floor)` lifts those sub-floor boxes; larger boxes keep
 // their proportional cqh size unchanged.
-//
-// 20px is the low end of the usual 20-24px broadcast text minimum. The former
-// 16px sat under it and the quarter/semi names sat exactly ON it, so the densest
-// tier of the board was also its least legible tier on air.
+// 20px is the low end of the usual 20-24px broadcast text minimum.
 export const OVERLAY_TYPE_FLOOR_PX = 20;
 
 // Frame-relative (refVh, ADR 0034 §4), not raw px, so the floor tracks the
 // capture frame: a hard px value outran the cards' own shrink-to-fit on every
 // smaller canvas, and sibling cards read as a size lottery the broadcast never
 // shows. A canvas that does NOT track the viewport (the /admin/matches bracket
-// preview, capped by its Container) overrides `--tl-overlay-type-floor` off its
+// preview, capped by its Container) overrides `--overlay-type-floor` off its
 // own measured width instead — see `PlayoffBracket`.
 export const overlayTypeFloor = refVh(OVERLAY_TYPE_FLOOR_PX);
 
@@ -314,8 +308,8 @@ export const adminPreview = {
 } as const;
 
 // A board's measured geometry (px): the floors, caps and reserved rows its brief
-// signed off at the fold budget (freestyle-board-ux §2/§6). Relocated values,
-// not a scale — each one is a measurement, so a retune re-measures the board.
+// signed off at the fold budget (freestyle-board-ux §2/§6). Measurements, not a
+// scale — a retune re-measures the board.
 // The floors derive from the race width they are spent on.
 export const boardGeometry = {
   // The live column's ceiling: two lane cards plus the changeover gutter; quali
@@ -374,7 +368,7 @@ export const typeScale = {
 } as const;
 
 // The daylight floor for text on the LIVE PATH — anything the operator reads
-// mid-match, from a step back, in venue sunlight (FREESTYLE_BOARD_UX §8 C12,
+// mid-match, from a step back, in venue sunlight (freestyle-board-ux §8 C12,
 // whose anti-pattern list ends "text <14 px on the live path"). MUI's `caption`
 // is 12 px, so a live-path caption keeps the variant (family, weight, its
 // `span` mapping) and lifts only the size through this one owner rather than
@@ -387,7 +381,7 @@ export const typeScale = {
 export const liveCaption = { fontSize: 14 } as const;
 
 // The CHOSEN KEY of a segmented setting — the mode toggle, the best-trick cap
-// pair (FREESTYLE_BOARD_UX §6). MUI marks a selected key in brand teal (2.72:1
+// pair (freestyle-board-ux §6). MUI marks a selected key in brand teal (2.72:1
 // on its own tinted well) and fills a contained one with the brand, both of
 // which §6 confines to links and nav; a fill + ink step inside the grey family
 // clears 4.5:1 instead, and reads the same live and locked — a lock may not

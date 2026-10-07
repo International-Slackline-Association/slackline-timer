@@ -51,9 +51,9 @@ describe('BuzzerMappingDialog', () => {
     ).toBeInTheDocument();
   });
 
-  // It opens only when asked (owner call, 2026-09-19): a sheet owns the board
-  // while it stands, so popping itself on a Buzz! connect made the buzzers inert
-  // at the very moment the operator plugged them in to test them.
+  // It opens only when asked: a sheet owns the board while it stands, so
+  // popping itself on a Buzz! connect would make the buzzers inert at the very
+  // moment the operator plugs them in to test them.
   it('opens nothing by itself when a Buzz connects', () => {
     withPads([{ index: 0, id: 'Sony Buzz' }]);
     render(<BuzzerMappingDialog title="Speedline" rows={rows} />);
@@ -120,7 +120,7 @@ describe('BuzzerMappingDialog', () => {
 
 /**
  * The reference sheet lives beside the handset card, where Space is the buzzer
- * (FREESTYLE_BOARD_UX §4.3): a mouse press that opens it must leave the
+ * (freestyle-board-ux §4.3): a mouse press that opens it must leave the
  * keyboard where it found it, or MUI hands focus back to the trigger on close
  * and the trigger owns every buzzer press after it.
  */

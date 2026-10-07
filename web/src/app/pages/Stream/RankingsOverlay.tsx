@@ -150,14 +150,10 @@ const PROFILE_ART = {
 } as const;
 
 /**
- * The presentation for a single ranking (header + the `variant`-selected ranked
- * field: `names` plates or `profile` portrait cards). Exported
- * so non-`/stream` surfaces (e.g. the Cognito-gated `/freestyle/preview`
- * projector panel) can reuse the exact freestyle row rendering without
- * duplicating it. Returns `null` (paints nothing) while loading, on error, or
- * when empty, so it is safe to mount unconditionally; inside a `StreamLayout`
- * the `useReportStreamStatus` calls feed the off-air status panel (and no-op
- * elsewhere, e.g. the projector reuse).
+ * A single round's ranked field. Exported for the freestyle timer display's
+ * standings panel (`FreestyleTimerDisplay`). Returns `null` while loading, on error,
+ * or when empty, so it is safe to mount unconditionally; `useReportStreamStatus`
+ * no-ops outside a `StreamLayout`.
  */
 export const RankingsBody = ({
   compId,
@@ -312,10 +308,10 @@ const RankedField = ({
   rows: RankedRow[];
   standings?: boolean;
 }) => (
-  // The ranked plates sit LOWER-LEFT. Inside the flex-column StreamLayout the
-  // growing column bottom-anchors the rows against the frame edge; the top
-  // padding reserves headroom above a full-length (top-8) field. In a block parent (the
-  // freestyle projector panel) `flexGrow` is inert and the rows sit in-flow.
+  // The ranked plates sit LOWER-LEFT: inside the flex-column StreamLayout the
+  // growing column bottom-anchors the rows; the top padding reserves headroom
+  // above a top-8 field. In a block parent (`FreestyleTimerDisplay`) `flexGrow`
+  // is inert and the rows sit in-flow.
   <Box
     data-testid="ranked-field"
     sx={{
@@ -501,9 +497,8 @@ const NameRow = ({
       </Box>
       <Plate
         data-testid="ranking-plate"
-        // A ranked row is always a FILLED content plate → solid white fill
-        // with near-black ink, per the two-tier rule (the bracket name-plate
-        // fix). White-on-translucent-white was illegible on camera.
+        // A filled name plate: solid white + near-black ink (design-system §3
+        // two-tier rule).
         fill={colors.overlay.plateFilled}
         strokeWidth={refVh(ART.strokeWidth)}
         sx={{
@@ -520,9 +515,8 @@ const NameRow = ({
           overflow: 'hidden',
         }}
       >
-        {/* Full-height flag block flush to the plate edge — the populated
-            Names treatment of the delivered masters, square like the
-            SVO strip. vh width = vh height keeps it square. */}
+        {/* Full-height square flag block flush to the plate edge, as in the
+            masters; vh width = vh height keeps it square. */}
         <FlagRow
           athlete={row.athlete}
           testId="ranking-flag-strip"
@@ -541,12 +535,9 @@ const NameRow = ({
             fontSize: refVh(plateHeight * 0.55),
           }}
         >
-          {/* A long name shrinks to fit the plate (measured uniform down-scale,
-              `useFitToWidth` — same treatment as the profile cards) instead of
-              ellipsizing, so the whole name stays legible on camera. The slot
-              keeps overflow:hidden as a fail-safe; the mono result is pinned
-              (flexShrink:0) so it never overruns the plate edge and gets swallowed
-              by Plate's overflow:hidden (rankings-name-result-clip). */}
+          {/* A long name shrinks to fit (`useFitToWidth`) rather than
+              ellipsizing; the result is pinned (flexShrink:0) so it never
+              overruns the plate edge into Plate's overflow:hidden. */}
           <Box ref={slotRef} sx={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex' }}>
             <Box
               ref={nameRef}
@@ -612,13 +603,10 @@ const SUBORDINATE_SIZE = `max(0.5em, ${overlayTypeFloor})`;
  * a subordinate size/weight so the number reads as "best time from the round
  * that placed them" (rule G3).
  *
- * Content-sized, a long tag ('SMALL FINAL') stole plate width from its own row
- * only — `useFitToWidth` then shrank that row's name and the taper read
- * non-monotonic (rank 4 smaller than rank 5). So the box reserves the FIELD's
- * widest tag on every row: each `candidates` tag is laid out hidden in the same
- * grid cell as the visible one, which makes the column intrinsically the widest
- * of them with no measurement pass — every row surrenders the same width and
- * the name fit varies only with the name.
+ * The box reserves the FIELD's widest tag on every row (each candidate laid out
+ * hidden in the same grid cell, so no measurement pass): a content-sized long
+ * tag ('SMALL FINAL') would shrink only its own row's name and break the
+ * monotonic taper.
  */
 const SourceTag = ({ tag, candidates }: { tag: string; candidates: string[] }) => (
   <Box
@@ -655,7 +643,7 @@ const SourceTag = ({ tag, candidates }: { tag: string; candidates: string[] }) =
  * A standings row's field-wide result column: the placing-round tag and the
  * result, each padded to the field's widest by hidden sizers in one grid cell,
  * so the column is one box (in the row's em) down the whole field — a DNF, an
- * em dash or a short tag no longer hands its row extra name room. The tag's
+ * em dash or a short tag never hands its row extra name room. The tag's
  * share is given back as plate width (see {@link useSurrenderedWidth}).
  */
 const ReservedColumn = ({

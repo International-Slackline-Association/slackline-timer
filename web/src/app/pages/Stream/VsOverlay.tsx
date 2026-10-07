@@ -28,28 +28,10 @@ import { streamStatusFromQueries } from 'app/pages/Stream/streamStatus';
 import { VsFreestyleStatsTable, VsSpeedStatsTable } from 'app/pages/Stream/VsStatsTable';
 
 /**
- * `/stream/vs/:round/:gender?compId=&token=&match=` — head-to-head for a single
- * matchup in the LAAX broadcast language (`LAAX 2026_vs speed.svg` /
- * `LAAX 2026_vs freestyle.svg`): two portrait photo cards (name + flag) flanking
- * a condensed Medium `VS`, each backed by an outer stats table (`VsStatsTable`)
- * whose content follows the discipline split — the speed plane's RUN 1/2/3
- * best-of-3 laps (`useTimes`, filling in live as each run is recorded), or the
- * freestyle plane's judged component breakdown + TOTAL (`useScores`, adapting the
- * columns per round). Once decided, the winner's frame edge goes `race.go` green
- * and the loser's `race.stop`. Transparent background for keying; refreshes live
- * on `db_update`.
- *
- * This variant is **pinned to one round** (the URL `:round`). For a card that
- * follows the operator across every round of a gender/discipline, see the
- * `/stream/vs-live/:gender` sibling (`VsLiveOverlay`) — same card, live round.
- *
- * A head-to-head lower-third shows exactly ONE matchup. Precedence for which:
- * an explicit `&match=<matchId>` query param > the control board's live
- * `selection.matchId` (when it names a match in this round) > the first match
- * without a winner by bracket position. The explicit param is stable across
- * re-seeds; the live selection follows the operator (superseding the old
- * recency tiebreaker); the bracket fallback keeps a freshly-opened overlay
- * (before the board pushes anything) from going blank.
+ * `/stream/vs/:round/:gender?compId=&token=&match=` — the head-to-head for ONE
+ * matchup (`VsMatchup`), **pinned to one round** (the URL `:round`). The
+ * round-following sibling is `/stream/vs-live/:gender` (`VsLiveOverlay`). Which
+ * match: see `pickMatch`.
  */
 export const VsOverlay = () => {
   const { round, gender } = useParams();
@@ -79,10 +61,11 @@ export const VsOverlay = () => {
  * The one match to show. Precedence: the explicitly-requested `matchId` >
  * the control board's live `selection.matchId` (only when it names a match in
  * this round/gender list) > the live match by bracket position (first without
- * a winner, else the first overall). Returns undefined for an empty round — or
+ * a winner, else the first overall) — which keeps a freshly-opened overlay from
+ * going blank before the board pushes. Returns undefined for an empty round, or
  * for an explicit `matchId` that isn't in the list (fail-safe blank, e.g. a
- * stale link after a re-seed), which deliberately does NOT fall through to the
- * live/positional picks.
+ * stale link after a re-seed): that does NOT fall through to the live/positional
+ * picks.
  */
 export const pickMatch = (
   matches: Match[],
@@ -127,16 +110,10 @@ export const pickLiveMatch = (
 };
 
 /**
- * Reference geometry measured off the `LAAX 2026_vs speed/freestyle.svg`
- * masters — provenance labels, not files in this repo; the measurement record
- * is `doc/dev/design-system/design-system.md` §7 "VS head-to-head". Px on the
- * 1920×1080 capture frame, carried to any capture size by `refVw`/`refVh`, so
- * a 1080p capture lands pixel-for-pixel on the master and nothing is pinned to
- * a fixed canvas.
- *
- * The composition is a centred row
- * `[stats table] [photo card] VS [photo card] [stats table]`; the portrait
- * panels are the `Competitor` frame itself (ADR 0029) and the gutters below are
+ * Reference px measured off the client's `LAAX 2026_vs speed/freestyle.svg`
+ * masters (not part of this repo; see design-system §7 "VS head-to-head"),
+ * carried to any capture size by `refVw`/`refVh`. The row is
+ * `[stats table] [photo card] VS [photo card] [stats table]`; the gutters are
  * asymmetric because the master's are.
  */
 export const VS_ART = {
@@ -223,15 +200,12 @@ const VsBody = ({
 };
 
 /**
- * The head-to-head card for one already-resolved match — the shared render of
- * the round-pinned `VsOverlay` and the round-following `VsLiveOverlay`. Flanks
- * each competitor's photo card with a discipline-specific stats table
- * (`VsStatsTable`): on the speed plane, the athlete's RUN 1/2/3 best-of-3 laps
- * off `useTimes` (they fill in live as each run is recorded); on the freestyle
- * plane, the judged component breakdown + TOTAL off `useScores`. The result data
- * is fetched for `round` (the pinned round, or the live match's own round) via
- * the discipline split. A decided match frames the winner `race.go` green and
- * the loser `race.stop`; an undecided one keeps both white edges.
+ * The head-to-head card for one resolved match, shared by `VsOverlay` and
+ * `VsLiveOverlay` (LAAX `vs speed/freestyle` masters): two `Competitor` cards
+ * flanking a `VS`, each backed by an outer `VsStatsTable` — speed RUN 1/2/3
+ * laps off `useTimes`, or the freestyle breakdown + TOTAL off `useScores`, both
+ * for `round`. A decided match frames the winner `race.go` and the loser
+ * `race.stop`; an undecided one keeps both white edges.
  *
  * Side order follows the board's live lane pairing when it names this match
  * (`matchSideOrder`) — all result data is athlete-keyed, so a swap only moves

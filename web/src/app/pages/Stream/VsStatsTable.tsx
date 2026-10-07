@@ -8,28 +8,21 @@ import { ScoreCell, type ScoreCellKind } from 'app/pages/Stream/ScoreCell';
 import { freestyleCellValue, isFreestyleCellShown } from 'app/pages/Stream/freestyleScore';
 
 /**
- * The per-athlete stats panel that flanks each `VsMatchup` photo card, a
- * transcription of the outer tables in `LAAX 2026_vs speed.svg` /
- * `LAAX 2026_vs freestyle.svg`. One table per competitor:
+ * The per-athlete stats panel flanking each `VsMatchup` photo card (the outer
+ * tables of the LAAX `vs speed/freestyle` masters):
  *
- * - **speed** — RUN 1/2/3 best-of-3 lap times, filling in live as each run is
- *   recorded (`updates during the match`); an unrun slot stays an empty
- *   translucent box, a DNF run renders `DNF`;
- * - **freestyle** — the judged component breakdown (trick difficulty, combo,
- *   style, control penalty, best trick) plus the TOTAL, with the same per-round
- *   column rule as the score card (qualification drops the two battle-only
- *   components — `isFreestyleCellShown`).
+ * - **speed** — RUN 1/2/3 best-of-3 lap times, filling in live; an unrun slot
+ *   stays an empty box, a DNF run renders `DNF`;
+ * - **freestyle** — the judged breakdown plus TOTAL, with the score card's
+ *   per-round column rule (`isFreestyleCellShown`).
  *
- * The composition is symmetric: values sit on the OUTER edge (toward the frame),
- * labels on the INNER edge (toward the photo), so the left table mirrors the
- * right (`side`). Geometry is the art's 1920×1080 metrics via `refVw`/`refVh`;
- * the container is the photo card's height so the flex row centres the shorter
- * speed block against the card exactly as the mock does.
+ * Values sit on the OUTER edge, labels on the INNER edge, so the left table
+ * mirrors the right (`side`).
  */
 
-/** Art metrics, px on the 1920×1080 capture frame (measurement record:
- *  `doc/dev/design-system/design-system.md` §7 "VS head-to-head"). The table
- *  container matches the photo card's height so the row group centres within. */
+/** Reference px (design-system §7 "VS head-to-head"). The table container
+ *  matches the photo card's height so the shorter speed block centres against
+ *  the card as in the master. */
 const CARD_H = 498.02;
 const TABLE_W = 400;
 const CELL_STROKE = 5; // the value-box border path is ~5px on the reference
@@ -60,8 +53,7 @@ const FS = {
 
 type Side = 'left' | 'right';
 
-/** The container the two disciplines share. `justifyContent center` keeps the
- *  (variable-length) body centred against the card height. */
+/** The container the two disciplines share. */
 const StatsShell = ({ side, children }: { side: Side; children: React.ReactNode }) => (
   <Box
     data-testid={`vs-stats-${side}`}
@@ -79,10 +71,8 @@ const StatsShell = ({ side, children }: { side: Side; children: React.ReactNode 
 
 /**
  * One stat row: a full-width backing band with the value box on the outer edge
- * and the label on the inner edge (mirrored by `side`). An absent `value`
- * (`null`) leaves the box empty rather than printing a placeholder zero — the
- * same fail-safe-blank rule the VS card follows for a missing result; the cell's
- * own two-tier chrome is `ScoreCell`'s.
+ * and the label on the inner edge (mirrored by `side`). A `null` value leaves
+ * the box empty rather than printing a placeholder zero.
  */
 const StatRow = ({
   side,
@@ -177,9 +167,8 @@ export const VsSpeedStatsTable = ({ side, runs }: { side: Side; runs: (number | 
   </StatsShell>
 );
 
-/** The freestyle component rows in art order (top → bottom, TOTAL rendered
- *  separately below). CONTROL PENALTY is the art's solid stop-red box and takes
- *  a smaller label; the rest are two-tier component cells (`ScoreCell`). */
+/** The freestyle component rows in art order (TOTAL rendered separately below);
+ *  CONTROL PENALTY takes a smaller label. */
 const FS_ROWS = [
   { key: 'difficulty', label: 'TRICK DIFFICULTY', labelSize: FS.labelSize, kind: 'component' },
   { key: 'combo', label: 'COMBO', labelSize: FS.labelSize, kind: 'component' },

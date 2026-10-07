@@ -23,7 +23,7 @@ import { overallMax } from 'app/util/scoreInput';
  *
  * The import reaches outside web/'s tsconfig (the server is a composite
  * project, so `tsc` cannot follow the source file), hence the ts-ignore;
- * vitest compiles the file just fine and that is what the check needs.
+ * vitest compiles it, which is all the check needs.
  */
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore -- cross-package source import, type-checked on the server side

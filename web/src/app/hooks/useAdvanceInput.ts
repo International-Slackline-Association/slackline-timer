@@ -11,14 +11,15 @@ const OVERLAY_SELECTOR = '[role="dialog"], [role="listbox"], [role="menu"]';
  * holding one is a confirm this seam registers, so one the seam is NOT holding
  * open is a dialog MUI is merely animating out (~195 ms after the answer ran).
  * The DOM alone cannot tell that from a question still standing — reading it
- * alone kept ADVANCE inert across the transition, against §4.8's "press again
- * to advance", with the handset readout blaming a picker that was never open. */
+ * alone would keep ADVANCE inert across the transition, against
+ * freestyle-board-ux §4.8's "press again to advance", with the handset readout
+ * blaming a picker that was never open. */
 const CONFIRM_MARKER = '[data-confirm-guard]';
 
 /** Focused elements a Space belongs to — typing it, picking with it, or (the
  * `button` / `[role=button]` / `a[href]` tier) activating it: on a focused
  * button Space IS the browser's click of that button, one action never two, and
- * on a focused link it is nothing at all (FREESTYLE_BOARD_UX §4.3). That tier is
+ * on a focused link it is nothing at all (§4.3). That tier is
  * safe only because every control the operator touches mid-match drops the focus
  * again (§4.4): the live column and the board chrome on the mouse press
  * (`RaceButton` / `blurOnClickProps`), an answered confirm as its question
@@ -32,7 +33,7 @@ const isKeystrokeOwner = (el: Element | null): boolean =>
   el !== null && (el.matches(KEYSTROKE_OWNER_SELECTOR) || (el as HTMLElement).isContentEditable);
 
 /** An open confirm, named: what the handset readout calls it, and the safe
- * answer an ADVANCE press behind it gives (brief §4.8/§4.14). */
+ * answer an ADVANCE press behind it gives (§4.8/§4.14). */
 export interface ConfirmGuard {
   /**
    * The question, as the readout names it — e.g. `Reset Athlete 1`. Both lines
@@ -80,7 +81,7 @@ const confirms: RegisteredConfirm[] = [];
 const doNothing = () => {};
 
 /**
- * The ONE ADVANCE guard (the brief's §4.3), consulted by all three
+ * The ONE ADVANCE guard (§4.3), consulted by all three
  * triggers — Space, pad 10 and the plate — so they cannot diverge behind a
  * modal: the overlay standing in the way, with the safe close to call and the
  * confirm to name (null when the overlay is a bare picker popup), or `null`
@@ -200,8 +201,8 @@ export const useAdvanceInput = (onAdvance: () => void): (() => void) => {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.code !== 'Space' || event.repeat) return;
-      // Deliberately NOT the safe close: the browser lands the press on the
-      // confirm's autoFocused safe button itself (one action, never two).
+      // NOT the safe close: the browser lands the press on the confirm's
+      // autoFocused safe button itself (one action, never two).
       if (advanceBlocked() !== null) return;
       if (isKeystrokeOwner(document.activeElement)) return;
       event.preventDefault();

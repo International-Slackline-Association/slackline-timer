@@ -15,7 +15,7 @@ interface ImportMetaEnv {
   readonly VITE_APP_COGNITO_CLIENT_ID?: string;
   /** Cognito Hosted-UI domain the sign-in redirect goes to. */
   readonly VITE_APP_COGNITO_DOMAIN?: string;
-  /** Cognito group allowed to operate the timer; mirrors the server's COGNITO_TIMER_GROUP. */
+  /** Cognito superadmin group (ADR 0045); mirrors the server's COGNITO_TIMER_GROUP. */
   readonly VITE_APP_COGNITO_TIMER_GROUP?: string;
   /** "true" to bypass Cognito auth for local development. Never set in production builds. */
   readonly VITE_APP_LOCAL_DEV?: string;

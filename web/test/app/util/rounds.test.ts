@@ -57,8 +57,8 @@ describe('isHeadToHeadRound', () => {
   });
 });
 
-// Format = mode (the ADR 0036 respec): the board mode owns the Round
-// vocabulary — quali IS the qualification round, battle IS a playoff match.
+// Format = mode (ADR 0036): the board mode owns the Round vocabulary — quali IS
+// the qualification round, battle IS a playoff match.
 describe('roundsForMode', () => {
   it('quali offers test + qualification only', () => {
     expect(roundsForMode('quali')).toEqual(['test', 'qualification']);

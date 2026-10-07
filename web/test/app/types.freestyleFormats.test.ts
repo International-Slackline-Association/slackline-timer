@@ -4,7 +4,7 @@ import { FREESTYLE_FORMAT_PRESETS } from 'app/types';
 
 /**
  * The Freestyle format timings encode championship rules F4/F5, applied by the
- * single Quali/Battle mode control (format = mode — the ADR 0036 respec). These
+ * single Quali/Battle mode control (format = mode, ADR 0036). These
  * are the numbers the operator would otherwise retype every battle, so pin them
  * to the rule values — a drift here silently mistimes a whole competition.
  */

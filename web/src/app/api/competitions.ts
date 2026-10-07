@@ -18,11 +18,11 @@ export type CompetitionUpdateInput = Pick<Competition, 'name' | 'startDate' | 'e
   Pick<Competition, 'config'>;
 
 /**
- * Poll cadence for the competitions list page. `db_update` can never keep this
- * list fresh: with no competition selected there is no relay room to join, and
- * a newly created competition broadcasts into its *own* room, which no other
- * client has joined yet. Interval refetches pause in background tabs (React
- * Query default) and stop with the page's unmount.
+ * Poll cadence for the competitions list (the /admin/competitions page and the
+ * AppShell picker). `db_update` can never keep this list fresh: with no
+ * competition selected there is no relay room to join, and a newly created
+ * competition broadcasts into its *own* room, which no other client has joined
+ * yet. Pauses in background tabs.
  */
 export const COMPETITIONS_LIST_POLL_MS = 15_000;
 

@@ -5,12 +5,9 @@
  *
  * Each channel is its own machine with its own states and events; what they
  * hold in common is the pair of shapes at their edges: what a transition hands
- * the effect drain, and what a transition hands a `Countdown` to render. Both
- * lived in `battleMachine.ts` because the battle lanes were written first, so
- * the warm-up and the try clock — neither of which knows what a lane is —
- * imported a lane module to speak the shared language. They now import this
- * one; `battleMachine` re-exports both so a lane-side reader still finds them
- * where the reducer uses them.
+ * the effect drain, and what a transition hands a `Countdown` to render.
+ * `battleMachine` re-exports both so a lane-side reader finds them where the
+ * reducer uses them.
  *
  * Nothing lane-shaped belongs here. `laneDisplay` (a `LaneState` → display
  * projection) stays with the lanes, as does the try clock's own
@@ -29,8 +26,7 @@ import type { RaceSound } from 'app/util/raceSound';
  * table-testable — the tone map IS the effect table.
  *
  * One contract for all three channels — `useEffectDrain` performs it
- * identically whichever of them returned it — hence the channel-neutral name:
- * it was `BattleEffect` while the lanes were the only machine that produced it.
+ * identically whichever of them returned it.
  */
 export type TimerEffect =
   | { kind: 'ws'; message: DistributiveOmit<CountdownWSMessage, 'sessionId'> }

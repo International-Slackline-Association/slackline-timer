@@ -19,18 +19,15 @@ import { createH2rPusher, resolveH2rTarget, type H2rPusher } from 'app/util/h2rC
 const DEFAULT_TARGET = 'http://127.0.0.1:4001';
 
 /**
- * `/stream/bridge?compId=&token=&h2r=` — the H2R Graphics bridge. Unlike the other
- * `/stream/*` pages this is **not** an OBS browser source: it is a tab the operator
- * keeps open on the machine running H2R. It follows the control board's relay-only
- * `updateSelection` (read token on `$connect`, ADR 0014), resolves each side to
- * display fields via the existing athletes/times/scores reads (the same join the
- * SVO overlays do), and POSTs name/country/result + the portrait into H2R's local API
- * on `:4001` (default; `?h2r=` overrides it with another loopback origin, see
- * `resolveH2rTarget`). Zero backend change — H2R is
- * push-only, so this is pure client packaging of the existing read token + reads.
- * See doc/dev/broadcast-overlays.md §"External graphics tools".
+ * `/stream/bridge?compId=&token=&h2r=` — the H2R Graphics bridge. Not an OBS
+ * browser source: a tab the operator keeps open on the machine running H2R. It
+ * follows the board's relay-only `updateSelection` (ADR 0014), resolves each side
+ * through `useLiveSideAthlete` (the SVO-B join), and POSTs name/country/result +
+ * portrait into H2R's local API (`:4001` by default; `?h2r=` takes another
+ * loopback origin, see `resolveH2rTarget`). H2R is push-only — see
+ * doc/dev/broadcast-overlays.md "External graphics tools".
  *
- * It paints a visible status panel (not the overlays' fail-safe blank) because the
+ * It paints a visible status panel (not the overlays' fail-safe blank): the
  * operator needs to confirm the bridge is connected and pushing.
  */
 export const BridgePage = () => {
@@ -74,10 +71,8 @@ const BridgeBody = ({
     s.athlete ? { athlete: s.athlete, result: s.result ?? '' } : null;
   const sides: BridgeSides = { 1: resolved(side1), 2: resolved(side2) };
 
-  // Re-push whenever the resolved board state changes. The dependency key is the
-  // pushed values (name/result per side + the board discipline) so a
-  // same-selection re-render is a no-op but a cleared lane, a new result, or a
-  // discipline switch fires an update.
+  // The dependency key is the pushed content, so a same-selection re-render is a
+  // no-op but a cleared lane, a new result or a discipline switch re-pushes.
   const key = JSON.stringify([
     sides[1]?.athlete.athleteId,
     sides[1]?.result,

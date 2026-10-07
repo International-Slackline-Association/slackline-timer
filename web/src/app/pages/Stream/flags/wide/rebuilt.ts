@@ -9,7 +9,7 @@
 // full resolution, lifted out of the vendored flag-icons artwork (`./emblems.ts`)
 // and placed undistorted: Spain's coat of arms, Argentina's Sun of May. Those
 // entries run well past the 32 KB the simple flags hold to, which is why the
-// `WideFlag` size guard exempts them.
+// size guard in `WideFlag.test.tsx` exempts them.
 // `./index.ts` resolves ./delivered.ts first, then this table, so a nation the
 // designer ever delivers automatically outranks its reconstruction here — drop
 // the entry when that happens (a test asserts the two never overlap).
@@ -34,9 +34,8 @@
 //
 // Do NOT reach for a flag's own rectangle as the viewBox. It is harmless only for
 // designs that are pure horizontal bands, and those work in the band rectangle
-// anyway; for anything carrying an angle or a circle it is the bug. The Union
-// Jack spent a release in a `0 0 60 30` viewBox, stretched 4.6x, its saltire
-// flattened into near-horizontal streaks.
+// anyway; for anything carrying an angle or a circle it is the bug (a Union
+// Jack in `0 0 60 30` stretches 4.6x, flattening its saltire into streaks).
 // Colours are flag DATA (sampled national palettes), not TELEMETRY tokens — the
 // same reason the delivered art carries its own hex.
 //

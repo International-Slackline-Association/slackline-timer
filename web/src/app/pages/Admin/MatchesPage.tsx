@@ -217,9 +217,8 @@ const MatchesManager = ({ compId }: { compId: string }) => {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Two toolbar rows is the ceiling before the page reads as a form: the
           title row carries what selects the VIEW, the filter row what acts on
-          the SELECTION. Both wrap rather than squeeze — unwrapped, the tablet
-          widths collapsed the title into the toggles and broke the buttons over
-          two lines each. */}
+          the SELECTION. Both wrap rather than squeeze, or at tablet widths the
+          title collapses into the toggles and the buttons break over two lines. */}
       <Stack
         direction="row"
         sx={{

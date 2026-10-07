@@ -7,9 +7,8 @@ import { BillingStack } from '../../infra/billing-stack';
 // The cost backstop (ADR 0031 §1). Invariants pinned here: the $55 (≈€50)
 // monthly Budget with 50/80/100% actual+forecast notifications, the us-east-1
 // EstimatedCharges alarm at $25 (an earlier warning than the Budget's 100%), and
-// the alarm routing to one SNS email topic. USD is the single currency of truth — AWS Budgets rejects EUR in
-// this account. A silent revert of the ceiling or a dropped notification tier
-// fails CI.
+// the alarm routing to one SNS email topic. USD only: AWS Budgets rejects EUR in
+// this account.
 const NOTIFY_EMAIL = 'billing-alerts@example.org';
 const app = new App({ context: { billingAlertEmail: NOTIFY_EMAIL } });
 const stack = new BillingStack(app, 'slackline-timer-v1-billing', {

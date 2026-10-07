@@ -36,8 +36,7 @@ const EMBLEM_NATIONS = [
 
 // flag-icons draws a flag's background as full-width axis-aligned rect paths
 // (`M0 0h640v480H0z`, `M0 120h640v240H0z`) before any emblem. That exact shape is
-// the classifier — matching on it rather than "the first N elements" keeps this
-// honest if the vendored artwork is re-ordered.
+// the classifier, so a re-ordered vendored file still strips correctly.
 const BACKGROUND_PATH = /<path[^>]*\bd="M0 \d+(?:\.\d+)?h640v\d+(?:\.\d+)?H0z"[^>]*\/>\s*/g;
 
 // Alpha above which a rendered pixel counts as emblem (not antialias fringe).

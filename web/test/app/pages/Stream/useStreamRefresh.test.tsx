@@ -236,9 +236,9 @@ describe('useStreamRefresh', () => {
   });
 
   it('re-applies no frame when the discipline changes', () => {
-    // Frames are handled once, as they arrive (ADR 0051) — nothing is held to be
-    // re-read when a dependency moves. Keyed on a held last frame, a discipline
-    // change re-ran the last `db_update`'s invalidation.
+    // Frames are handled once, as they arrive (ADR 0051) — nothing is held to
+    // be re-read when a dependency moves. Keyed on a held last frame, a
+    // discipline change would re-run the last `db_update`'s invalidation.
     wsState.readyState = ReadyState.OPEN;
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');

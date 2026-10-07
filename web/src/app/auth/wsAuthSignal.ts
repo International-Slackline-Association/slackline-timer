@@ -1,17 +1,15 @@
 import { useSyncExternalStore } from 'react';
 
 /**
- * A tiny cross-component signal for "the WebSocket `$connect` authorizer
- * rejected us" (HTTP 401 → the socket closes during the handshake and never
- * reaches OPEN). The relay is the real security boundary, so the browser only
- * learns of a denied operator session from a failed connection — not from the
- * Cognito group claim, which can still look valid on a token that has lapsed
- * past its ~1h lifetime.
+ * Cross-component signal for "the WebSocket `$connect` authorizer rejected us"
+ * (HTTP 401 → the socket closes during the handshake and never reaches OPEN).
+ * The browser learns of a denied session only from that failed connection: a
+ * cached IdToken can look valid past its ~1h lifetime, and a manager may hold
+ * no grant on the opened competition (ADR 0045).
  *
- * `useWS` reports the verdict here; `RequireSignedIn` reads it so the denied
- * operator gets the same clear message as a missing group claim instead of a
- * silently stuck "Closed" socket. Kept in the `app/auth` seam (not in the WS
- * hook) so the gate component can subscribe without importing the hook.
+ * `useWS` reports the verdict here; `RequireSignedIn` turns it into a clear
+ * message instead of a silently stuck "Closed" socket. Lives in the `app/auth`
+ * seam so the gate can subscribe without importing the WS hook.
  */
 
 let denied = false;

@@ -15,8 +15,7 @@ export type SelectFieldProps = Omit<TextFieldProps, 'select' | 'children' | 'pla
 
 /**
  * The house native-select field: a MUI `TextField select` carrying the shared
- * `native` + shrunk-label slotProps and rendering `<option>`s from data, so the
- * incantation lives in one place instead of at ~30 call sites. Pair with
+ * `native` + shrunk-label slotProps and rendering `<option>`s from data. Pair with
  * `enumOptions` for enum-backed pickers.
  */
 export const SelectField = ({ options, placeholder, slotProps, ...rest }: SelectFieldProps) => (

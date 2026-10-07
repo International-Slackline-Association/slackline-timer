@@ -9,8 +9,8 @@ import {
 } from 'app/util/countdownClock';
 import type { CountdownDisplayState } from 'app/util/timerChannel';
 
-// Pure-core table tests (HSM rule 3): no React, no mocks, no fake timers —
-// wall clock rides in on `at`.
+// Pure-core table tests: no React, no mocks, no fake timers — wall clock rides
+// in on `at`.
 
 describe('clockFromMessage (wire → union mapper)', () => {
   it('start_countdown anchors to the shared wire epoch when present', () => {
@@ -129,8 +129,8 @@ describe('clockFromRecovery (snapshot row → union mapper)', () => {
   });
 
   it('onBreak wins over isRunning — the old illegal combo collapses to the held break', () => {
-    // The boolean bag let a malformed row tick the run AND the break at once;
-    // the union makes that unrepresentable: on break, the run is held.
+    // A boolean bag would let a malformed row tick the run AND the break at
+    // once; the union makes that unrepresentable: on break, the run is held.
     const state = clockFromRecovery(
       { remainingMs: 45_000, isRunning: true, onBreak: true, breakRemainingMs: 10_000 },
       0,

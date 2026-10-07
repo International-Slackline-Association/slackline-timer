@@ -52,8 +52,8 @@ describe('laneCardState (FREESTYLE_BOARD_UX §3/§6)', () => {
   });
 
   it('separates a held lane from a pristine one at the same phase', () => {
-    // Both lanes are `idle`; only `armedMs` says one of them ran. The whole
-    // point of the tier — the card frame and word diverge from here.
+    // Both lanes are `idle`; only `armedMs` says one of them ran, so the card
+    // frame and word diverge here.
     expect(laneCardState(idle(ARMED)).tier).toBe('ready');
     expect(laneCardState(idle(ARMED - 1)).tier).toBe('held');
   });

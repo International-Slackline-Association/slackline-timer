@@ -85,9 +85,7 @@ export interface ResolvedSlot extends BracketSlot {
  * The single-direction "name" bracket layout (LAAX broadcast `Name Brackets`
  * reference): a left→right tree with no background art — section labels, name
  * plates and connector elbows are all drawn in JSX over the transparent
- * overlay. This is geometry only (percentages of a 16:9 canvas), kept separate
- * from the mirrored `BRACKET_SLOTS` art so the "profile" variant and its parity
- * tests are untouched.
+ * overlay. Geometry only (percentages of a 16:9 canvas).
  *
  * Plates are bound to resolved athletes by `boxId` (quarter/half/final reuse
  * the same ids as `BRACKET_SLOTS`); the `winner` plate has no slot — it carries
@@ -121,13 +119,12 @@ export interface NameTreeLayout {
 }
 
 /**
- * One shared vertical recentre for both trees. Both arts were framed with an
- * empty top quarter (an event-logo slot that no longer exists) and captions
- * running into the bottom 1.5%, so the measured geometry hangs bottom-heavy and
- * breaks the 5% title-safe rule (design-system §7.5). This shifts the WHOLE
- * tree — boxes, label bands and connector coordinates alike — so its bounding
- * box centres on the canvas, leaving every relative percentage the art encodes
- * untouched. The admin preview and the overlay therefore stay one tree.
+ * One shared vertical recentre for both trees: the measured art hangs
+ * bottom-heavy past the title-safe margin (why: design-system §7 "Overlay
+ * reference geometry"). Shifts the WHOLE tree — boxes, label bands and
+ * connector coordinates alike — so its bounding box centres on the canvas,
+ * leaving every relative percentage the art encodes untouched. The admin
+ * preview and the overlay therefore stay one tree.
  *
  * `centreX` also centres the boxes' horizontal extent — only for the name tree
  * without its quarter column, which would otherwise hug the right edge. Labels
@@ -418,7 +415,7 @@ export const profileTreeLayout = ({ hideQuarter = false }: TreeOptions = {}): Pr
     },
     { text: 'FINALS', xPct: 50, yPct: artY(719.9), sizePct: 85.06 / 1080 },
     // The art wedges a two-line SMALL FINALS into the pair's 94.94px gap, but
-    // Oswald runs wider than the art's Placard Next and collided with the card
+    // Oswald runs wider than the art's Placard Next and collides with the card
     // frames (boxes paint over labels). Deviation from the master: a single
     // line under the pair — the region the tree keeps clear — at the art size,
     // singular per `roundLabel`'s "Small final" vocabulary.

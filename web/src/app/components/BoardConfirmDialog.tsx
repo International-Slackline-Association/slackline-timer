@@ -12,7 +12,7 @@ import { RaceButton } from 'app/components/RaceButton';
 import { useConfirmGuard } from 'app/hooks/useAdvanceInput';
 
 /**
- * The operator surfaces' one confirm shell (FREESTYLE_BOARD_UX §4.8), shared by
+ * The operator surfaces' one confirm shell (freestyle-board-ux §4.8), shared by
  * the control boards and the admin pages. Every question it carries stands over
  * a press with no undo — a lane's Reset, the rail's whole-board re-arm, a
  * best-trick tally, a selection change that orphans a match, revoking every

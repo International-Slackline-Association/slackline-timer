@@ -1,5 +1,5 @@
 /**
- * The TALLY plate's content, derived (FREESTYLE_BOARD_UX §3/§4.1).
+ * The TALLY plate's content, derived (freestyle-board-ux §3/§4.1).
  *
  * The plate answers two questions at once — **where the board is** (left: a
  * state word plus one live fact) and **what the next ADVANCE press does**
@@ -11,8 +11,7 @@
  * in on `now`, so the live facts (`02:14 left`, `00:12`) are a render-time
  * projection and every row is a table test rather than a page screenshot.
  *
- * Readings of the brief's §3 table resolved rather than copied (the awaiting
- * row's resolution has since been folded back into §3):
+ * Where this reads the §3 table rather than copying it:
  *  - the "no athlete" row's right-hand `SELECT AN ATHLETE` moved to the
  *    sub-line. A press with no athlete assigned still starts the lane, and §4.1
  *    outranks the row: the plate must never name an effect the press does not
@@ -126,7 +125,7 @@ interface StateLine {
 
 const LANES = [1, 2] as const;
 
-/** `P1 BIANCHI`, or the bare player number before an athlete is picked. */
+/** `P1 BIANCHI`, or the bare slot number before an athlete is picked. */
 const who = (lane: PlayerId, names: AdvanceNames): string =>
   names[lane] ? `P${lane} ${names[lane].toUpperCase()}` : `P${lane}`;
 

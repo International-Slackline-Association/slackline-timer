@@ -169,11 +169,11 @@ describe('FreestyleSelectionPanel', () => {
     expect(screen.getByTestId('why-line')).toHaveTextContent('why: locked while Athlete 1 runs');
   });
 
-  // freestyle-board-fold-budget: battle used to stack a context grid over a
-  // bordered "Athlete assignment" box — two captions, a border and a nested
-  // inset, ~60 px of the live column that holds the lane transport over the
-  // fold. One wrapping row now: four flex items in quali, four in battle (the
-  // trio counts once, because it wraps as one).
+  // freestyle-board-fold-budget: a context grid over a bordered "Athlete
+  // assignment" box — two captions, a border and a nested inset — would cost
+  // ~60 px of the live column that holds the lane transport over the fold. One
+  // wrapping row instead: four flex items in quali, four in battle (the trio
+  // counts once, because it wraps as one).
   it('lays the whole selection on one wrapping row in both modes', () => {
     const { rerender } = renderPanel(makeRecorder(), 'quali');
 
@@ -191,10 +191,10 @@ describe('FreestyleSelectionPanel', () => {
     expect(battleRow).toContainElement(screen.getByTestId('athlete-assignment-group'));
   });
 
-  // The Match select carried a permanent helper line under it. What it fills is
-  // the manual's own sentence and the two pickers beside it show the answer, so
-  // on a fold-bound live board the hint is setup chrome the live path paid 20 px
-  // for (the collapse order of design-system §9 "Responsive contract").
+  // No permanent helper line under the Match select: what it fills is the
+  // manual's own sentence and the two pickers beside it show the answer, so on
+  // a fold-bound live board the hint would be setup chrome the live path pays
+  // 20 px for (the collapse order of design-system §9 "Responsive contract").
   it('carries no helper line under the match select', () => {
     renderPanel(makeRecorder(), 'battle');
 
@@ -342,8 +342,8 @@ describe('FreestyleSelectionPanel', () => {
 
   // The handset readout names a question after the change it asks about
   // (§4.8/§4.14): one dialog stands over two doors, so a single hand-spelled
-  // name sent the operator looking for a control the board never had — and read
-  // the same whichever picker raised it.
+  // name would send the operator looking for a control the board never had —
+  // and read the same whichever picker raised it.
   it.each([
     { kind: 'gender', pending: { kind: 'gender', gender: 'female' }, question: 'Change gender' },
     { kind: 'round', pending: { kind: 'round', round: 'final' }, question: 'Change round' },

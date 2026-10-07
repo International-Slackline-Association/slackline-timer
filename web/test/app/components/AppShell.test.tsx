@@ -56,8 +56,8 @@ describe('AppShell', () => {
   });
 
   // The wordmark is the brand link's accessible name, not a section title: as a
-  // heading it opened every page in the app at level 6, one above whatever the
-  // page's own `h1` then said.
+  // heading it would open every page in the app at level 6, above the page's
+  // own `h1`.
   it('contributes no heading above the page', () => {
     renderShell('/admin/athletes');
 

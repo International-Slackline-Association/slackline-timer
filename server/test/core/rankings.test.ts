@@ -215,7 +215,7 @@ describe('rankAthletesByOverall (freestyle judged ranking)', () => {
   });
 
   it('falls through difficulty→combo→style→bestTrick in priority order', () => {
-    // bestTrick is intentionally inverted to prove it is NOT consulted once
+    // bestTrick is inverted to prove it is NOT consulted once
     // style (the first differing component) separates them.
     const ranking = rankAthletesByOverall(
       athletes,
@@ -255,7 +255,7 @@ describe('rankAthletesByOverall (freestyle judged ranking)', () => {
   });
 
   it('applies the name tiebreak to DNF pairs even against the listing order', () => {
-    // Listing order (cara before anna) deliberately contradicts name order: a
+    // Listing order (cara before anna) contradicts name order: a
     // comparator that returns NaN for -Infinity minus -Infinity leaves the sort
     // undefined and this ordering unfixed.
     const ranking = rankAthletesByOverall(

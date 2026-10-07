@@ -1,9 +1,8 @@
 /**
  * Time formatting / parsing utilities.
  *
- * Ported 1:1 from timertimer's `Timertimer.Timer` (lib/timertimer/timer.ex) so the
- * Slackline Timer migration keeps identical display semantics — including the magic
- * DNF sentinel. See doc/dev/architecture.md ("Data model").
+ * Display semantics match timertimer's `Timertimer.Timer` (lib/timertimer/timer.ex),
+ * including the DNF sentinel. See doc/dev/architecture.md ("Data model").
  */
 
 /** Elapsed-ms value that means "Did Not Finish". Preserve this exact integer. */
@@ -16,9 +15,7 @@ const pad = (n: number): string => n.toString().padStart(2, '0');
  * A countdown clock's live remaining: the budget less the wall-clock elapsed
  * since its anchor, clamped at zero (`max(0, durationMs − (now − anchorMs))`).
  * The ONE shared source for every anchored countdown derivation — lanes, the
- * quali break, the best-trick try clock, the snapshot builder, the display tick
- * — so the arithmetic and the anchor concept live in exactly one place. Pure /
- * React-free (wall clock arrives as `now`), like `formatClock`/`formatMs`.
+ * quali break, the best-trick try clock, the snapshot builder, the display tick.
  */
 export const remainingFrom = (durationMs: number, anchorMs: number, now: number): number =>
   Math.max(0, durationMs - (now - anchorMs));
@@ -43,7 +40,7 @@ export const remainingCeilSecond = (durationMs: number, anchorMs: number, now: n
  * operator-minted start epoch (Stopwatch's tick); with no clock-skew correction
  * (ADR 0021) a viewer clock a few ms behind the operator's yields a transient
  * negative for the first frames after `start`. That benign skew must render `0:00.00`,
- * not crash the broadcast overlay — the throw here was a defensive guard, not a spec.
+ * not crash the broadcast overlay.
  */
 export function formatMs(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return '00:00:00';

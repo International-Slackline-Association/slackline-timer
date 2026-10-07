@@ -19,9 +19,8 @@ import { main } from '@functions/connectionHandler/handler';
 
 /**
  * $connect events carry the query string; **$disconnect events do not** — API
- * Gateway attaches queryStringParameters to $connect only. That asymmetry is the
- * whole point of these tests: a $disconnect must resolve its session from the
- * reverse map item, never from the (absent) query string.
+ * Gateway attaches queryStringParameters to $connect only, so a $disconnect must
+ * resolve its session from the reverse map item, never from the query string.
  */
 const connectEvent = (
   queryStringParameters: Record<string, string> | null,

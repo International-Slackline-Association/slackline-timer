@@ -1,26 +1,16 @@
 // Garbage-collect unreferenced assets from the CDK bootstrap ("cdk-hnb659fds-*")
 // staging bucket, safely — via `cdk gc`, NOT an S3 lifecycle rule.
 //
-// The CDK bootstrap S3 bucket accumulates one content-hashed object per deploy
-// (Lambda bundles, synth templates). A blanket lifecycle-expiry rule is UNSAFE
-// here: an old asset can still be referenced by the currently-deployed stack, and
-// deleting it breaks the next `cdk deploy` / Lambda code-update. `cdk gc` instead
-// reads every deployed CloudFormation stack in the environment, marks only the
-// assets no live stack references as "isolated", and (with --delete) removes
-// those that have stayed isolated past the rollback buffer.
+// A lifecycle-expiry rule is UNSAFE: an old asset can still be referenced by a
+// deployed stack, and deleting it breaks the next deploy / Lambda code-update.
+// `cdk gc` marks only assets no deployed stack in the environment references,
+// and (with --delete) removes those isolated past the rollback buffer.
 //
-// Both this repo's stacks share one app (infra/app.ts): the backend in
-// eu-central-2 and the web frontend in eu-central-1. Each has its own CDKToolkit
-// bootstrap (and thus its own staging bucket), so gc runs against both
-// environments by default. cdk gc is still flagged experimental, so --unstable=gc
-// is required.
+// Each region has its own CDKToolkit bootstrap bucket; REGIONS covers the
+// backend (eu-central-2) and web (eu-central-1) environments, not the billing
+// stack's us-east-1. cdk gc is still experimental, hence --unstable=gc.
 //
-// DEFAULT IS DRY-RUN. Without --delete this only prints what would be collected
-// (cdk gc --action print) and touches nothing. Pass --delete to actually reclaim.
-//
-// Usage:
-//   node scripts/maintenance/gcBootstrapAssets.mjs
-//   node scripts/maintenance/gcBootstrapAssets.mjs --delete --region eu-central-2
+// DEFAULT IS DRY-RUN (cdk gc --action print); --delete reclaims.
 //
 // Flags: --delete, --region (eu-central-2|eu-central-1), --rollback-buffer-days N
 // (default 30), --created-buffer-days N (default 7), --profile, --account

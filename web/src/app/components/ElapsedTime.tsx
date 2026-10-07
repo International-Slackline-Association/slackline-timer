@@ -2,8 +2,8 @@ import { Numeral } from 'app/components/Numeral';
 import { formatClock, formatMs } from 'app/util/time';
 
 /**
- * A time value rendered as a `Numeral` — the single presentational home for what
- * were three inline time formatters (ADR 0034 §6). Two faces, one component:
+ * A time value rendered as a `Numeral` — the single presentational home for a
+ * formatted time (ADR 0034 §6). Two faces, one component:
  *
  * - `race` (default) — `formatMs` `M:SS.hh`, DNF-aware (the `DNF_SENTINEL`
  *   renders `DNF`). The live stopwatch never carries the sentinel, so that half

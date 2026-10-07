@@ -33,7 +33,7 @@ describe('buzzButton', () => {
   });
 });
 
-// FREESTYLE_BOARD_UX §4.14 / audit S18: the mapping the operator reads is
+// freestyle-board-ux §4.14 / audit S18: the mapping the operator reads is
 // GENERATED from the constants the pad handlers dispatch on, and it knows the
 // mode — a row for a key this board binds to nothing is worse than no row.
 describe('buzzerRows', () => {

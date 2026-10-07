@@ -1,13 +1,12 @@
 import { isMatchRound, type MatchRound } from 'app/types';
 
 /**
- * The correction link, from both ends (FREESTYLE_BOARD_UX §4.9 / B4). A saved
+ * The correction link, from both ends (freestyle-board-ux §4.9 / B4). A saved
  * panel on the Freestyle board owns no correction path — the score POST upserts
  * on `SCORE#<round>#<athleteId>`, so the board locks and points at the Scores
- * page instead. That makes the landing the whole path: the operator arrives
- * mid-competition after ONE row, and every filter they set by hand there is
- * time spent off the slackline. The board writes the params and the page seeds
- * its filters from them; this module is where the two ends agree on the names.
+ * page instead, landing on the ONE row mid-competition with no filter to set by
+ * hand. The board writes the params and the page seeds its filters from them;
+ * this module is where the two ends agree on the names.
  */
 const SCORES_ROUTE = '/admin/scores';
 

@@ -26,11 +26,12 @@ describe('Stopwatch hero time numerals', () => {
     const computed = window.getComputedStyle(time);
     expect(computed.fontFamily).toContain('JetBrains Mono');
     expect(computed.fontVariantNumeric).toBe('tabular-nums');
-    // Race-state color language replaces the old black fill + white stroke.
+    // No text stroke: the race-state color carries the numeral.
     expect(computed.webkitTextStroke).toBe('');
-    // Viewport-relative hero sizing (DESIGN_SYSTEM §4) — a vw-driven clamp so the
-    // numeral fills a projector screen, not a fixed MUI h3. jsdom 29's CSS parser
-    // drops clamp() from computed fontSize, so assert the emotion-injected rule.
+    // Viewport-relative hero sizing (design-system §4) — a vw-driven clamp so
+    // the numeral fills a projector screen, not a fixed MUI h3. jsdom 29's CSS
+    // parser drops clamp() from computed fontSize, so assert the
+    // emotion-injected rule.
     const css = [...document.querySelectorAll('style')].map((s) => s.textContent).join('');
     expect(css).toContain('clamp(');
     expect(css).toContain('vw');
@@ -62,8 +63,7 @@ describe('Stopwatch hero time numerals', () => {
         recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
       />,
     );
-    // Uppercase status tag (DESIGN_SYSTEM label style) rather than the old
-    // parenthetical caption.
+    // Uppercase status tag (design-system label style).
     expect(screen.getByText('UNOFFICIAL')).toBeVisible();
     expect(screen.queryByText('(Unofficial)')).not.toBeInTheDocument();
   });
@@ -88,8 +88,8 @@ describe('Stopwatch hero time numerals', () => {
 
   it('renders a finished numeral in white with the footage halo', () => {
     // The frozen finished time is the payload of the stream timer; over dark
-    // footage a slate numeral vanished, so it reads plain white + the protection
-    // halo rather than the recessive idle slate.
+    // footage a slate numeral vanishes, so it reads plain white + the
+    // protection halo, not the recessive idle slate.
     render(
       <Stopwatch
         isReady
@@ -375,10 +375,10 @@ describe('Stopwatch hero time numerals', () => {
 
     it('a 50ms tick landing after stop() must not unfreeze the authoritative time', () => {
       // Under relay latency a 50ms tick can be queued before the stop lands and
-      // fire just after stop() froze the lane. The old code cleared the interval
-      // only one commit later (the [isRunning] effect), so that stale tick could
-      // overwrite stopTime−startTime with Date.now()−startTime — breaking the
-      // "finished lane is skew-free by construction" guarantee (ADR 0021).
+      // fire just after stop() froze the lane. Clearing the interval one commit
+      // later (an [isRunning] effect) would let that stale tick overwrite
+      // stopTime−startTime with Date.now()−startTime — breaking the "finished
+      // lane is skew-free by construction" guarantee (ADR 0021).
       const setSpy = vi.spyOn(globalThis, 'setInterval');
       vi.setSystemTime(1_000_000);
       const start: StopwatchWSMessage = {

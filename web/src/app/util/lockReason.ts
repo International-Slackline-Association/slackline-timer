@@ -1,5 +1,5 @@
 /**
- * Why a race control is inert — **one map** (FREESTYLE_BOARD_UX §4.7), so the
+ * Why a race control is inert — **one map** (freestyle-board-ux §4.7), so the
  * button, its Tooltip and the handset that shares the same guard cannot word
  * the same lock two ways. Board-wide holds are not restated here: they carry
  * their `BoardHold` and render through `holdReason`, so a lane control and the
@@ -8,7 +8,7 @@
  * The two `*Locks` functions are the interlock table itself: the button
  * `disabled` prop, the Tooltip and the gamepad guard all read one of these
  * fields, which is what keeps a screen press and a handset press inert at the
- * same instants (the audit found them diverging — S09/S23).
+ * same instants (S09/S23).
  */
 
 import { holdReason, type BoardHold } from 'app/util/boardState';
@@ -146,7 +146,7 @@ export interface BestTrickLocks {
   /**
    * `Reset series` and `Leave best trick`. Best trick is the phase AFTER both
    * turns, so a live run holds them with the rest of the panel. An open try is
-   * deliberately not one of their locks (§4.7 lists neither): both are the way
+   * not one of their locks (§4.7 lists neither): both are the way
    * out of the series, `DISARM` stops the window with it, and what guards the
    * tally is the confirm they share (§4.8), not a lock.
    */

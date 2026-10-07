@@ -16,16 +16,14 @@ import { matchToInput } from 'app/util/raceTime';
  * The pure half of the Freestyle scoring console (`useScoreRecorder`): the
  * per-athlete-slot entry machine (bottom of the file) plus the helpers that turn a
  * judge panel into a persistable Score and resolve a match winner from two of
- * them. Kept free of React/IO so every record-or-skip decision is exhaustively
- * testable — the live control page can't be unit-tested (it opens real WebSocket
- * connections).
+ * them. Pure, so every record-or-skip decision is exhaustively testable.
  *
  * The five components are the operator's inputs; `overall` is optional — when an
  * explicit value is given it is carried through, otherwise the server computes it
  * from the components, mirrored here so the previewed value matches what's stored.
  */
 
-/** The five judged component fields the operator types in (strings from inputs). */
+/** The five judged component fields the operator types in. */
 export interface ScoreFields {
   difficulty: number;
   combo: number;
@@ -69,8 +67,8 @@ export const zeroBattleOnlyForRound = (round: MatchRound, fields: ScoreFields): 
  * The ceiling on an Overall override: the sum of the maxima of the components
  * that apply in this round (100 at quali, 120 in a battle). There is no floor —
  * the control penalty is uncapped, so a battle overall may legitimately go
- * negative. Duplicated in server/src/core/types.ts (where `validateScoreInput`
- * 400s the same value), guarded by test/app/types.parity.test.ts.
+ * negative. Duplicated in server/src/core/types.ts (`validateScoreInput` 400s
+ * above it), guarded by web/test/app/types.parity.test.ts.
  */
 export const overallMax = (round: MatchRound): number => {
   const battleOnly = BATTLE_ONLY_SCORE_COMPONENTS as readonly string[];
@@ -83,9 +81,8 @@ export const overallMax = (round: MatchRound): number => {
  * The Overall override as the operator holds it: `null` = none (the computed
  * value stands), else the raw text typed. Raw, because a battle overall may be
  * negative (the control penalty is uncapped, §4.9) and `-` is not a number yet:
- * parsed eagerly it read as "no override" and the field snapped back to the
- * computed value on the keystroke that opened the minus, putting a negative
- * overall out of reach of the board entirely.
+ * parsed eagerly it would read as "no override" and snap the field back to the
+ * computed value, so a negative overall could never be typed.
  */
 export type OverrideDraft = string | null;
 
@@ -215,9 +212,9 @@ export const restoreSlotFromScores = (
   const score = scores.find((s) => s.round === round && s.athleteId === athleteId);
   if (!score) return null;
   // Coerce nullish numerics to 0 at this unpacking edge: a legacy/partial record
-  // can carry `undefined` where the type says `number` (the persisted-data-vs-types
-  // gotcha). Left raw, an absent `overall` reaches `formatScore(fb.overall)` on the
-  // console (crash) and `deriveFreestyleMatchWinner` (NaN winner), and absent
+  // can carry `undefined` where the type says `number`. Left raw, an absent
+  // `overall` reaches `formatScore(fb.overall)` on the console (crash) and
+  // `deriveFreestyleMatchWinner` (NaN winner), and absent
   // components feed uncontrolled inputs. Zero matches how a fresh/DNF score stores them.
   const fields: ScoreFields = {
     difficulty: score.difficulty ?? 0,
@@ -310,12 +307,10 @@ export const deriveFreestyleMatchWinner = (
 /**
  * The per-athlete-slot entry machine.
  *
- * One athlete slot's judge panel as a discriminated union (HSM rule 1), replacing the
- * five parallel slices the scoring console used to keep (`fields`, `overrides`,
- * `feedback`, a `matchResults` ref, `derivedWinner`). Those could represent
- * states the board has no meaning for — a locked panel with no recorded value,
- * an override typed into a save already in flight, a match result for a POST
- * that then failed. Here each arm carries exactly the fields valid in it.
+ * One athlete slot's judge panel as a discriminated union, so states the board
+ * has no meaning for — a locked panel with no recorded value, an override typed
+ * into a save already in flight, a match result for a POST that then failed —
+ * are unrepresentable: each arm carries exactly the fields valid in it.
  *
  * The transition is pure and effect-emitting like the board's own machines
  * (`battleMachine`): a landed save queues `resolve_match` for the edge, which is

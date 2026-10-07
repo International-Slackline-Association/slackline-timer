@@ -132,11 +132,10 @@ describe('nextWarmupSurface — snapshot re-derivation (late joiner)', () => {
     expect(snapshot([warmupRow(0, true), ...idleLanes])).toBe('lanes');
   });
 
-  // fsux-preview-surface-peer-snapshot commit 2: the warm-up row now carries its
-  // `armedMs` too (ADR 0046 §2), so "pending" narrows to a PRISTINE window. A
-  // window the operator stopped part-way is spent — the normal way a warm-up
-  // ends — and the lanes own the surface; a pre-feature sender omits the field
-  // and keeps the old reading.
+  // The warm-up row carries its `armedMs` too (ADR 0046 §2), so "pending"
+  // narrows to a PRISTINE window. A window the operator stopped part-way is
+  // spent — the normal way a warm-up ends — and the lanes own the surface; a
+  // sender without the field reads as pending.
   it('a resting warm-up below its armed budget is spent — the lanes own the surface', () => {
     expect(snapshot([warmupRow(240_000, false, 300_000), ...idleLanes])).toBe('lanes');
   });

@@ -31,8 +31,7 @@ interface Props {
   /**
    * `card` is the desk's setup column; `strip` is the same live proof in one
    * wrapping row, for the widths where the desk columns stack and a ~220 px
-   * setup card would push the lane transport under the fold
-   * (`speedline-compact-setup-strip`). The page picks ONE — the card owns a pad
+   * setup card would push the lane transport under the fold. The page picks ONE — the card owns a pad
    * listener and a once-a-second ticker, so a CSS display toggle over both
    * would double them and report the press twice.
    */
@@ -40,7 +39,7 @@ interface Props {
 }
 
 /**
- * The handset card (FREESTYLE_BOARD_UX §4.14), shared by both desks — and, in
+ * The handset card (freestyle-board-ux §4.14), shared by both desks — and, in
  * `strip`, the one-row form the Speedline desk falls to below its column gate.
  *
  * It is **always rendered**, even with nothing plugged in: the browser reveals

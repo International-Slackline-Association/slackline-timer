@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { ElapsedTime } from 'app/components/ElapsedTime';
 import { colors, fonts } from 'app/theme/tokens';
 
-/** The gutter's resting value: the changeover slot is always rendered (§4.12),
- * so the lane cards never slide sideways when a turn ends. */
+/** The gutter's resting value: the changeover slot is always rendered
+ * (freestyle-board-ux §4.12), so the lane cards never slide sideways when a
+ * turn ends. */
 const IDLE_VALUE = '—';
 
 /**

@@ -7,15 +7,14 @@ import { telemetryTheme } from 'app/theme/theme';
 import { colors } from 'app/theme/tokens';
 
 /**
- * The brand teal tier on the live path (FREESTYLE_BOARD_UX §6).
+ * The brand teal tier on the live path (freestyle-board-ux §6).
  *
  * MUI reaches for `primary.main` — the brand teal — wherever a surface asks for
  * the brand: as a contained button's fill, as a filled chip's ground, as a text
- * button's ink. All three are 2.9:1 against `contrastText`/white, so every one
- * of them shipped under the 4.5:1 its label owes. The tier that clears it is
- * `brand.tealDark` (4.61:1 on a panel), and the theme is where it belongs: the
- * score rail hand-painted it on Save alone, which is how `Set both lanes` — the
- * same button, one column over — kept the failing one.
+ * button's ink. All three are 2.9:1 against `contrastText`/white, under the
+ * 4.5:1 a label owes. The tier that clears it is `brand.tealDark` (4.61:1 on a
+ * panel), and the theme is where it belongs: hand-painted on one button, it
+ * leaves the same button one column over on the failing pair.
  *
  * `contrast.test.ts` proves the pairs clear their floor and that no control page
  * hand-paints them again; this proves the controls land on them. A locked button

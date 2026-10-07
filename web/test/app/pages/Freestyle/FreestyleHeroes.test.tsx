@@ -14,10 +14,10 @@ const TALLY: NonNullable<FreestyleSelection['bestTrick']> = {
 
 /**
  * The audience best-trick tally is fed by the relay's `{lane1, lane2}` name
- * shape, so it carried its own hand-written "Athlete n" fallback — the copy the
- * shared `athleteLabel` seam exists to prevent (a rename splits the copies, and
- * this one is the surface the room reads). Pinned with EMPTY names, the only
- * state in which the fallback shows at all.
+ * shape, so its "Athlete n" fallback must come from the shared `athleteLabel`
+ * seam, not a hand-written copy (a rename splits the copies, and this one is
+ * the surface the room reads). Pinned with EMPTY names, the only state in which
+ * the fallback shows at all.
  */
 describe('BestTrickTally athlete labels', () => {
   it('falls back to the shared athlete label when the room has no names yet', () => {

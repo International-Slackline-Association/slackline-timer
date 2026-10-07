@@ -18,7 +18,7 @@ import { BoardConfirmDialog } from 'app/components/BoardConfirmDialog';
 import { LockedControl } from 'app/components/LockedControl';
 import { MatchWinnerLine } from 'app/components/MatchWinnerLine';
 import { RaceButton, blurOnClickProps } from 'app/components/RaceButton';
-// The board's one wheel rule (§9). The judged components are number inputs that
+// The board's one wheel rule (freestyle-board-ux §4.9). The judged components are number inputs that
 // are not seconds, so they take the rule rather than the field it lives on.
 import { blurOnWheel } from 'app/components/SecondsField';
 import { WhyLine } from 'app/components/WhyLine';
@@ -52,16 +52,16 @@ import {
 } from 'app/util/scoreInput';
 
 /**
- * Freestyle score entry: the five judged components + Save/DNF per athlete slot. The
- * selection (round/gender/match + the athlete per slot) lives ABOVE the run
- * board in `FreestyleSelectionPanel` (ADR 0036 layout); both panels take their
- * own half of the one `useScoreRecorder`, which stays the single owner. The overall is
- * previewed from the components (the same formula the server uses) and can be
- * overridden. In quali only Athlete 1 records (one athlete at a time); battle
+ * Freestyle score entry: the five judged components + Save/DNF per athlete
+ * slot. The selection (round/gender/match + the athlete per slot) lives ABOVE
+ * the run board in `FreestyleSelectionPanel` (ADR 0036 layout); both panels
+ * take their own half of the one `useScoreRecorder`, the single owner. The
+ * overall is previewed from the components (the same formula the server uses)
+ * and can be overridden. In quali only Athlete 1 records (one athlete at a time); battle
  * shows both athlete slots and the derived match winner.
  *
  * Where each athlete slot's save stands is a PERSISTENT slot on their panel
- * (FREESTYLE_BOARD_UX §4.9), never only the toast that has already gone by the
+ * (§4.9), never only the toast that has already gone by the
  * time the operator looks up from the slackline: `not entered` → `SAVING…` →
  * `SAVED n` / `NOT SAVED · reason` + a retry that re-posts the kept values.
  */
@@ -86,14 +86,12 @@ const COMPONENT_GRID_SX = {
 /** Holds the status slot's height across all four states, so a save landing
  * never shifts the Save button out from under the operator's hand (§4.12):
  * the chip's row plus one caption line, the tallest of the four. It is also
- * where a field's error is spelled out (`Difficulty: Max 40`): the fields
- * reserve no helper line of their own, which on the 360 px rail was 17 px a
- * row, six rows a battle, and the difference between the rail's Reset and the
- * 900 px fold (`ftt-followup-freestyle-score-rail-foot-and-move-2`). Its contents
- * ride ONE wrapping row, so the `Move score to …` offer shares the chip's line
- * wherever the panel is wide enough — the compact Score tab, where a row of
- * its own is what pushed Save ~40 px under the fold
- * (`fsux-score-rail-move-row-fold`) — and drops under it on the 360 px rail. */
+ * where a field's error is spelled out (`Difficulty: Max 40`): a helper line
+ * per field row would push the rail's Reset under the 900 px fold. Its
+ * contents ride ONE wrapping row, so the `Move score to …` offer shares the
+ * chip's line wherever the panel is wide enough (the compact Score tab, where
+ * a row of its own pushes Save under the fold) and drops under it on the
+ * 360 px rail. */
 const STATUS_SLOT_SX = {
   minHeight: boardGeometry.freestyle.statusSlot,
   alignItems: 'center',
@@ -136,7 +134,7 @@ const RAIL_RESET = {
  * stands over both of them. */
 const KEEP_TIMING = 'Keep timing';
 
-/** The permanent cap on a judged field (§9) — `/ 40`, or the uncapped penalty. */
+/** The permanent cap on a judged field (§4.9) — `/ 40`, or the uncapped penalty. */
 const capAdornment = (max: number | undefined) => (
   <InputAdornment position="end">
     <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
@@ -355,7 +353,7 @@ export const FreestyleScoreControls = ({
     // the recorded row); it unlocks when the slot's athlete changes. Locked
     // means `readOnly`, NOT `disabled`: the recorded value is the one number
     // the operator reads back off this panel, and disabled ink is unreadable
-    // in sunlight (audit S21).
+    // in sunlight (§9 S21).
     const locked = entry.status === 'saved';
     const pending = entry.status === 'pending';
     const failed = entry.status === 'error';
@@ -429,7 +427,7 @@ export const FreestyleScoreControls = ({
           {selected[slot] ? ` — ${athleteName(selected[slot])}` : ''}
         </Typography>
         {/* Two per row: the judged components are the tallest thing in the
-            320 px rail, and both athlete slots' Save must share the operator's screen
+            rail, and both athlete slots' Save must share the operator's screen
             with the clocks (§2). DOM order is the manual's, so the tab order the
             keyboard path relies on is the order the judges' sheet is read in. */}
         <Box sx={COMPONENT_GRID_SX}>
@@ -482,7 +480,7 @@ export const FreestyleScoreControls = ({
                   : {
                       endAdornment: (
                         <InputAdornment position="end">
-                          {/* Out of the tab run (§4.11): it sits INSIDE the
+                          {/* Out of the tab run: it sits INSIDE the
                               Overall field, so a keyboard Tab from the last
                               number landed here instead of on the Save that
                               records it. A pointer still reaches it, and the

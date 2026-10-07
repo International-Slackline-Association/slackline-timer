@@ -84,8 +84,8 @@ export const CornerBadge = ({
  * whether it is a keyed ground. The key-composite mode (`?bg=h2r`) counts too:
  * its ground is transparent here, but the frame is flattened onto a chroma
  * ground and keyed downstream, so a badge would hit air all the same.
- * AudioMutedBadge deliberately opts out (its cue must survive even on the
- * keyed projector rig).
+ * AudioMutedBadge opts out (its cue must survive even on the keyed projector
+ * rig).
  */
 export const useChromaSuppressed = (defaultBg: string): boolean => {
   const { search } = useLocation();

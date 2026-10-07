@@ -5,16 +5,15 @@ import type { PlayerId } from 'app/util/breakState';
 
 /**
  * Arm a single wall-clock timeout for a lane's zero-crossing, driven by the
- * reducer state (HSM rule 4). A `running` lane fires TIMEOUT at its budget end;
+ * reducer state (ADR 0032, effects as data). A `running` lane fires TIMEOUT at its budget end;
  * an `onBreak` lane fires BREAK_ZERO at its break end. Anchored to the reducer's
  * wall-clock anchors so a re-render/reconnect re-derives the same deadline; the
  * reducer guards the event so a stale fire after a phase change is a no-op.
  *
- * This is the single coordinator for lane expiry — the `Countdown` display is
- * purely visual (it no longer bubbles onExpire/onBreakExpire up as
- * coordination), the way `useTryExpiry` and `useWarmupExpiry` own the other two
- * channels' crossings. The feed surfaces keep their `onExpire`: they beep off
- * their own tick and dispatch into no machine.
+ * This is the single coordinator for lane expiry, as `useTryExpiry` and
+ * `useWarmupExpiry` are for the other two channels; the control board's
+ * `Countdown` is purely visual. The feed surfaces' `onExpire` only beeps off
+ * their own tick and dispatches into no machine.
  */
 export const useLaneExpiry = (
   lane: PlayerId,

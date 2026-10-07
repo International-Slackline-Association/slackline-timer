@@ -1,6 +1,6 @@
 /**
  * What a handset press just did, in one line — the live half of the Freestyle
- * board's handset card (FREESTYLE_BOARD_UX §4.14). The card is the only place
+ * board's handset card (freestyle-board-ux §4.14). The card is the only place
  * an operator can check a binding without spending a real press on a live
  * board, so the readout has to be right about presses that did *nothing*: an
  * inert press reads `→ locked: …` and a press behind a confirm reads
@@ -165,7 +165,7 @@ export const handsetReadout = (button: number, outcome: HandsetOutcome): string 
   return `handset ${handset} · ${color.toLowerCase()} ${tail}`;
 };
 
-/** How long ago the press was, as `0:04` — minutes unpadded, like the brief. */
+/** How long ago the press was, as `0:04` — minutes unpadded (§4.14). */
 export const agoLabel = (ms: number): string => {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;

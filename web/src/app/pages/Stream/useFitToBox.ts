@@ -18,16 +18,12 @@ const usedSize = (el: HTMLElement, fallback: { w: number; h: number }) => {
 };
 
 /**
- * Shrink-to-fit for an overlay name/label block: measures the content's natural
- * (untransformed) size against its slot and returns a `fit` scale that the
- * caller applies as `transform: scale(fit)` — short content stays at full size,
- * only an overflowing block is scaled down (instead of clipping mid-letter). The
- * slot is the `overflow:hidden` box; the measured node is the content-sized
- * block inside it. Neither the used size nor `scrollWidth`/`scrollHeight`
- * reflects the transform, so re-measuring never feeds back. The display face
- * loads async (the pre-swap fallback measures wider/narrower), so re-measure on
- * `document.fonts.ready`. jsdom reports 0 for every dimension (no layout), so
- * the fit stays 1 there.
+ * Shrink-to-fit for an overlay name/label block: the `fit` scale (≤ 1) the
+ * caller applies as `transform: scale(fit)` to the content-sized `nameRef`
+ * inside the `overflow:hidden` `slotRef`. Neither the used size nor
+ * `scrollWidth`/`scrollHeight` reflects the transform, so re-measuring never
+ * feeds back. Re-measures on `document.fonts.ready` (the pre-swap fallback face
+ * measures differently). jsdom has no layout, so the fit stays 1 there.
  */
 const useFit = (fitHeight: boolean) => {
   const slotRef = useRef<HTMLDivElement>(null);

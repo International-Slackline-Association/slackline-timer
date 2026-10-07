@@ -16,10 +16,10 @@ interface RecorderToastProps {
  * empty Alert.
  *
  * Top-RIGHT, and neutral: the live column runs down the middle of both boards,
- * so a bottom-centre toast covered the clocks and the lane buttons it was
- * reporting on (audit S22, FREESTYLE_BOARD_UX §4.12), and a filled `go`-green
- * plate beside a running lane is a second state light telling a different story
- * (§6 — the race palette is the timer's). The severity survives as the icon and
+ * so a bottom-centre toast would cover the clocks and the lane buttons it is
+ * reporting on (finding S22, freestyle-board-ux §4.12), and a filled
+ * `go`-green plate beside a running lane is a second state light telling a
+ * different story (§6 — the race palette is the timer's). The severity survives as the icon and
  * border mark on a panel ground, where it is a mark rather than a fill.
  *
  * 'clickaway' is ignored: the operator's next tap often RAISES the next toast

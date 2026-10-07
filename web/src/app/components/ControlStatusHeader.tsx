@@ -68,11 +68,10 @@ const LINK_STATUS: Record<
 /**
  * The widest link label, in characters. The link plate reserves it so the health
  * row's geometry is a function of the VIEWPORT, not of which reading is showing
- * (§4.12: nothing below the header moves on a status change). At the desk widths
- * the four-cell row sits on its wrap threshold, so without the reserve a longer
- * alarm label ("Connection lost" over "Connecting…") took the few px the
- * `AUDIO LOCKED` plate beside it needed, tipped it into a second line and pushed
- * the whole desk down a row — exactly when the operator is reading an alarm.
+ * (freestyle-board-ux §4.12: nothing below the header moves on a status
+ * change). At the desk widths the four-cell row sits on its wrap threshold, so a
+ * longer alarm label would tip `AUDIO LOCKED` onto a second line and push the
+ * desk down a row, exactly when the operator is reading an alarm.
  * `ch`, not a pixel width: it tracks the type scale, and the desk grid keeps its
  * relative tracks (design-system §9 "Responsive contract").
  */
@@ -107,8 +106,8 @@ const HEADER_GRID_SX = {
 } as const;
 
 /**
- * The header with a setup row (the Speedline stacked tier,
- * `speedline-compact-fold-lane-dnf-1024`). Below `lg` the health block is the
+ * The header with a setup row (the Speedline stacked tier). Below `lg` the
+ * health block is the
  * tallest cell — two plate rows plus the caption track — so the context plates
  * and the recording line leave ~60 px of empty column beside it, and the setup
  * strip takes that column rather than a row under the whole header. Row 2 is
@@ -258,21 +257,15 @@ export const ControlStatusHeader = ({
             gridArea: withSetup ? 'health' : undefined,
           }}
         >
-          {/* ONE row at the desk widths (fsux-desk-fold-budget): the health
-              block was a 2x2 plate grid over a full-width sound button, ~125 px
-              of chrome above the fold on both consoles. Four cells in a row —
-              three readings plus the sound toggle, which needs no words to be
-              pressed — and the detail caption under them cost ~47 px, and the
-              lane transport comes back onto a 900 px screen.
+          {/* ONE row at the desk widths: three readings plus the icon-only
+              sound toggle, with the detail caption under them, cost ~47 px of
+              fold, so the lane transport fits a 900 px screen.
 
               The single row starts at `lg`, not `md`: the header splits the
-              width three ways, so below ~1200 px the four cells share a third of
-              a tablet, which `5a69ad8` measured taller AND messier than two rows
-              of two.
-              The desk itself starts at 1280, so `lg` is where the promise is
-              owed. The reading tracks shrink (`minmax(0, auto)`) either way, so
-              a long phrase wraps inside its plate instead of widening the
-              column. */}
+              width three ways, so below ~1200 px four cells in a third of a
+              tablet measure taller than two rows of two. The reading tracks
+              shrink (`minmax(0, auto)`) either way, so a long phrase wraps
+              inside its plate instead of widening the column. */}
           <Box
             data-testid="control-health-grid"
             sx={{
@@ -288,10 +281,8 @@ export const ControlStatusHeader = ({
               width: { xs: '100%', md: 'auto' },
             }}
           >
-            {/* Named like the detail line under it: the link phase is the one
-                reading checked before every run, and it is the reading an
-                off-screen probe has to be able to take without also reading the
-                audio and peer rows sharing this row. */}
+            {/* Test id: the link phase is the one reading checked before every
+                run, readable without the audio and peer cells beside it. */}
             <Box data-testid="control-link-status" sx={healthPlateSx}>
               <StatusLine
                 icon={<LinkStatusIcon fontSize="small" />}
@@ -319,11 +310,9 @@ export const ControlStatusHeader = ({
               </Box>
             )}
             {health.sound && (
-              // Icon-only, and the state IS the icon (speaker vs muted) — the
-              // words move to the accessible name and the Tooltip, so the
-              // toggle costs a cell instead of a row. `aria-label` +
-              // `aria-pressed` are unchanged: the button reads the same to a
-              // screen reader and to the driver as it did with its label.
+              // Icon-only (the state IS the icon); the words live in the
+              // accessible name and the Tooltip, so the toggle costs a cell,
+              // not a row.
               <Tooltip title={soundLabel} disableInteractive>
                 <Button
                   size="small"
@@ -349,20 +338,14 @@ export const ControlStatusHeader = ({
               </Tooltip>
             )}
           </Box>
-          {/* ONE row, reserved and never exceeded. The row is the fold budget
-              the health block won back above, so a sentence too long for the column is
-              clipped rather than given a second line — which is what made the
-              health slot 59.2 px on one reading and 77.3 px on the next and
-              moved the whole desk on a link change (`control-health-slot-height`).
-              Clipped, not lost: the full sentence is on the caption itself.
+          {/* ONE row, reserved and never exceeded: a sentence too long for
+              the column is clipped, not wrapped, so a link change never moves
+              the desk. Clipped, not lost: the full sentence is the `title`.
 
-              And it contributes NO intrinsic width (`width: 0` + a percentage
-              floor, resolved only once the column is sized): the health Stack
-              shrinks to fit, so an alarm sentence longer than the plates above
-              it used to widen the column and re-lay the row inside it — the
-              slot measured 77.3 px on one sentence and 57.3 px on a longer one
-              at 1440x720 (`ftt-followup-speedline-desk-fold-2`). The geometry
-              is the viewport's now, never the reading's. */}
+              It contributes NO intrinsic width (`width: 0` + a percentage
+              floor, resolved once the column is sized): the health Stack
+              shrinks to fit, so a long alarm sentence would otherwise widen the
+              column and re-lay the row above it. */}
           <Typography
             data-testid="control-link-detail"
             variant="caption"

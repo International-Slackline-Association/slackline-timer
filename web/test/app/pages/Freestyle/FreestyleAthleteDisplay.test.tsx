@@ -213,8 +213,8 @@ describe('FreestyleAthleteDisplay quali break counter', () => {
 
 // ADR 0036: battle has no break machinery on the wire and no audience-facing
 // pause clock — the battle layout must render neither, not even reserved-hidden
-// ones. (The next-up arrow, once also unported, now rides the relayed hint —
-// STATUS athlete-display-next-up; covered by the "battle next up" suite below.)
+// ones. (The next-up arrow rides the relayed hint — the "battle next up" suite
+// below.)
 describe('FreestyleAthleteDisplay battle layout omissions', () => {
   it('renders no break/pause surface in battle', () => {
     renderDisplay();
@@ -225,9 +225,9 @@ describe('FreestyleAthleteDisplay battle layout omissions', () => {
   });
 });
 
-// STATUS athlete-display-next-up: the battle athlete display marks who goes next
-// during the changeover pause with an on-deck arrow on that lane's clock, off
-// the board's relayed `nextUp` hint (ADR 0037).
+// The battle athlete display marks who goes next during the changeover pause
+// with an on-deck arrow on that lane's clock, off the board's relayed `nextUp`
+// hint (ADR 0037).
 describe('FreestyleAthleteDisplay battle next up', () => {
   it('marks the next-up player from the relayed hint', () => {
     renderDisplay();
@@ -327,12 +327,12 @@ describe('FreestyleAthleteDisplay battle over', () => {
     expect(screen.getByText('Battle Over')).toBeInTheDocument();
   });
 
-  // battle-marker-layout: the banner used to be the lane column's THIRD flex
-  // child, so `space-evenly` re-divided the screen the moment a battle ended and
-  // both hero clocks jumped — on the projector and on /stream/athletes-freestyle.
-  // jsdom has no layout, so the pin is structural: the banner is out of the flex
-  // flow. The clock bounding boxes either side of the transition are measured by
-  // the driver's display-signoff pass at 1920x1080.
+  // As the lane column's THIRD flex child the banner would make `space-evenly`
+  // re-divide the screen the moment a battle ends, jumping both hero clocks —
+  // on the projector and on /stream/athletes-freestyle. jsdom has no layout, so
+  // the pin is structural: the banner is out of the flex flow. The clock
+  // bounding boxes either side of the transition are measured by the driver's
+  // display-signoff pass at 1920x1080.
   it('keeps the Battle Over banner out of the lane column flex flow', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -374,14 +374,14 @@ describe('FreestyleAthleteDisplay battle over', () => {
   });
 });
 
-// STATUS athlete-display-warmup-default: warm-up is the DEFAULT view — it shows
-// until the warm-up has finished or a competition action (a lane run / best-trick
-// try) takes over; a fresh display presumes the warm-up phase.
+// Warm-up is the DEFAULT view — it shows until the warm-up has finished or a
+// competition action (a lane run / best-trick try) takes over; a fresh display
+// presumes the warm-up phase.
 describe('FreestyleAthleteDisplay warm-up default view', () => {
-  // fsux-preview-warmup-seed: OPEN and preview-enabled, but nothing has arrived
-  // — neither a snapshot nor a countdown message. The surface is unseeded, so it
-  // draws NO clock: the old default (`warmupActive: true` over an empty
-  // recovery) put a fabricated `WARM-UP 00:00` on air.
+  // OPEN and preview-enabled, but nothing has arrived — neither a snapshot nor
+  // a countdown message. The surface is unseeded, so it draws NO clock: a
+  // `warmupActive: true` default over an empty recovery would put a fabricated
+  // `WARM-UP 00:00` on air.
   it('renders no clock at all on an unseeded display (no messages yet)', () => {
     renderDisplay();
 
@@ -497,12 +497,12 @@ describe('FreestyleAthleteDisplay warm-up default view', () => {
     expect(screen.getByText('Warm-up')).toBeInTheDocument();
   });
 
-  // warmup-hold-late-joiner-post-expiry-divergence: a running warm-up whose
-  // time-to-go has fully elapsed snapshots as { isRunning: true, remainingMs: 0 }
-  // (the control's own onExpire hand-off may not have landed at the instant the
-  // snapshot was built). remainingMs is the authority: a spent window is
-  // expired-and-cleared like the already-connected viewers whose hero Countdown
-  // fired onExpire — never a resurrected WARM-UP OVER hold for the late joiner.
+  // A running warm-up whose time-to-go has fully elapsed snapshots as
+  // { isRunning: true, remainingMs: 0 } (the control's own onExpire hand-off
+  // may not have landed at the instant the snapshot was built). remainingMs is
+  // the authority: a spent window is expired-and-cleared like the
+  // already-connected viewers whose hero Countdown fired onExpire — never a
+  // resurrected WARM-UP OVER hold for the late joiner.
   it('recovers the lane view when the running warm-up has fully elapsed', () => {
     renderDisplay();
     deliverFrames(
@@ -517,12 +517,12 @@ describe('FreestyleAthleteDisplay warm-up default view', () => {
   });
 });
 
-// fsux-preview-surface-peer-snapshot: `request_state` is answered to the WHOLE
-// room, so a snapshot mostly answers somebody ELSE's join. The surface is seeded
-// once per socket, by the first evidence to arrive, and only live messages move
-// it after that — otherwise opening a second control panel between matches
-// (lanes pristine, so `competitionBusy` is false) flips every athlete display in
-// the venue back to the WARM-UP hero.
+// `request_state` is answered to the WHOLE room, so a snapshot mostly answers
+// somebody ELSE's join. The surface is seeded once per socket, by the first
+// evidence to arrive, and only live messages move it after that — otherwise
+// opening a second control panel between matches (lanes pristine, so
+// `competitionBusy` is false) flips every athlete display in the venue back to
+// the WARM-UP hero.
 describe('FreestyleAthleteDisplay surface seeding (once per socket)', () => {
   const pendingWarmupSnapshot = snapshotMessage([
     { timerId: 0, remainingMs: 300_000, isRunning: false },
@@ -565,9 +565,9 @@ describe('FreestyleAthleteDisplay surface seeding (once per socket)', () => {
   });
 });
 
-// STATUS athlete-display-post-warmup-handoff: once the warm-up ENDS — stopped by
-// the operator or run out — the display hands off to the selected athletes'
-// armed lanes rather than holding a stale WARM-UP OVER hero.
+// Once the warm-up ENDS — stopped by the operator or run out — the display
+// hands off to the selected athletes' armed lanes rather than holding a stale
+// WARM-UP OVER hero.
 describe('FreestyleAthleteDisplay post-warm-up handoff', () => {
   afterEach(() => {
     vi.useRealTimers();

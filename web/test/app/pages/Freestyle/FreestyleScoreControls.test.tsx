@@ -233,8 +233,8 @@ describe('FreestyleScoreControls', () => {
   });
 
   // §4.11: the panel is typed on the numpad — five components, Overall, Save.
-  // `use computed` is an end-adornment INSIDE the Overall field, so it used to
-  // land between the last number and the press that records it.
+  // `use computed` is an end-adornment INSIDE the Overall field, so in DOM
+  // order it would land between the last number and the press that records it.
   it('keeps `use computed` out of the Overall → Save tab run', async () => {
     renderPanel(
       makeRecorder({
@@ -304,9 +304,9 @@ describe('FreestyleScoreControls', () => {
     expect(recordScore).toHaveBeenCalledWith(1);
   });
 
-  // A stray Enter on a panel nobody typed into recorded a judged 0.00 for that
-  // athlete — in a battle, enough to flip the match. Save waits for a number;
-  // a non-performing athlete is the DNF, which stays open.
+  // A stray Enter on a panel nobody typed into would record a judged 0.00 for
+  // that athlete — in a battle, enough to flip the match. Save waits for a
+  // number; a non-performing athlete is the DNF, which stays open.
   describe('Save waits for a draft', () => {
     const panel = (slot: 1 | 2 = 1) =>
       screen.getByRole('form', { name: `Score Athlete ${slot}` }) as HTMLFormElement;
@@ -426,10 +426,9 @@ describe('FreestyleScoreControls', () => {
     expect(saveButton()).toBeDisabled();
   });
 
-  // The fold budget (`ftt-followup-freestyle-score-rail-foot-and-move-2`): a
-  // reserved helper line under every field cost ~100 px of the 360 px rail.
-  // The reason rides the status slot instead, which is reserved anyway, so an
-  // error still cannot move Save (§4.12).
+  // The fold budget: a reserved helper line under every field would cost
+  // ~100 px of the 360 px rail. The reason rides the status slot instead, which is
+  // reserved anyway, so an error still cannot move Save (§4.12).
   describe('field errors', () => {
     it('reserves no helper line under the fields', () => {
       const { container } = renderPanel(
@@ -685,8 +684,8 @@ describe('FreestyleScoreControls', () => {
       expect(declared(within(foot).getByRole('separator'), 'display', SIDE_FOOT)).toBe('none');
     });
 
-    // A column that appears only with its contents narrows both panels
-    // sideways the moment the second save lands (`…-score-rail-foot-and-move-1`).
+    // A column that appears only with its contents narrows both panels sideways
+    // the moment the second save lands.
     it('reserves the side column in a battle before anything is saved', () => {
       renderPanel(makeRecorder(), 'battle', rail());
       const foot = screen.getByTestId('score-rail-foot');

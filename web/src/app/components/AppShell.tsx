@@ -114,10 +114,9 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         }}
       >
         <Toolbar sx={{ gap: 2, flexWrap: 'wrap' }}>
-          {/* Mark + wordmark as one link. The mark is decorative — the wordmark
-              beside it is the link's accessible name, and nothing else: as the
-              `<h6>` its variant defaults to, the shell opened every page in the
-              app one level above the page's own `h1`. */}
+          {/* Mark + wordmark as one link; the wordmark is its accessible name.
+              A `span`, not the variant's default `<h6>`, so the shell adds no
+              heading ahead of the page's own `h1`. */}
           <Stack
             direction="row"
             spacing={1.25}

@@ -43,9 +43,8 @@ beforeEach(() => {
 });
 
 /**
- * The board's surface is the page's whole API, so it is the one thing a later
- * round can silently widen: every plate, chip or health flag it adds arrives as
- * another key. These lock the SHAPE — named slices, nothing loose beside them —
+ * The board's surface is the page's whole API, so it is what silently widens:
+ * every plate, chip or health flag added arrives as another key. These lock the SHAPE — named slices, nothing loose beside them —
  * so a new key has an obvious home and the return never flattens back out.
  */
 describe('useFreestyleBoard — the shape it hands the page', () => {
@@ -86,10 +85,9 @@ describe('useFreestyleBoard — the shape it hands the page', () => {
   });
 
   it('files the peer cue under the surface that wears it, already routed', () => {
-    // The page used to read `chrome.lastPeerEvent` and work out which lane (or
-    // the selection row) the newest mirrored action addressed — board routing
-    // done in the layout. Only one surface can hold the cue, so the routing has
-    // one home: here, split across the two slices that render it.
+    // Which lane (or the selection row) the newest mirrored action addressed is
+    // board routing, not layout: only one surface can hold the cue, so the
+    // routing has one home — here, split across the two slices that render it.
     const board = mountBoard().result.current;
 
     expect(board.lanes.peerToken).toEqual({ 1: null, 2: null });

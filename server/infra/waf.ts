@@ -1,23 +1,19 @@
 import { CfnCondition, CfnParameter, Fn, Stack } from 'aws-cdk-lib';
 import { CfnWebACL } from 'aws-cdk-lib/aws-wafv2';
 
-// ADR 0031 §5: authored default-OFF. Baseline posture is API throttling + Budgets;
-// WAF is provisioned only during observed abuse because its standing monthly cost
-// can rival the app's idle bill. CLOUDFRONT scope only (created in us-east-1): a
-// regional ACL cannot attach to HTTP or WebSocket APIs (REST only), so API-level
-// WAF needs a CloudFront edge in front of the API. Runbook: doc/dev/deploy.md §6.3.
+// ADR 0031 §5: authored default-OFF; its standing cost rivals the app's idle
+// bill. CLOUDFRONT scope only (created in us-east-1): a regional ACL attaches to
+// REST APIs only, not HTTP/WebSocket, so API-level WAF needs a CloudFront edge in
+// front of the API. Runbook: doc/dev/deploy.md §6.3.
 
-// Per-IP request budget over the WAF 5-minute window. Sized well above a live
-// admin + ~15 overlays refreshing on db_update (a browser source behind one NAT
-// makes a few requests per refresh), far below a flood — the same posture as the
-// API GW throttle, but per-source and only active when enabled.
+// Per-IP requests per WAF 5-minute window, on the SPA's static assets. A venue
+// puts every client behind one NAT, so raise it before enabling during an event
+// (doc/dev/deploy.md §6.3).
 const RATE_LIMIT_PER_5MIN = 2000;
 
 /**
- * A CfnParameter("WafEnabled": true|false, default false) + the matching
- * CfnCondition. Gate every WAF resource on the returned condition
- * (`cfnResource.cfnOptions.condition = enabled`) so the default deploy synthesizes
- * NO WAF resources — no standing cost until ops flips the flag.
+ * The `WafEnabled` parameter (default false) + its condition. Gate every WAF
+ * resource on it so the default deploy synthesizes none.
  */
 export function defineWafToggle(stack: Stack): CfnCondition {
   const param = new CfnParameter(stack, 'WafEnabled', {
@@ -32,12 +28,7 @@ export function defineWafToggle(stack: Stack): CfnCondition {
   });
 }
 
-/**
- * The rate-based WebACL for one `scope` — see the header for where each scope
- * must be created. `condition` gates the resource (nothing synthesizes at the
- * defaults); `namePrefix` keeps the CloudWatch metric names unique per scope,
- * since one account can carry both.
- */
+/** `namePrefix` keeps the CloudWatch metric names unique per ACL. */
 export function makeRateBasedWebAcl(
   stack: Stack,
   id: string,

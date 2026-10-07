@@ -1,6 +1,6 @@
 /**
  * Which numbered step of the Freestyle chronology the board is on
- * (FREESTYLE_BOARD_UX §2 / the desk): the desk never folds a section, so the
+ * (freestyle-board-ux §2 / the desk): the desk never folds a section, so the
  * only cue that a first-time operator is looking at the right one is emphasis —
  * the current step's caption at full ink, the rest at `ink.mid`.
  *

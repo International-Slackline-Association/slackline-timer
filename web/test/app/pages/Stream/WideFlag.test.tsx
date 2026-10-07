@@ -40,8 +40,8 @@ describe('WideFlag', () => {
     // photographic coat of arms is ~1.2 MB of traced rects) must be downsampled,
     // never inlined wholesale into the bundle.
     //
-    // A CREST is the deliberate exception: a nation's coat of arms is its identity
-    // on air, so those entries carry the real vector artwork at full resolution
+    // A CREST is the exception: a nation's coat of arms is its identity on air,
+    // so those entries carry the real vector artwork at full resolution
     // (`wide/emblems.ts`) and are allowed past the ceiling. Everything else —
     // stripes, cantons, constructed geometry — has no excuse to be large.
     for (const [iso, art] of Object.entries({ ...DELIVERED_WIDE_FLAGS, ...REBUILT_WIDE_FLAGS })) {
@@ -69,9 +69,9 @@ describe('WideFlag', () => {
   it('draws every rebuilt band in the band rectangle, never a flag rectangle', () => {
     // The rule the delivered masters follow without stating it: the FIELD takes
     // the band's stretch, the DEVICE never does. Reaching for a flag's own
-    // viewBox breaks it — `gb` shipped in `0 0 60 30`, squashed 4.6x. A device
-    // that must stay true rides in a nested <svg> that opts back out of the
-    // outer `preserveAspectRatio="none"` (see `emblem` in rebuilt.ts).
+    // viewBox breaks it — `gb`'s `0 0 60 30` squashes 4.6x. A device that must
+    // stay true rides in a nested <svg> that opts back out of the outer
+    // `preserveAspectRatio="none"` (see `emblem` in rebuilt.ts).
     for (const [iso, art] of Object.entries(REBUILT_WIDE_FLAGS)) {
       expect(art, iso).toContain('viewBox="0 0 150 16.3"');
       const inner = art.slice(art.indexOf('>') + 1);

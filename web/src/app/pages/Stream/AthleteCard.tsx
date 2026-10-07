@@ -21,87 +21,59 @@ import { refVh } from 'app/util/overlayScale';
 import { resultInk } from 'app/util/resultLabel';
 
 /**
- * The LAAX athlete-card art (`Profiles_W_*.png` is a provenance label for the
- * client-delivered LAAX 2026 masters, not a file in this repo; the surviving
- * measurement record is `doc/dev/design-system/design-system.md` §7 "Athlete
- * card & name strip"), shared by the VS / SVO overlays (via `Competitor`) and
- * the bracket `profile`-variant photo boxes so the broadcast look is identical
- * everywhere:
+ * The LAAX athlete card (measured off the client's `Profiles_W_*.png` masters,
+ * not part of this repo; see design-system §7 "Athlete card & name strip"),
+ * shared by the VS / SVO / winner overlays (via `Competitor`), the profile
+ * rankings and the bracket `profile` boxes:
  *
- * - a **black & white** portrait filling the upper card (`photoUrl` over a
- *   translucent plate, `grayscale` so any colour source reads as the B&W art).
- *   When the athlete has no `photoUrl`, the portrait region flips to a SOLID
- *   OPAQUE initials plate (`overlay.plateFilled`) instead of the translucent
- *   base — otherwise the empty plate keys out to a void on a chroma/transparent
- *   broadcast bg. The `athlete === undefined` (TBD) slot is a separate path;
- * - a **white plate** (`overlay.plateFilled`) under the lower third, its top
- *   edge a shallow **concave-upward arc** (a radial-gradient mask) — deepest at
- *   the centre, rising to the sides — the signature LAAX cut;
- * - the name in condensed caps — **bold given name over a light family name**
- *   (ADR 0016), sized to a near-equal cap-height ratio — in `overlay.nameInk`;
- * - the national **flag** at the very foot: a single nationality fills the full
- *   card width; two nationalities fall back to native-ratio contained blocks.
+ * - a **B&W** portrait (`grayscale`) filling the card. A bound athlete with no
+ *   `photoUrl` gets a SOLID initials plate — the translucent base would key out
+ *   to a void on a chroma/transparent bg. The unbound (TBD) slot is separate;
+ * - a **white plate** under the lower third, its top edge a concave-upward arc
+ *   (`ARC_MASK`);
+ * - the name, **bold given over light family** (ADR 0016), in `overlay.nameInk`;
+ * - the national **flag** across the foot (`WideFlag`; two nationalities split
+ *   the band).
  *
- * The card fills its container and scales every element in container-query units
- * (`cqh`/`cqw`), so one component serves both the fixed-size `Competitor` frame
- * and the percentage-sized bracket boxes (tiny quarters → large final). The name
- * block lives in its OWN container-query box (the plate's clear region, below the
- * arc and above the flag), so its `cqh` resolves against the plate rather than
- * the whole card — otherwise the type, sized in card-cqh, rides up under the
- * arc and shears long names. Within it, name + result + caption ride ONE
- * measured wrapper that **shrinks to fit** the band in BOTH axes (`useFitToBox`)
- * — a long family name never ellipsizes, and a card carrying a result never
- * yields the name's height to it (the whole stack scales together, so the
- * given/family cap ratio and the numeral stay proportional).
- * The winner edge goes `race.go` green, a decided head-to-head loser's
- * `race.stop` (edge only — the name/result ink stays the plate tier). An optional
- * `result` numeral renders below the name in the monospace face (best time /
- * judged overall).
+ * Everything scales in container-query units, so one component serves the fixed
+ * `Competitor` frame and the percentage-sized bracket boxes. The name block is
+ * its OWN size container (the plate's clear region), so its `cqh` resolves
+ * against the plate, not the card — card-cqh type rides up under the arc and
+ * shears long names. Name + result + caption shrink to fit that box together in
+ * both axes (`useFitToBox`), keeping the cap ratio and numeral proportional.
+ * Winner/loser recolour the edge only; the ink stays the plate tier.
  *
- * `narrow` is for the tiny profile quarter/semi boxes (`PBOX_W ≈ 5.2%` canvas),
- * where a full uppercase first+last name shears to a single letter + ellipsis.
- * It renders ONE meaningful fragment — the `shortName → lastName → firstName`
- * display fallback (ADR 0016) — on a single bold line instead of the two-weight
- * split, so the on-air text stays legible. The wide VS `Competitor` and the
- * large centre FINALS box keep the full bold-first/light-last treatment.
+ * `narrow` is for the tiny profile quarter/semi boxes, where a full uppercase
+ * first+last name shears to one letter: it renders ONE fragment
+ * (`shortName → lastName → firstName`, ADR 0016) on a single bold line.
  */
 
-/** Foot flag-strip height (card %). The masters put the flag band across the
- *  foot from y≈235→251 of the 250-tall card — 6%. The white plate stops above
- *  it and the name block bottoms out at it, so the flag never sits under either. */
+/** Foot flag-strip height (design-system §7). The white plate stops above it and
+ *  the name block bottoms out at it, so the flag never sits under either. */
 const FLAG_STRIP_H = '6%';
 
-/** Thickness of the near-black divider rule the masters draw at y=234.67 (93.9%),
- *  between the white plate foot and the flag band. Proportional (cqh) so it scales
- *  with the card; ~2px on the 250-tall master. */
+/** The near-black divider rule between the plate foot and the flag band;
+ *  card-cqh so it scales with the card. */
 const DIVIDER_H = '0.8cqh';
 
-/** Ground between the name block's foot and the divider rule. The fit packs the
- *  stack flush to that foot, so without it the last row (the standings caption)
- *  sits on the rule. Card-cqh like `DIVIDER_H`, so it scales on the fixed
- *  `Competitor` frame and the percentage bracket boxes alike. */
+/** Ground between the name block's foot and the divider rule: the fit packs the
+ *  stack flush to that foot, so without it the standings caption sits on the rule. */
 const NAME_FOOT_CLEARANCE = '1.5cqh';
 
-/** Concave-upward arc for the plate's top edge (radial-gradient mask): a top-
- *  centred ellipse (rx = half the box → zero cut at the sides) removes a downward
- *  bulge from the plate, so its top edge sits flush at the band top (~54% of the
- *  card, the master's side depth) and sags to ~58% at the centre (ry = 10% of the
- *  40%-tall band). Black/transparent here are the mask stencil (alpha), not
- *  palette colours. */
+/** The plate's arc'd top edge: a top-centred ellipse (rx = half the box → zero
+ *  cut at the sides, ry = 10% of the 40%-tall band) masked out of the plate.
+ *  Black/transparent are the alpha stencil, not palette colours. */
 const ARC_MASK = 'radial-gradient(50% 10% at 50% 0%, transparent 99.5%, black 100%)';
 
-/** The broadcast type floor, read through an override channel rather than off
- *  the token directly: a canvas that does NOT track the viewport (the
- *  `/admin/matches` bracket preview, capped by its Container) declares
- *  `--overlay-type-floor` off its own measured width, so its cards scale
- *  proportionally instead of starting every narrow name at the full viewport
- *  floor. Not a `--tl-*` name — a computed layout value, not a token (ADR 0034
- *  §1) — and the token stays the fallback everywhere else. */
+/** The broadcast type floor through an override channel: a canvas that does NOT
+ *  track the viewport (the `/admin/matches` bracket preview) declares
+ *  `--overlay-type-floor` off its own measured width so its cards scale
+ *  proportionally. Not a `--tl-*` name — a computed layout value, not a token
+ *  (ADR 0034). */
 const TYPE_FLOOR = `var(--overlay-type-floor, ${overlayTypeFloor})`;
 
-/** The card's text is dark ink on a white plate, so cancel the StreamLayout
- *  footage drop-shadow — it would read as a dark double-image rather than the
- *  flat plate text the LAAX refs show. */
+/** Dark ink on a white plate: cancel the StreamLayout footage drop-shadow, which
+ *  reads as a dark double-image here. */
 const PLATE_TEXT_FLAT = { textShadow: 'none' } as const;
 
 export const AthleteCard = ({
@@ -139,14 +111,11 @@ export const AthleteCard = ({
    *  Opt-in: the bracket boxes keep the bare green edge. */
   winnerTag?: boolean;
   narrow?: boolean;
-  /** Frame stroke width. Every home passes its own edge off the v2 art (ADR
-   *  0029) — the heavier 10px lower-third frame on the VS/winner cards
-   *  (`Competitor`), the light 6px shared stroke in the bracket, cqh in the
-   *  `AthleteForm` preview — so the proportional default is only a fallback. */
+  /** Frame stroke width. Every home passes its own edge (ADR 0029; values in
+   *  design-system §7), so the proportional default is only a fallback. */
   edgeWidth?: string;
-  /** Winner-edge treatment (see `Plate`). Defaults to the `outset` bold rim the
-   *  big VS/winner lower-third cards want; the dense bracket boxes pass `flat`
-   *  so the champion's green edge never outweighs its white-edged neighbours. */
+  /** Winner-edge treatment (see `Plate`): `outset` for the big lower-third
+   *  cards, `flat` for the dense bracket boxes. */
   winnerRing?: 'outset' | 'flat';
 }) => {
   const { slotRef, nameRef, fit } = useFitToBox();
@@ -172,11 +141,9 @@ export const AthleteCard = ({
         fontFamily: fonts.display,
       }}
     >
-      {/* B&W portrait — fills the card; the name band overlaps its foot. A BOUND
-          photoless athlete gets a solid opaque initials plate (not a keyed-out
-          hole) so the card still reads as an intentional name/flag plate; an
-          unbound (TBD) slot stays transparent so the Plate's translucent
-          overlay.plate fill shows through as the reference's empty grey slot. */}
+      {/* B&W portrait under the name band. An unbound (TBD) slot stays
+          transparent so the Plate's translucent fill reads as the reference's
+          empty grey slot; a bound photoless athlete gets the solid initials plate. */}
       <Box
         data-testid="athlete-card-photo"
         sx={{
@@ -215,12 +182,8 @@ export const AthleteCard = ({
             {initials}
           </Typography>
         )}
-        {/* Unbound (TBD) slot: the question-mark placeholder, centred over the
-            translucent plate, so an undecided box reads as an intentional "to be
-            decided" card rather than an empty keyed-out hole. The white name band,
-            flag and divider are all suppressed for this case (see below), so the
-            card is just the empty plate + mark — the reference's translucent grey
-            slot. White (overlay.stroke language) at the empty-plate alpha. */}
+        {/* Unbound (TBD) slot: the "?" mark over the bare translucent plate —
+            band, flag and divider are suppressed below. */}
         {!athlete && (
           <UnknownAthlete
             testId="athlete-card-unknown"
@@ -228,8 +191,8 @@ export const AthleteCard = ({
               height: '50cqh',
               color: colors.overlay.stroke,
               opacity: 0.65,
-              // Broadcast protection halo so the white mark survives bright
-              // footage over the translucent plate (§7).
+              // Protection halo: the white mark sits on a translucent plate
+              // over bright footage (design-system §7).
               filter: overlayMarkHalo,
             }}
           />
@@ -264,10 +227,7 @@ export const AthleteCard = ({
         </Typography>
       )}
 
-      {/* White plate with the arc'd LAAX top edge (see ARC_MASK); bottom raised
-          by the strip height so it never paints over the flag (FLAG_STRIP_H).
-          Suppressed for an unbound (TBD) slot so the card stays the reference's
-          bare translucent plate under the question mark, not an empty white bar. */}
+      {/* White plate (ARC_MASK top edge), raised off the flag strip. */}
       {athlete && (
         <Box
           data-band
@@ -284,19 +244,16 @@ export const AthleteCard = ({
         />
       )}
 
-      {/* Name block, scoped to the band's clear rectangular region (below the
-          18% slant, above the divider rule). Its own `containerType:size`
-          re-anchors `cqh` to THIS box, so the type sizes against the band — not
-          the whole card — and stays clear of the slant and flag at every box
-          size (fixed Competitor + percentage bracket boxes alike). */}
+      {/* Name block: the band's clear region below the arc, above the divider
+          rule; its own size container re-anchors `cqh` to this box. */}
       <Stack
         data-testid="athlete-card-name"
         sx={{
           position: 'absolute',
           left: 0,
           right: 0,
-          // Sit below the slant's deepest point; end a clearance above the
-          // divider rule, which paints over anything below it.
+          // Below the arc's deepest point; end a clearance above the divider
+          // rule, which paints over anything below it.
           top: '68%',
           bottom: `calc(${FLAG_STRIP_H} + ${DIVIDER_H} + ${NAME_FOOT_CLEARANCE})`,
           containerType: 'size',
@@ -306,13 +263,10 @@ export const AthleteCard = ({
           overflow: 'hidden',
         }}
       >
-        {/* Shrink-to-fit slot. The cqh lines size against the band HEIGHT, so a
-            long family name overruns the card width and a result numeral under
-            it overruns the band. `flexShrink:0` keeps the slot from yielding its
-            height (which sheared the family-name glyphs); the measured node
-            holds its NATURAL box — `max-content` width, unshrunk height, so the
-            inner `noWrap` lines aren't clipped away from the measurement — and
-            one uniform scale fits both axes, cap ratio and numeral intact. */}
+        {/* Shrink-to-fit slot. `flexShrink:0` stops the slot yielding height
+            (which shears the family-name glyphs); the measured node holds its
+            NATURAL box — `max-content`, unshrunk — so the inner `noWrap` lines
+            aren't clipped out of the measurement. */}
         <Box
           ref={slotRef}
           data-testid="athlete-card-name-slot"
@@ -354,12 +308,10 @@ export const AthleteCard = ({
                     fontWeight: 700,
                     letterSpacing: overlayArt.nameTracking,
                     // ≥1 keeps an uppercase accent inside the line box, off the
-                    // overflow:hidden band edge on the tiny quarter box (overlay-
-                    // typography-polish).
+                    // overflow:hidden band edge on the tiny quarter box.
                     lineHeight: 1.1,
-                    // 30cqh resolves against the ~26%-tall name band; the floor
-                    // keeps the ~171px quarter box off the ~13px sub-floor,
-                    // while larger boxes keep the proportional cqh size.
+                    // The floor keeps the ~171px quarter box off a ~13px
+                    // sub-floor; larger boxes keep the proportional cqh size.
                     fontSize: `max(30cqh, ${TYPE_FLOOR})`,
                     ...PLATE_TEXT_FLAT,
                   }}
@@ -367,9 +319,6 @@ export const AthleteCard = ({
                   {athlete.shortName || athlete.lastName || athlete.firstName}
                 </Typography>
               ) : (
-                // The bold-first / light-last split lives in AthleteName; the card
-                // uses its cqh cap-height default (34 : 27.2cqh = the masters' 1.25
-                // ratio) + the winner accent. The opaque white plate keeps flat shadow.
                 <AthleteName
                   athlete={athlete}
                   sizing="cqh"
@@ -377,17 +326,15 @@ export const AthleteCard = ({
                 />
               ))}
             {result !== undefined && (
-              // The gap is `cqh`, never `%`: a percentage vertical margin
-              // resolves against the containing block's WIDTH, so on these
-              // shrink-wrapped cards it tracked the wrong axis entirely.
+              // `cqh`, never `%`: a percentage vertical margin resolves against
+              // the containing block's WIDTH.
               <Stack
                 direction="row"
                 sx={{ mt: '3cqh', alignItems: 'baseline', columnGap: '0.4em' }}
               >
                 <Numeral
                   fontWeight={700}
-                  // Floored like the name: on the smallest profile-ranking card the
-                  // 22cqh result numeral fell to the ~13px sub-floor.
+                  // Floored like the name, for the smallest profile-ranking card.
                   fontSize={`max(22cqh, ${TYPE_FLOOR})`}
                   color={
                     isWinner
@@ -404,9 +351,7 @@ export const AthleteCard = ({
                 >
                   {result}
                 </Numeral>
-                {/* Points unit riding the result — the profile-cut analogue of
-                    the names cut's subordinate display-caps unit, so a bare
-                    judged overall reads as points here too (freestyle only). */}
+                {/* The names cut's subordinate display-caps unit. */}
                 {resultUnit !== undefined && (
                   <Box
                     component="span"
@@ -427,10 +372,7 @@ export const AthleteCard = ({
                 )}
               </Stack>
             )}
-            {/* Placing-round caption under the result — the same subordinate
-                display-caps treatment the names cut rides beside its result, so
-                the profile board disambiguates a bracket order identically.
-                `cqh` gap for the same reason as the result row above. */}
+            {/* Placing-round caption, in the names cut's subordinate treatment. */}
             {sourceTag !== undefined && (
               <Typography
                 data-testid="athlete-card-source-tag"
@@ -454,8 +396,7 @@ export const AthleteCard = ({
         </Box>
       </Stack>
 
-      {/* The 2px near-black divider rule the masters draw at 93.9%, between the
-          white plate foot and the flag band (sits on the flag strip's top edge). */}
+      {/* Divider rule on the flag strip's top edge (DIVIDER_H). */}
       {athlete && (
         <Box
           data-testid="athlete-card-divider"
@@ -470,11 +411,8 @@ export const AthleteCard = ({
         />
       )}
 
-      {/* National flag across the very foot. `WideFlag` renders the client's own
-          card art for the nation (stretched edge-to-edge, no crop) or, for an
-          uncovered nation, the flag-icons flag contained on its edge colour. Two
-          nationalities abut as two blocks. The white plate backs both, so an
-          unknown code still reads as an intentional foot. */}
+      {/* Flag foot (see `WideFlag`). The white backing keeps an unknown code
+          an intentional foot. */}
       {athlete && (
         <Box
           data-testid="athlete-card-flag-strip"
@@ -489,13 +427,9 @@ export const AthleteCard = ({
           }}
         >
           <WideFlag athlete={athlete} />
-          {/* Hairline keyline framing the flag band. A low-contrast flag whose
-              field matches the white plate foot (e.g. Japan's white ground) is
-              otherwise indistinguishable from the plate; the near-black frame —
-              the same ink as the divider above — gives every flag a crisp edge
-              on the foot (overlay-typography-polish). An inset shadow on an
-              overlay layer, not a border, so it paints OVER the edge-to-edge art
-              without shrinking it. */}
+          {/* Hairline keyline so a white-field flag (Japan) doesn't merge into the
+              plate. An inset shadow on an overlay layer, not a border, so it
+              paints OVER the edge-to-edge art without shrinking it. */}
           <Box
             data-testid="athlete-card-flag-keyline"
             sx={{

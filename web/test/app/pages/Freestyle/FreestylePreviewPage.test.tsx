@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Athlete, RankedAthlete } from 'app/types';
 
 // The page opens a receiver socket for the countdown + db_update refresh — stub
-// it so no real socket opens (the realtime path is deliberately untested).
+// it so no real socket opens (the realtime path is not under test here).
 vi.mock('app/hooks/useWebSocket', async (importOriginal) => {
   const actual = await importOriginal<typeof import('app/hooks/useWebSocket')>();
   return {

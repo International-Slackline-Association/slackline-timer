@@ -20,7 +20,7 @@ import { useFreestyleTimerFeed, type RecoveredLane } from './useFreestyleTimerFe
 /** A recovered lane that has spent its whole budget counts as expired — the
  * control board always snapshots lanes 1/2 with their armed budget, so a zeroed,
  * non-running lane can only be one that ran out (feeds Battle Over recovery). A
- * RUNNING row is read off its anchor rather than assumed live: the rows are now
+ * RUNNING row is read off its anchor rather than assumed live: the rows are
  * refreshed from every live message (`nextRecovery`), so this predicate sees a
  * lane whose window has already elapsed — the same crossing the mounted clock
  * reports through `onExpire` — before the control's stop lands. */
@@ -50,15 +50,14 @@ const recoveredExpired = (lane: RecoveredLane | undefined, at: number): boolean 
  * relayed `nextUp` hint — ADR 0037).
  * Quali has no idle clock to mark, so the same arrow carries the operator-named
  * next athlete's name under the hero instead (`qualiNextUp`).
- * Still NOT ported: the battle between-turns pause count-UP (judge-facing,
- * control-local, never relayed — ADR 0036). Per-state region backgrounds are also
- * out: a state color only
- * expresses its state (DESIGN_SYSTEM §2) and painted grounds would break the
- * `?bg=` contract.
+ * Not ported: the battle between-turns pause count-UP (judge-facing,
+ * control-local, never relayed — ADR 0036). No per-state region backgrounds: a
+ * state color only expresses its state (design-system §2) and painted grounds
+ * would break the `?bg=` contract.
  *
- * Warm-up is the display's OPENING view, but only once the room has said so: until the first message or snapshot
- * arrives the surface is `unseeded` and renders nothing at all
- * (fsux-preview-warmup-seed). From there the feed holds the warm-up until it
+ * Warm-up is the display's OPENING view, but only once the room has said so:
+ * until the first message or snapshot arrives the surface is `unseeded` and
+ * renders nothing at all. From there the feed holds the warm-up until it
  * finishes or a competition action (lane run / best-trick try) takes over.
  *
  * All data comes from the shared feed (`useFreestyleTimerFeed`) — the same WS
@@ -118,8 +117,8 @@ export const FreestyleAthleteDisplay = ({ variant }: { variant: 'venue' | 'strea
 
   const isReadyToDisplay = readyState === ReadyState.OPEN && isPreviewEnabled;
   const warmupHero = warmupSurface === 'warmup' && !bestTrick;
-  // The lane layouts show only once the session has actually SAID something
-  // (fsux-preview-warmup-seed): an unseeded display draws no clock at all
+  // The lane layouts show only once the session has actually SAID something:
+  // an unseeded display draws no clock at all
   // rather than a hero fabricated from the defaults — a broadcast surface with
   // the wrong number on it is worse than one with none.
   const laneLayout = warmupSurface === 'lanes' && !bestTrick;
@@ -154,7 +153,7 @@ export const FreestyleAthleteDisplay = ({ variant }: { variant: 'venue' | 'strea
           laneNames={laneNames}
           countdownMessage={countdownMessage}
           recovery={recovery[3]}
-          // Per-channel tone, the same one the control board plays (§4.2).
+          // Per-channel tone, the same one the control board plays (freestyle-board-ux §4.2).
           onExpire={() => playAudio('short')}
         />
       )}
@@ -204,7 +203,7 @@ export const FreestyleAthleteDisplay = ({ variant }: { variant: 'venue' | 'strea
           </Box>
         ) : (
           // Battle (Battle.html): two stacked per-player regions. No break UI and
-          // no audience pause clock (see the class doc); the on-deck arrow on a
+          // no audience pause clock (see the component doc); the on-deck arrow on a
           // lane's clock marks who goes next during the changeover.
           <Box
             sx={{
@@ -243,14 +242,12 @@ export const FreestyleAthleteDisplay = ({ variant }: { variant: 'venue' | 'strea
               <Typography
                 component="div"
                 sx={{
-                  // OUT of the column's flex flow (battle-marker-layout): as a
-                  // third `space-evenly` child the banner re-divided the screen
-                  // the instant a battle ended and shoved both hero clocks — the
-                  // one moment the audience is reading them. (At 1920x1080 the two
-                  // lane regions are 508 px each, so a third child also overflowed
-                  // the 1080 px column and squeezed them.) A reserved slot is the
-                  // other way out and is worse: it would move the signed-off idle
-                  // geometry for the whole match to serve its last two seconds.
+                  // OUT of the column's flex flow: a third `space-evenly` child
+                  // re-divides the screen the instant a battle ends and shoves
+                  // both hero clocks (at 1920x1080 the two 508 px regions also
+                  // overflow the column). A reserved slot would move the
+                  // signed-off idle geometry for the whole match to serve its
+                  // last two seconds.
                   //
                   // It rests its BOTTOM edge on the seam between the two regions
                   // (`space-evenly` over two equal children puts that seam at
@@ -269,7 +266,7 @@ export const FreestyleAthleteDisplay = ({ variant }: { variant: 'venue' | 'strea
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
                   fontSize: 'clamp(1rem, 2.4vw, 2.25rem)',
-                  // The §2 DNF-badge language scaled up — solid stop fill with
+                  // The design-system §2 DNF-badge language scaled up — solid stop fill with
                   // white caps (state as a block, not colored text), matching
                   // the Countdown's on-dark frames: it reads from across a
                   // venue where stop-colored text on slate would not. On a

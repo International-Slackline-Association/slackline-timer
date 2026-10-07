@@ -61,9 +61,8 @@ describe('speedlineLocks', () => {
     expect(locks.start).toBe('locked while a lane runs');
   });
 
-  // `speedline-live-run-reset-confirm-and-abort-lock`: the confirm guards a
-  // live Reset, not a lock — a locked Reset left Stop-both-lanes (which POSTs
-  // Times) as the only way out of a run gone wrong.
+  // The confirm guards a live Reset, not a lock — a locked Reset would leave
+  // Stop-both-lanes (which POSTs Times) as the only way out of a run gone wrong.
   it.each([
     ['the lights', { signalPhase: 2 }],
     ['a running lane', { laneState: { 1: running, 2: { kind: 'idle' } } as const }],
@@ -79,10 +78,10 @@ describe('speedlineLocks', () => {
     expect(locks.abort).toBe('no start sequence to abort');
   });
 
-  // `speedline-lock-says-aborted-after-a-clean-run`: the schedule's terminal
-  // phase IS -1, so the SAME wire value ends a clean sequence and latches an
-  // abort. The abort latch — not the phase — is what tells them apart, and the
-  // board must never blame a false start that never happened.
+  // The schedule's terminal phase IS -1, so the SAME wire value ends a clean
+  // sequence and latches an abort. The abort latch — not the phase — is what
+  // tells them apart, and the board must never blame a false start that never
+  // happened.
   it.each([
     [false, 'sequence finished — Reset to re-arm'],
     [true, 'start aborted — Reset to re-arm'],
@@ -100,7 +99,7 @@ describe('speedlineLocks', () => {
 
   it('arms each lane Stop on its own clock, link down or not', () => {
     // A running lane must always be stoppable: the clocks are browser-local
-    // (FREESTYLE_BOARD_UX §4.13), so a reconnecting relay may not strand a
+    // (freestyle-board-ux §4.13), so a reconnecting relay may not strand a
     // finishing athlete.
     const locks = speedlineLocks({
       ...idle,
@@ -132,9 +131,9 @@ describe('speedlineLocks', () => {
     expect(speedlineLocks({ ...idle, signalPhase: -1, aborted: true }).swap).toBeNull();
   });
 
-  // `speedline-void-run-locked-while-run-live`: a mid-run void would let the
-  // still-running lane's Stop record a Time for a run already voided, so Void
-  // is interlocked exactly like the swap beside it on the rail.
+  // A mid-run void would let the still-running lane's Stop record a Time for a
+  // run already voided, so Void is interlocked exactly like the swap beside it
+  // on the rail.
   it.each([
     ['idle', idle],
     ['lights', { ...idle, signalPhase: 2 }],
@@ -169,9 +168,9 @@ describe('speedlineLocks', () => {
 });
 
 /**
- * `speedline-resume-stopped-lane`: a mis-pressed Stop is undoable while the run
- * is still the board's live run — the other lane is away, or the last stop is
- * inside the grace (a solo quali run has no second clock to hold the window).
+ * A mis-pressed Stop is undoable while the run is still the board's live run —
+ * the other lane is away, or the last stop is inside the grace (a solo quali
+ * run has no second clock to hold the window).
  */
 describe('speedlineLocks resume', () => {
   it('offers no resume for a lane that never stopped', () => {

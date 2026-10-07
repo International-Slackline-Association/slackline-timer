@@ -27,10 +27,10 @@ describe('useLapsingConfirm', () => {
     expect(result.current[0]).toBeNull();
   });
 
-  // The defect this hook exists for: a question closed by a peer event left the
-  // stamp behind, and the next time the risk returned — the next Start, the
-  // next try — the dialog popped open with nobody having pressed anything, and
-  // took the whole handset with it (`overlayOwnsBoard`, §4.8).
+  // A question closed by a peer event must not leave its stamp behind: the next
+  // time the risk returns — the next Start, the next try — the dialog would pop
+  // open with nobody having pressed anything, and take the whole handset with it
+  // (`overlayOwnsBoard`, §4.8).
   it('stays closed when the risk returns, since nobody asked again', () => {
     const { result, rerender } = renderHook(({ atRisk }) => useLapsingConfirm<number>(atRisk), {
       initialProps: { atRisk: true },

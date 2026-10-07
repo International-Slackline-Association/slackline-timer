@@ -5,15 +5,15 @@ import type { FreestyleSelection, LiveSelection, SpeedSelection } from 'app/hook
 /**
  * The selection union's split (`SpeedSelection | FreestyleSelection`,
  * discriminated on `discipline`), held at the TYPE level: the two boards share
- * one relay room, and the whole point of the split is that neither arm can
- * carry — or read — the other board's session state. A field parked on the
+ * one relay room, and neither arm may carry — or read — the other board's
+ * session state. A field parked on the
  * wrong arm is invisible to a runtime assertion (it is optional, so nothing
  * ever sets it), so the guard has to be the compiler: the tables below stop
  * compiling the moment a key crosses over.
  *
- * The wire is unchanged by the split — every field was already optional and
- * each board already sent only its own — so there is nothing here about the
- * message shapes; `selectionLww.test.ts` walks both arms' full literals.
+ * The split is type-only — every field is optional on the wire and each board
+ * sends only its own — so nothing here covers message shapes;
+ * `selectionLww.test.ts` walks both arms' full literals.
  */
 
 /** `true` only while `K` is absent from `T`. */

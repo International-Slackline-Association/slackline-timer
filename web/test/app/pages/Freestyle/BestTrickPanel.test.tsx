@@ -258,9 +258,10 @@ describe('BestTrickPanel live-control contract (FREESTYLE_BOARD_UX §6)', () => 
 
 /**
  * The cap pair is the panel's one segmented SETTING, and §6 confines brand teal
- * to links and nav: MUI's contained/outlined defaults painted the chosen key in
- * the brand fill and the other in brand ink at 2.95:1 — a second primary-looking
- * action beside End try, in the one family the live path may not use.
+ * to links and nav: MUI's contained/outlined defaults would paint the chosen
+ * key in the brand fill and the other in brand ink at 2.95:1 — a second
+ * primary-looking action beside End try, in the one family the live path may
+ * not use.
  */
 describe('BestTrickPanel cap pair paint (FREESTYLE_BOARD_UX §6)', () => {
   // The tones resolve through the TELEMETRY palette the app installs in
@@ -314,11 +315,10 @@ describe('BestTrickPanel cap pair paint (FREESTYLE_BOARD_UX §6)', () => {
 });
 
 /**
- * The armed panel is the run deck's part 2 and paints the same §6 tiers the lane
- * cards do — words, digits, frame strokes, all computed on `panel` — so it is a
- * `panel` Paper like them rather than the one live-column surface left on the
- * page canvas. The disarmed step keeps §2's one-line `[Begin best trick]` row:
- * there is nothing yet for a card to hold.
+ * The armed panel is the run deck's part 2 and paints the same §6 tiers the
+ * lane cards do — words, digits, frame strokes, all computed on `panel` — so it
+ * is a `panel` Paper like them. The disarmed step keeps §2's one-line
+ * `[Begin best trick]` row: there is nothing yet for a card to hold.
  */
 describe('BestTrickPanel surface (FREESTYLE_BOARD_UX §6)', () => {
   /** §6's race target: the width half of `>=56 x 120`. */
@@ -546,9 +546,9 @@ describe('BestTrickPanel — Reset series guard', () => {
     expect(within(dialog).getByText(/Aiko has used 1 of 3 tries, Bruno 1/)).toBeInTheDocument();
   });
 
-  // A peer reset the series while the question stood: with the tally spent
-  // back to zero there is nothing left to lose, so the question goes — and it
-  // stays gone. Held behind the closed dialog, the press re-opened it the next
+  // A peer reset the series while the question stood: with the tally spent back
+  // to zero there is nothing left to lose, so the question goes — and it stays
+  // gone. Held behind the closed dialog, the press would re-open it the next
   // time a try was spent, mid-series and unasked for (rubric C04).
   it('closes on a peer reset and does not re-ask on the next try', async () => {
     const onReset = vi.fn();

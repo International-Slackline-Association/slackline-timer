@@ -8,8 +8,8 @@ import { useAudio } from 'react-use';
 import type { RaceSound } from 'app/util/raceSound';
 
 /**
- * The four race beeps — one element per `RaceSound`, so the reducers' four
- * expiry tones are four distinct files — plus the autoplay-unlock state
+ * The four race beeps — one element per `RaceSound`, four distinct files —
+ * plus the autoplay-unlock state
  * machine. Chromium rejects `play()` until the page has seen a user gesture,
  * and activation does NOT survive the cross-origin Hosted-UI redirect — so a
  * never-touched preview/projector tab would drop every beep silently

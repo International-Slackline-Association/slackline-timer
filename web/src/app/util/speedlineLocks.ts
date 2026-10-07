@@ -1,6 +1,6 @@
 /**
  * Why a Speedline race control is inert — **one map**, the Freestyle board's
- * §4.7 interlock table applied to the second desk (FREESTYLE_BOARD_UX §7, the
+ * §4.7 interlock table applied to the second desk (freestyle-board-ux §7, the
  * P3 sibling note). The button's `disabled`, the why-line printed under it and
  * the handset guard all read the same field, which is what keeps a screen press
  * and a buzzer press inert at the same instants.
@@ -15,8 +15,8 @@ import type { SpeedlineLaneState } from 'app/util/timerSnapshot';
 export type LaneId = 1 | 2;
 
 /**
- * How long after the LAST lane stops a mis-pressed Stop can still be undone
- * (`speedline-resume-stopped-lane`). The other lane still running is what
+ * How long after the LAST lane stops a mis-pressed Stop can still be undone.
+ * The other lane still running is what
  * normally says the run is live; a solo quali run has no second clock, so the
  * window is a grace instead — long enough for the operator to see the frozen
  * numeral and reach the button, short enough that the run is plainly over
@@ -76,9 +76,9 @@ export interface SpeedlineLockInput {
    * Whether the -1 the board holds is an ABORT rather than a sequence run to
    * its end. The schedule's terminal phase and the abort latch are the same
    * wire value (`useStartSignalTimer`, and changing that is a protocol change),
-   * so the distinction rides beside it: without it the board blamed a start
-   * abort after every clean run (`speedline-lock-says-aborted-after-a-clean-run`).
-   * Both wordings wait on the same Reset — only what the operator is told differs.
+   * so the distinction rides beside it: without it the board would blame a
+   * start abort after every clean run. Both wordings wait on the same Reset —
+   * only what the operator is told differs.
    */
   aborted: boolean;
   /** The clock the time-bounded locks are graded against (the resume grace).
@@ -104,9 +104,9 @@ export interface SpeedlineLocks {
    * already voided — or, made to reset the clocks, a second Reset that skips
    * Reset's confirm. */
   void: string | null;
-  /** Per-lane undo of a mis-pressed Stop (`speedline-resume-stopped-lane`).
-   * Graded by the run, like `stop` and `swap` — a dead link may not take it
-   * either: the athlete it un-freezes is still on the line. */
+  /** Per-lane undo of a mis-pressed Stop. Graded by the run, like `stop` and
+   * `swap` — a dead link may not take it either: the athlete it un-freezes is
+   * still on the line. */
   resume: Record<LaneId, string | null>;
 }
 

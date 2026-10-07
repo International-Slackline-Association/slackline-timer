@@ -16,7 +16,7 @@ import { SelectedCompetitionProvider } from 'app/state/selectedCompetition';
 const COMP = 'worlds-2026';
 
 /**
- * The page now also runs the rankings/matches queries (for the off-air status
+ * The page also runs the rankings/matches queries (for the off-air status
  * panel), so the mock must answer those GETs with arrays — only the read-token
  * POST returns the token object. `tokenResult` lets a test inject a token or an
  * error for the mint/revoke path while the status queries stay well-formed.

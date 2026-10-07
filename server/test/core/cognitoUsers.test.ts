@@ -99,8 +99,8 @@ describe('resolveUserByEmail', () => {
     expect(sendMock.mock.calls[0][0].input.Filter).toBe('email = "ab@isa.org"');
   });
 
-  // Regression guard for the removed `?? 'eu-central-1'` fallback: a guessed
-  // region builds a client against the *backend's* region, where ListUsers
+  // No region fallback: a guessed region (e.g. the backend's) builds a client
+  // against a region where ListUsers
   // matches nothing — indistinguishable from "user not found", so every grant
   // is silently refused.
   it('refuses to guess the pool region when COGNITO_REGION is unset', async () => {

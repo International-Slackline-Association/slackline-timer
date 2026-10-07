@@ -2,8 +2,8 @@
 // (ADR 0052; rules in lib/fieldBounds.mjs).
 //
 // PUT is a full replacement, so a stored value outside a new bound 400s on its
-// next edit. Run this against prod before the bounds deploy: every violation is
-// either fixed in the data or grandfathered in the validator first.
+// next edit. Run this against prod before deploying a tightened bound: every
+// violation is either fixed in the data or grandfathered in the validator first.
 //
 // Strictly read-only: one paginated Scan, no write call is imported, and any
 // unknown or write-ish flag (--yes, --delete, …) is refused. Output carries

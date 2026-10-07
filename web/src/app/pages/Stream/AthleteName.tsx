@@ -4,25 +4,20 @@ import { type Athlete } from 'app/types';
 import { colors, fonts, overlayArt } from 'app/theme/tokens';
 
 /**
- * The LAAX name split — given name **bold** abutting family name **light**, both
- * in the one `fonts.display` condensed-caps family (ADR 0016). The single home of
- * the 700/300 first/last treatment: the SVO name lower-third and bracket `name`
- * plates (`sizing="fixed"`) and the stacked photo cards (`sizing="cqh"`) all
- * render through it, so the weight split lives in exactly one place.
+ * The LAAX name split — given name **bold** (700) abutting family name **light**
+ * (300) in `fonts.display` (ADR 0016); the one home of that treatment (name
+ * strips, bracket/ranking/score-card plates, photo cards).
  *
- * `accent` optionally recolours only the bold given name (e.g. `race.go` for a
- * bracket winner) so the two-weight contrast survives the recolour; the family
- * name always stays on the base ink.
+ * `accent` recolours only the given name (e.g. a winner's `race.go`), so the
+ * two-weight contrast survives; the family name stays on the base ink.
  *
- * - **`fixed`** (default) — an inline `Box` strip; the caller drives flow and font
- *   size via `sx` (a horizontal name row whose size is set by its container).
- *   `noWrap` keeps a long family name on one line.
+ * - **`fixed`** (default) — an inline single-line span; the caller drives flow
+ *   and font size via `sx`.
  * - **`cqh`** — the two names STACKED and centred, sized in container-query
  *   height at the card masters' cap ratio so one split serves every card box size.
  *
  * Both modes paint dark ink on an opaque white plate, so both cancel the
- * StreamLayout footage drop-shadow — it would read as a dark double-image
- * instead of flat plate text.
+ * StreamLayout footage drop-shadow.
  */
 export const AthleteName = ({
   athlete,
@@ -47,19 +42,15 @@ export const AthleteName = ({
             color: accent ?? colors.overlay.nameInk,
             textTransform: 'uppercase',
             // Declared, NOT inherited: MUI stamps `theme.typography.body1`
-            // (= `fonts.body`) onto every Typography root, and that declaration
-            // beats an ancestor's `fontFamily`. Omitting it here silently
-            // rendered the LAAX name in Saira — and dragged the 300 below with
-            // it, which Saira doesn't load, flattening the weight split too.
+            // (= `fonts.body`) onto every Typography root, beating an ancestor's
+            // `fontFamily` — the name falls back to Saira, which doesn't load the
+            // 300 below either, flattening the weight split.
             fontFamily: fonts.display,
-            // 700, not 800: Oswald's heaviest bundled face is 700, so an 800
-            // request just resolves back to it (see `fonts.display`).
+            // Oswald's heaviest bundled face is 700 (see `fonts.display`).
             fontWeight: 700,
             letterSpacing: overlayArt.nameTracking,
-            // ≥1 so an uppercase diacritic (É/Ø/Ñ) sits inside the line box and
-            // isn't shaved off by the card's overflow:hidden band on the smallest
-            // profile card (overlay-typography-polish); the 700/300 weight split,
-            // not leading, still reads as the given/family cue.
+            // ≥1 so an uppercase diacritic (É/Ø/Ñ) isn't shaved off by the card's
+            // overflow:hidden band on the smallest profile card.
             lineHeight: 1.1,
             fontSize: '34cqh',
             textShadow: 'none',
@@ -78,10 +69,8 @@ export const AthleteName = ({
               fontFamily: fonts.display, // see the given line
               fontWeight: 300,
               letterSpacing: overlayArt.nameTracking,
-              // Family : given = 1 : 1.25 (34 : 27.2cqh) — the card masters'
-              // 35.62 : 44.6 cap ratio, keeping the 700/300 weight as the
-              // given/family cue (ADR 0016). ≥1 leaves headroom for uppercase
-              // accents (see the given line).
+              // Given : family = 34 : 27.2cqh = 1.25, the card masters' 44.6 :
+              // 35.62 cap ratio. ≥1 for accents (see the given line).
               lineHeight: 1.1,
               fontSize: '27.2cqh',
               textShadow: 'none',
@@ -103,16 +92,13 @@ export const AthleteName = ({
         letterSpacing: overlayArt.nameTracking,
         lineHeight: 0.95,
         whiteSpace: 'nowrap',
-        // Dark ink on a white plate everywhere this is used (bracket name plates,
-        // SVO strip): cancel the footage drop-shadow — see the JSDoc's plate rule.
         textShadow: 'none',
         ...sx,
       }}
     >
-      {/* Inherit the wrapper's fontSize + display face; a default Typography is
-          body1 (16px in the body font), which would shrink the name to a sliver
-          in the wrong face (the name-strip "tiny name" bug). Longhands, NOT the
-          `font: inherit` shorthand — that also resets the 700/300 weight split. */}
+      {/* Inherit the wrapper's size + face: a default Typography is body1 (16px
+          in the body font). Longhands, NOT the `font: inherit` shorthand — that
+          also resets the 700/300 weight split. */}
       <Typography
         component="span"
         sx={{ fontFamily: 'inherit', fontSize: 'inherit', fontWeight: 700, color: accent }}

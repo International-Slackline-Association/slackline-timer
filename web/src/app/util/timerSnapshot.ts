@@ -1,16 +1,11 @@
 /**
  * Pure helpers for peer-to-peer timer state recovery.
  *
- * The relay persists nothing (it is a dumb broadcast), so a late-joining or
- * reconnecting preview/overlay would render a blank timer until the next
- * operator action. Recovery is request-reply: the preview emits `request_state`
- * on (re)open, the control page replies with a snapshot built here, and the
- * preview applies it via the normalized lane states below.
- *
- * This module is React-free and side-effect-free so all the branching (idle vs
- * running vs finished, clock-skew clamping, countdown epoch adjustment) is unit
- * tested off the untestable realtime page components — mirroring how
- * `raceTime.ts` / `scoreInput.ts` pull pure logic off the hooks.
+ * The relay persists nothing, so a late-joining or reconnecting page would
+ * render a blank timer until the next operator action. Recovery is
+ * request-reply (ADR 0011): the page emits `request_state` on (re)open, every
+ * control panel replies with a snapshot built here, and the receiver applies it
+ * via the normalized lane states below.
  */
 
 import type { CountdownSnapshot, SpeedlineSnapshot } from 'app/hooks/useWebSocket';
@@ -205,10 +200,10 @@ export interface CountdownControlRow {
 }
 
 /**
- * Current control-page Freestyle state. The page does not keep the live
- * remaining (it lives in each Countdown child), so it lifts the last value it
- * passed plus the wall-clock epoch a running lane started at, and this builder
- * adjusts for elapsed time at send.
+ * Current control-page Freestyle state, as the channel owners hand it over
+ * (`laneSnapshot` and siblings): each lane's frozen remaining plus the
+ * wall-clock epoch a running lane started at; this builder adjusts for elapsed
+ * time at send.
  */
 export interface CountdownControlState {
   isPreviewEnabled: boolean;
@@ -243,10 +238,8 @@ export const buildCountdownSnapshot = (state: CountdownControlState): CountdownS
       t.isRunning && t.startedAt != null
         ? remainingFrom(t.lastRemainingMs, t.startedAt, state.now)
         : Math.max(0, t.lastRemainingMs);
-    // The break allowance and the armed budget ride in every phase (`!= null`,
-    // 0 is a real count), so a mid-run joiner doesn't assume the full allowance
-    // and doesn't re-arm the room to its own preset; the channels that have
-    // neither (warm-up, best trick) omit them.
+    // The break allowance and the armed budget ride in every phase (`!= null`:
+    // 0 is a real count) — see `CountdownControlRow`.
     return {
       timerId: t.timerId,
       remainingMs,

@@ -5,7 +5,7 @@
  * the desk, where the operator finds out by a control sliding out from under a
  * glove.
  *
- * Shared, because two surfaces now budget their own strings the same way — the
+ * Shared, because two surfaces budget their own strings the same way — the
  * lane card's why-line (`WhyLine.test`) and the score rail's save status
  * (`FreestyleScoreControls.test`) — and a model kept twice is a model that
  * drifts.
@@ -19,11 +19,10 @@ export const charsPerLine = (contentPx: number): number => Math.floor(contentPx 
 
 /**
  * The slack every authored line owes its longest row. The content widths are
- * derived numbers — `LANE_CARD_CONTENT_PX` moved 241→246 with the
- * `LANE_COLUMN_PX` correction, silently loosening the lane budget from 34 to 35
- * chars — so a string wrapping at EXACTLY the budget is one desk nudge away
- * from taking an extra line, and a line-count assertion alone would go red only
- * after the fact. One glyph of headroom is what makes the next nudge fail in a
+ * derived numbers (`LANE_CARD_CONTENT_PX` follows `LANE_COLUMN_PX`, and a few px
+ * there move the lane budget a char), so a string wrapping at EXACTLY the budget
+ * is one desk nudge away from taking an extra line, and a line-count assertion
+ * alone would go red only after the fact. One glyph of headroom is what makes the next nudge fail in a
  * test instead of on the board.
  */
 export const REQUIRED_SLACK_CHARS = 1;

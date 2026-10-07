@@ -159,9 +159,8 @@ describe('RaceLaneColumn', () => {
   });
 
   // §6 names the pair a failed save wears — the `NOT SAVED` chip is a stop, the
-  // same one the Freestyle rail paints. It had been the break tone (outlined
-  // `warning`), which reads as "a break is running" at a glance and wrote the
-  // words at 1.94:1 besides.
+  // same one the Freestyle rail paints. The break tone (outlined `warning`)
+  // reads as "a break is running" and inks the words at 1.94:1.
   it('flags a failed lane save with the stop chip, not the break tone', () => {
     render(
       column(
@@ -176,9 +175,9 @@ describe('RaceLaneColumn', () => {
   });
 
   /**
-   * `speedline-lane-save-retry` + `speedline-times-page-deep-link`: a failed
-   * save carries its own recovery — the re-send, and the one Times-page row it
-   * belongs to, opened beside the board rather than in place of it.
+   * A failed save carries its own recovery — the re-send, and the one
+   * Times-page row it belongs to, opened beside the board rather than in place
+   * of it.
    */
   describe('a failed lane save', () => {
     const failedInput = {
@@ -335,10 +334,10 @@ describe('RaceLaneColumn', () => {
   });
 
   /**
-   * The wrong-athlete recovery (`speedline-wrong-athlete-reattribute`): the
-   * saved Time stays bound to whoever it was POSTed under, so the chip has to
-   * say so — otherwise it reads as this run's result for the athlete now
-   * standing on the lane, and the only undo left is deleting it.
+   * The wrong-athlete recovery: the saved Time stays bound to whoever it was
+   * POSTed under, so the chip has to say so — otherwise it reads as this run's
+   * result for the athlete now standing on the lane, and the only undo left is
+   * deleting it.
    */
   describe('a lane re-picked after its save', () => {
     const misattributed = makeRecorder({
@@ -403,9 +402,8 @@ describe('RaceLaneColumn', () => {
     });
   });
 
-  // The console's state-painted press: it shipped as a `size="small"`
-  // hand-painted `Button` — the right colour, under the 44 px aux floor, and
-  // holding the focus the handset needs (§4.4/§6).
+  // The console's state-painted press: the 44 px aux floor, and the blur rule
+  // so it never holds the focus the handset needs (§4.4/§6).
   it('paints Lane n DNF as a race control', () => {
     render(column(1, makeRecorder({ laneAthletes: { 1: 'a1', 2: 'a2' } })));
 
@@ -413,12 +411,11 @@ describe('RaceLaneColumn', () => {
   });
 
   /**
-   * `speedline-lane-post-stop-layout-shift`: every press the run produces used
-   * to be MOUNTED on the stop — Resume, the Saved chip, the correction field —
-   * pushing False start and DNF 74–120 px down the column under the operator's
-   * hand, and DNF under a 768 px fold. The fix is slots, not order alone: the
-   * column's own tests can only pin what jsdom knows (DOM order and the
-   * reserved heights); the rects are the driver's at the contract widths.
+   * Mounting the stop's presses (Resume, the Saved chip, the correction field)
+   * on the stop would push False start and DNF 74–120 px down under the
+   * operator's hand, so they stand in reserved slots. jsdom pins only DOM order
+   * and the reserved heights; the rects are the driver's at the contract
+   * widths.
    */
   describe('the column holds still across a stop', () => {
     const assigned = { 1: 'a1', 2: '' } as const;
