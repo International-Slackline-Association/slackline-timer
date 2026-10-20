@@ -143,6 +143,38 @@ describe('useGamepads — press callback', () => {
     expect(onPress.mock.calls[1][0].at).toBe(Date.now() - 250);
   });
 
+  // A real report's timestamp is a fractional DOMHighResTimeStamp; the stop it
+  // times is an epoch every surface formats, and `formatMs` takes integers only.
+  it('stamps an integer epoch off a fractional report timestamp', () => {
+    vi.setSystemTime(4_000_000);
+    connected = [fakePad(0, buzz())];
+    const onPress = mountWithSpy();
+
+    connected = [fakePad(0, buzz(10), performance.now() - 40.37)];
+    pollOnce();
+    expect(onPress.mock.calls[0][0].at).toBe(Date.now() - 40);
+  });
+
+  // A dead heat is two reds in one HID report: both stops must carry the same
+  // epoch, however long the first press's commit holds the second one up.
+  it.each([
+    ['no timestamp', () => 0],
+    ['a report timestamp', () => performance.now() - 30],
+  ])('stamps every edge of one report with one `at` (%s)', (_, stamp) => {
+    vi.setSystemTime(3_000_000);
+    connected = [fakePad(0, buzz())];
+    const onPress = vi.fn<(press: GamepadPress) => void>(() => {
+      vi.advanceTimersByTime(40);
+    });
+    renderHook(() => useGamepads(onPress), { wrapper });
+
+    connected = [fakePad(0, buzz(10, 15), stamp())];
+    pollOnce();
+
+    const [first, second] = onPress.mock.calls.map(([p]) => p);
+    expect(second.at).toBe(first.at);
+  });
+
   it('falls back to the wall clock when the pad carries no timestamp', () => {
     vi.setSystemTime(2_000_000);
     connected = [fakePad(0, buzz())];

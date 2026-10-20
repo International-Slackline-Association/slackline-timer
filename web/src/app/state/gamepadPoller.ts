@@ -4,7 +4,7 @@ import { flushSync } from 'react-dom';
  * One rising edge of one button. `seq` is monotonic across the poller, so two
  * presses of the same button stay distinguishable and every subscriber sees the
  * same `seq` for the same press; `at` is the epoch the press happened at (see
- * `pressEpoch`), the value a stop is timed off.
+ * `reportEpoch`), the value a stop is timed off.
  */
 export interface GamepadPress {
   button: number;
@@ -32,13 +32,17 @@ const MAX_REPORT_AGE_MS = 250;
 /**
  * The epoch of the HID report that carried the press. `gamepad.timestamp` is on
  * the `performance.now()` clock, so only its AGE is taken from it and applied to
- * `Date.now()` — no cross-clock arithmetic. Browsers that leave it 0/absent get
- * the poll time.
+ * `Date.now()` — no cross-clock arithmetic — rounded to whole ms, since the
+ * stop it times is an integer epoch every surface formats (`formatMs` throws on
+ * a fraction). Browsers that leave it 0/absent get the poll time. Read at a report's first edge, before it is delivered: every
+ * edge of the report shares it, so a dead heat's second stop does not absorb
+ * the first one's commit.
  */
-const pressEpoch = (gamepad: Gamepad, now: number): number => {
+const reportEpoch = (gamepad: Gamepad): number => {
+  const now = Date.now();
   if (!gamepad.timestamp) return now;
   const age = Math.min(Math.max(performance.now() - gamepad.timestamp, 0), MAX_REPORT_AGE_MS);
-  return now - age;
+  return now - Math.round(age);
 };
 
 /**
@@ -87,6 +91,7 @@ export const createGamepadPoller = (): GamepadPoller => {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     for (const gamepad of pads) {
       if (!gamepad) continue;
+      let at: number | undefined;
       for (let i = 0; i < gamepad.buttons.length; i++) {
         const key = `${gamepad.index}:${i}`;
         const pressed = gamepad.buttons[i].pressed;
@@ -99,7 +104,8 @@ export const createGamepadPoller = (): GamepadPoller => {
         lastEdgeTime.set(key, now);
         if (gamepad.index !== selectedIndex) continue;
         seq += 1;
-        deliver({ button: i, seq, at: pressEpoch(gamepad, now) });
+        at ??= reportEpoch(gamepad);
+        deliver({ button: i, seq, at });
       }
     }
   };

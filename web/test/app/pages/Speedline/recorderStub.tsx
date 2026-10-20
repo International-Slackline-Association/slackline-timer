@@ -59,7 +59,6 @@ export const makeRecorder = (over: Partial<RaceRecorder> = {}): RaceRecorder =>
     clearFs: vi.fn(),
     fsOutcome: { kind: 'none' },
     awardRunTo: vi.fn(),
-    createTime: { isError: false, error: null } as never,
     updateTime: { isError: false, error: null } as never,
     deleteTime: { isError: false, error: null } as never,
     laneFeedback: { 1: null, 2: null },

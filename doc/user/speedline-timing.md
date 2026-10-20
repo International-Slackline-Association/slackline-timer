@@ -153,11 +153,17 @@ recorded** for it.
 
 - **Saved / Saving… / Not saved.** The chip under each lane is the truth. A
   _Not saved_ chip means the result did not reach the server — the timing itself
-  was unaffected. Under the lane's DNF button, **Retry save** sends the same
-  time again (a failed DNF retries as a DNF); it does not count the run a
-  second time. If it still will not go through, **Times page ↗** beside it
-  opens the **Times** page in a new tab, filtered to that athlete and round, so
-  you can enter the time there while the console keeps running.
+  was unaffected. The top of the **Result recording** panel also shows a
+  _Lane n time not saved_ warning for each lane that failed, saying why, with a
+  **Retry** button — in view without scrolling even on a compact laptop screen.
+  It stays until that lane's time goes through, even if the other lane saves
+  in the meantime. Under the lane's DNF button, **Retry save** does the same
+  thing. Either one
+  sends the same time again (a failed DNF retries as a DNF), and neither counts
+  the run a second time. If it still will not go through, **Times page ↗**
+  beside **Retry save** opens the **Times** page in a new tab, filtered to that
+  athlete and round, so you can enter the time there while the console keeps
+  running.
 - **Correct a time on the spot.** Once a lane's time is saved, a
   **Correct time** box appears next to it. Type the hand-timed value as
   `M:SS.hh` and press Enter. Useful when the hand timer and the system clock

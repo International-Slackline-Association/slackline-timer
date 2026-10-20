@@ -11,6 +11,7 @@ import {
 import { useMatchSelection } from 'app/hooks/useMatchSelection';
 import type { LiveSelection } from 'app/hooks/useWebSocket';
 import { isTimeRound, type TimeRound } from 'app/types';
+import { apiErrorMessage } from 'app/util/apiError';
 import {
   clearFalseStart,
   deriveFsOutcome,
@@ -60,8 +61,9 @@ export interface LaneFeedback {
    * failed correction keeps it.
    */
   saved?: { timeId: string; input: TimeInput };
-  /** The body a rejected POST sent — what `retrySave` re-sends. */
-  failed?: { input: TimeInput };
+  /** The body a rejected POST sent — what `retrySave` re-sends — and why it
+   * was rejected, which the rail's per-lane strip states. */
+  failed?: { input: TimeInput; reason: string };
 }
 
 const NO_FEEDBACK: Record<LaneId, LaneFeedback | null> = { 1: null, 2: null };
@@ -450,18 +452,18 @@ export const useRaceRecorder = (compId: string) => {
   const saveTime = (
     lane: LaneId,
     input: ReturnType<typeof finishTimeInput>,
-    { retry = false } = {},
+    retrying?: LaneFeedback['failed'],
   ): void => {
     if (!input) return;
     // An accepted result closes the lane's attempt: the next start zeroes its FS
     // counter (a fresh attempt), unless a void reopens it for a rerun.
     closeAttempt(lane);
     // A retry in flight keeps `failed`, so the board holds its Retry (disabled)
-    // in place instead of collapsing the row until the reply.
+    // and the reason in place instead of collapsing them until the reply.
     setLaneStatus(lane, {
       status: 'pending',
       valueMs: input.timeMs,
-      ...(retry && { failed: { input } }),
+      ...(retrying && { failed: retrying }),
     });
     const generation = saveGeneration.current[lane];
     const withdrawn = (): boolean => saveGeneration.current[lane] !== generation;
@@ -480,9 +482,13 @@ export const useRaceRecorder = (compId: string) => {
         });
         setToast({ text: `Lane ${lane} time saved`, severity: 'success' });
       },
-      () => {
+      (error: unknown) => {
         if (withdrawn()) return;
-        setLaneStatus(lane, { status: 'error', valueMs: input.timeMs, failed: { input } });
+        setLaneStatus(lane, {
+          status: 'error',
+          valueMs: input.timeMs,
+          failed: { input, reason: apiErrorMessage(error) },
+        });
         setToast({ text: `Lane ${lane} time not saved`, severity: 'error' });
       },
     );
@@ -502,7 +508,7 @@ export const useRaceRecorder = (compId: string) => {
       ...saveGeneration.current,
       [lane]: saveGeneration.current[lane] + 1,
     };
-    saveTime(lane, fb.failed.input, { retry: true });
+    saveTime(lane, fb.failed.input, fb.failed);
   };
 
   /**
@@ -848,7 +854,6 @@ export const useRaceRecorder = (compId: string) => {
     clearFs,
     fsOutcome,
     awardRunTo,
-    createTime,
     updateTime,
     deleteTime,
     // Per-lane / snackbar save feedback.

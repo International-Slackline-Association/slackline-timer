@@ -2425,8 +2425,9 @@ carries both lanes) reached the console as one press.
    any `useGamepads` is subscribed, and each press is one `flushSync` calling
    every subscriber in registration order (same `seq` for all; a throwing
    subscriber is logged and contained). `at` is the HID report's time
-   (`Date.now()` minus the report's age, clamped to 250 ms), and a stop takes
-   `at` rather than the time its handler ran. A new input source follows the
+   (`Date.now()` minus the report's age rounded to whole ms, clamped to
+   250 ms), read once per report so a dead heat's two edges share it, and a stop takes `at` rather
+   than the time its handler ran. A new input source follows the
    same shape.
 
 **Rejected.** A frame queue drained by an effect (a second mechanism for what

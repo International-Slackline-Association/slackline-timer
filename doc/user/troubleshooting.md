@@ -55,9 +55,10 @@ panel, or a warning strip saying the time was not saved.
   screen is right.
 - **Read the reason** — it is what the server said — then send it again:
   **Retry save** on the Freestyle panel that failed (your numbers are kept
-  exactly as typed, and a failed DNF retries as a DNF), or **Retry save** under
-  the Speedline lane that failed (the same time, sent again). The status stays
-  on the panel or lane until it succeeds, so there is no message to miss.
+  exactly as typed, and a failed DNF retries as a DNF), or, on the Speedline
+  console, **Retry** on that lane's warning at the top of **Result recording**
+  or **Retry save** under the lane (the same time, sent again). The status
+  stays on the panel or lane until it succeeds, so there is no message to miss.
 - If it will not go through, write the number down and enter it on the **Times**
   page (or **Scores** for freestyle) once the connection is back. On the
   Speedline console, **Times page ↗** beside the failed lane opens it in a new

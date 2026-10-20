@@ -9,6 +9,7 @@ vi.mock('app/api/client', async (importOriginal) => {
   return { ...actual, apiFetch: apiFetchMock };
 });
 
+import { ApiError } from 'app/api/client';
 import { useRaceRecorder, type RaceRecorder } from 'app/hooks/useRaceRecorder';
 import type { Match, Time } from 'app/types';
 import { DNF_SENTINEL } from 'app/util/time';
@@ -162,7 +163,33 @@ describe('useRaceRecorder', () => {
 
       await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
       expect(result.current.laneFeedback[1]?.saved).toBeUndefined();
+      expect(result.current.laneFeedback[1]?.failed?.reason).toBe('boom');
       expect(result.current.toast).toMatchObject({ severity: 'error' });
+    });
+
+    // Both lanes share one create mutation, whose last result says nothing
+    // about lane 1 once lane 2 has saved: the lane's own feedback is the truth.
+    it("keeps lane 1's failure and its reason when lane 2 then saves", async () => {
+      let rejectNext = true;
+      apiFetchMock.mockImplementation((path: string, opts?: FetchOpts) => {
+        if ((opts?.method ?? 'GET') === 'POST' && rejectNext) {
+          rejectNext = false;
+          return Promise.reject(new ApiError(503, 'service unavailable'));
+        }
+        return Promise.resolve(routeApi(path, opts));
+      });
+      const { result } = startedRecorder();
+      act(() => result.current.setLaneAthlete(2, 'a2'));
+      act(() => result.current.recordFinish(1, 5000));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
+
+      act(() => result.current.recordFinish(2, 6000));
+      await waitFor(() => expect(result.current.laneFeedback[2]?.status).toBe('saved'));
+
+      expect(result.current.laneFeedback[1]).toMatchObject({
+        status: 'error',
+        failed: { reason: 'service unavailable' },
+      });
     });
 
     it('no-ops a repeat finish for a lane that already recorded this run', async () => {
@@ -824,15 +851,16 @@ describe('useRaceRecorder', () => {
       act(() => result.current.recordFinish(1, 5000));
       await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
       const sent = { athleteId: 'a1', round: 'qualification', timeMs: 4000, startTime: 1000 };
-      expect(result.current.laneFeedback[1]?.failed?.input).toEqual(sent);
+      expect(result.current.laneFeedback[1]?.failed).toEqual({ input: sent, reason: 'boom' });
 
       act(() => result.current.retrySave(1));
 
-      // In flight it keeps the body, so the board holds the offer (disabled).
+      // In flight it keeps the body and the reason, so the board holds the
+      // offer (disabled) and still says why it is there.
       expect(result.current.laneFeedback[1]).toMatchObject({
         status: 'pending',
         valueMs: 4000,
-        failed: { input: sent },
+        failed: { input: sent, reason: 'boom' },
       });
       act(() => result.current.retrySave(1));
       await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('saved'));

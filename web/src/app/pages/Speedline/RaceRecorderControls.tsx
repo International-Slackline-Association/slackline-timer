@@ -58,7 +58,7 @@ export const RaceRecorderControls = ({
     voidRun,
     fsOutcome,
     awardRunTo,
-    createTime,
+    retrySave,
     updateTime,
     deleteTime,
     laneFeedback,
@@ -163,6 +163,34 @@ export const RaceRecorderControls = ({
         Result recording
       </Typography>
       <Stack spacing={2}>
+        {/* Per lane, off the lane's own feedback: both lanes share one create
+            mutation, whose last result a later lane's save would clear while
+            this lane is still unsaved. The lane column's Retry is the same
+            press, a scroll under the 1280×720 fold; at the rail's head this
+            one clears it even with a playoff match's rows below. */}
+        {([1, 2] as const).map((lane) => {
+          const feedback = laneFeedback[lane];
+          if (!feedback?.failed) return null;
+          return (
+            <Alert
+              key={lane}
+              severity="warning"
+              action={
+                <RaceButton
+                  tone="save"
+                  disabled={feedback.status === 'pending'}
+                  onClick={() => retrySave(lane)}
+                  aria-label={`Retry lane ${lane}`}
+                >
+                  Retry
+                </RaceButton>
+              }
+            >
+              Lane {lane} time not saved: {feedback.failed.reason} (timing is unaffected)
+            </Alert>
+          );
+        })}
+
         <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <TextField
             label="Round"
@@ -354,12 +382,6 @@ export const RaceRecorderControls = ({
             athleteName={athleteName}
             awaiting={seriesAwaiting}
           />
-        )}
-
-        {createTime.isError && (
-          <Alert severity="warning">
-            Time not saved: {apiErrorMessage(createTime.error)} (timing is unaffected)
-          </Alert>
         )}
 
         {updateTime.isError && (

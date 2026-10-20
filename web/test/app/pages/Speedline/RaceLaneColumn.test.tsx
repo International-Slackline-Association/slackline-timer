@@ -189,7 +189,10 @@ describe('RaceLaneColumn', () => {
     const failed = (status: 'error' | 'pending' = 'error') =>
       makeRecorder({
         laneAthletes: { 1: 'a1', 2: '' },
-        laneFeedback: { 1: { status, valueMs: 83450, failed: { input: failedInput } }, 2: null },
+        laneFeedback: {
+          1: { status, valueMs: 83450, failed: { input: failedInput, reason: 'boom' } },
+          2: null,
+        },
       });
 
     it('offers Retry save as a race control, re-sending through the recorder', () => {
