@@ -1,5 +1,6 @@
 import { Box, Stack, Typography, useMediaQuery } from '@mui/material';
 import { type ReactNode } from 'react';
+import { ControlBoardFrame } from 'app/components/ControlBoardFrame';
 import { ControlStatusHeader } from 'app/components/ControlStatusHeader';
 import { RecorderToast } from 'app/components/RecorderToast';
 import { useFreestyleBoard } from 'app/hooks/useFreestyleBoard';
@@ -177,6 +178,7 @@ export const FreestyleControlPage = () => {
       data-testid="selection-column"
       sx={{
         width: '100%',
+        mx: 'auto',
         maxWidth: selectionMaxWidth,
       }}
     >
@@ -197,6 +199,7 @@ export const FreestyleControlPage = () => {
       data-testid="run-column"
       sx={{
         width: '100%',
+        mx: 'auto',
         maxWidth: deckMaxWidth,
       }}
     >
@@ -230,7 +233,10 @@ export const FreestyleControlPage = () => {
     format.mode === 'battle'
       ? section(
           'bestTrick',
-          <Box data-testid="best-trick-column" sx={{ width: '100%', maxWidth: deckMaxWidth }}>
+          <Box
+            data-testid="best-trick-column"
+            sx={{ width: '100%', maxWidth: deckMaxWidth, mx: 'auto' }}
+          >
             <BestTrickPanel
               series={bestTrick.series}
               runningLane={lanes.running}
@@ -265,7 +271,7 @@ export const FreestyleControlPage = () => {
   );
   return (
     <>
-      <Stack spacing={1.5} sx={{ width: '100%', padding: { xs: 1, sm: 2 } }}>
+      <ControlBoardFrame board="freestyle" spacing={1.5} padding={{ xs: 1, sm: 2 }}>
         <ControlStatusHeader
           context={{
             mode: 'Freestyle',
@@ -294,6 +300,7 @@ export const FreestyleControlPage = () => {
                 sx={{
                   position: 'sticky',
                   maxWidth: plateMaxWidth,
+                  mx: 'auto',
                   top: 0,
                   zIndex: 2,
                   backgroundColor: 'background.default',
@@ -330,7 +337,7 @@ export const FreestyleControlPage = () => {
           severity={recorder.toast?.severity ?? 'success'}
           onClose={recorder.clearToast}
         />
-      </Stack>
+      </ControlBoardFrame>
       {/* Outside the spaced stack: the zero-height holder would still take a
           spacing gap below the desk. */}
       {chrome.audioElement}

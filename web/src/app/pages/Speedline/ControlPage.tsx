@@ -32,6 +32,7 @@ import { handsetReadout } from 'app/util/handsetReadout';
 import { roundLabel } from 'app/util/rounds';
 import { SPEEDLINE_BUZZER_ROWS, speedlineHandsetOutcome } from 'app/util/speedlineHandset';
 import { BoardConfirmDialog } from 'app/components/BoardConfirmDialog';
+import { ControlBoardFrame } from 'app/components/ControlBoardFrame';
 import { ControlStatusHeader } from 'app/components/ControlStatusHeader';
 import { HandsetCard } from 'app/components/HandsetCard';
 import { LockedControl } from 'app/components/LockedControl';
@@ -675,9 +676,10 @@ export const SpeedlineControlPage = () => {
 
   return (
     <>
-      <Stack
+      <ControlBoardFrame
+        board="speedline"
         spacing={wideDesk ? 1.5 : 1}
-        sx={{ width: '100%', padding: { xs: 1, sm: wideDesk ? 2 : 1.5 } }}
+        padding={{ xs: 1, sm: wideDesk ? 2 : 1.5 }}
       >
         <ControlStatusHeader
           context={{
@@ -785,7 +787,7 @@ export const SpeedlineControlPage = () => {
           onConfirm={confirmReset}
           onCancel={() => setResetConfirmOpen(false)}
         />
-      </Stack>
+      </ControlBoardFrame>
       {/* Outside the spaced stack: the zero-height holder would still take a
           spacing gap below the desk — the last 12 px of the 720 px fold. */}
       {audioElement}

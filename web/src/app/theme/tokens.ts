@@ -307,15 +307,27 @@ export const adminPreview = {
   cardHeight: 240,
 } as const;
 
+// The live column's ceiling: two lane cards plus the changeover gutter; quali
+// is the single card, capped where the TAKE BREAK verb still fits its slot.
+// Speedline's is the same rule with its start strip between the lanes.
+const deckMax = { freestyle: 800, freestyleQuali: 500, speedline: 880 } as const;
+
+// The desk at its widest: both rails, the board's widest deck and the desk
+// grid's two `gap: 2` gutters. Past it the live track only grows empty column.
+const boardWidth = (deck: number) => deskRails.setup + deck + deskRails.record + 2 * 2 * space.unit;
+
 // A board's measured geometry (px): the floors, caps and reserved rows its brief
 // signed off at the fold budget (freestyle-board-ux §2/§6). Measurements, not a
 // scale — a retune re-measures the board.
 // The floors derive from the race width they are spent on.
 export const boardGeometry = {
-  // The live column's ceiling: two lane cards plus the changeover gutter; quali
-  // is the single card, capped where the TAKE BREAK verb still fits its slot.
-  // Speedline's is the same rule with its start strip between the lanes.
-  deckMax: { freestyle: 800, freestyleQuali: 500, speedline: 880 },
+  deckMax,
+  // The control board frame's cap (`ControlBoardFrame`), centred past it so the
+  // rails stay against the deck at any viewport.
+  boardMax: {
+    speedline: boardWidth(deckMax.speedline),
+    freestyle: boardWidth(deckMax.freestyle),
+  },
   freestyle: {
     // The armed best-trick panel: three race tracks, the deck's two 16 px
     // gutters and the panel's hairlines.

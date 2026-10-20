@@ -50,10 +50,9 @@ fold is measured are the [responsive contract](./design-system.md#responsive-con
 | F5  | The score rail's panels were 350 px each: a 20 px MUI body helper under every judged field, a title that wrapped on a long athlete name, and 8 px rhythm throughout                                                        | Helper leading tightened to its own (the line carries `max 40`, never a paragraph), the title held to one line like the lane card's name, rhythm to 0.75. Athlete 2's Save clears 900 by 25 px with both panels saved. The status slot keeps its 52 px reserve — lowering it made a save landing move Save, which is the slot's whole job                                                 |
 | F6  | `control-link-detail` helped SIZE the health column it sits under: a longer alarm sentence measurably narrowed the plate row (77.3 → 57.3 px at 1440×720)                                                                  | `width: 0` + a percentage floor — no intrinsic contribution, full width once the column is settled (`ftt-followup-speedline-desk-fold-2`)                                                                                                                                                                                                                                                 |
 
-> Not resolved here: at `md` (900–1200) the health grid is still two rows of two, because four cells
-> in a third of a tablet is what `5a69ad8` measured as worse. The plate now reads only `AUDIO
-LOCKED` (the gesture moved to the detail caption), so a single `md` row is a re-measure, not a
-> wording call (`ftt-followup-speedline-console-fold-and-wording-1`). The rail-foot
+> The health grid is one row from `md` too: four cells in a third of a tablet measured worse
+> (`5a69ad8`), so at `md` both header grids give health its own width instead (design-system §9
+> "Breakpoints"); the 1024 tablet's header is 59 px here and 77 px on Speedline (was 91). The rail-foot
 > reset was the other residue, closed by `ftt-followup-freestyle-score-rail-foot-and-move-2`: the
 > judged fields reserve no helper line at all (a field's error is spelled out in the status slot,
 > which F5 already reserves), which recovered 102 px of the 360 px rail. Measured with both battle
