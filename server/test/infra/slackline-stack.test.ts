@@ -1,5 +1,5 @@
-import { App } from 'aws-cdk-lib';
-import { Match, Template } from 'aws-cdk-lib/assertions';
+import { App, Stack } from 'aws-cdk-lib';
+import { Annotations, Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../../infra/app';
@@ -961,6 +961,72 @@ describe('Cognito identity is deployment config, never a committed literal', () 
     } finally {
       for (const k of ENV_KEYS) delete process.env[k];
       for (const [k, v] of saved) if (v !== undefined) process.env[k] = v;
+    }
+  });
+});
+
+describe('photos bucket CORS origin is optional deployment config', () => {
+  const WEB_ORIGIN = 'https://example.cloudfront.net';
+
+  const synthBackend = (context: Record<string, unknown> = {}): Stack => {
+    const saved = process.env.WEB_ORIGIN;
+    delete process.env.WEB_ORIGIN;
+    try {
+      const app = createApp({
+        'aws:cdk:bundling-stacks': [],
+        billingAlertEmail: 'billing-alerts@example.org',
+        cognitoUserPoolId: COGNITO.userPoolId,
+        cognitoClientId: COGNITO.clientId,
+        cognitoTimerGroup: COGNITO.timerGroup,
+        cognitoRegion: COGNITO.region,
+        ...context,
+      });
+      return app.node.findChild('slackline-timer-v1') as Stack;
+    } finally {
+      if (saved !== undefined) process.env.WEB_ORIGIN = saved;
+    }
+  };
+
+  const photosCorsRules = (backend: Stack) => {
+    const buckets = Template.fromStack(backend).findResources('AWS::S3::Bucket');
+    const id = Object.keys(buckets).find((key) => key.startsWith('PhotosBucket'));
+    expect(id, 'photos bucket').toBeDefined();
+    return buckets[id!].Properties.CorsConfiguration.CorsRules as Record<string, unknown>[];
+  };
+
+  const httpApiCors = (backend: Stack) =>
+    Template.fromStack(backend).findResources('AWS::ApiGatewayV2::Api', {
+      Properties: { ProtocolType: 'HTTP' },
+    });
+
+  it('narrows the presigned-POST CORS rule to WEB_ORIGIN when it is set', () => {
+    const backend = synthBackend({ webOrigin: WEB_ORIGIN });
+    expect(photosCorsRules(backend)).toEqual([
+      expect.objectContaining({ AllowedOrigins: [WEB_ORIGIN], AllowedMethods: ['POST'] }),
+    ]);
+    Annotations.fromStack(backend).hasNoWarning('*', Match.stringLikeRegexp('WEB_ORIGIN'));
+  });
+
+  it('falls back to any origin with a synth warning when WEB_ORIGIN is unset', () => {
+    const backend = synthBackend();
+    expect(photosCorsRules(backend)).toEqual([
+      expect.objectContaining({ AllowedOrigins: ['*'], AllowedMethods: ['POST'] }),
+    ]);
+    Annotations.fromStack(backend).hasWarning('*', Match.stringLikeRegexp('WEB_ORIGIN'));
+  });
+
+  it.each(['https://example.cloudfront.net/', 'example.cloudfront.net', `${WEB_ORIGIN}/app`])(
+    'fails synth on %s, which is not a bare origin',
+    (webOrigin) => {
+      expect(() => synthBackend({ webOrigin })).toThrow(/WEB_ORIGIN/);
+    },
+  );
+
+  it('leaves the HTTP API preflight open either way (its gate is the authorizer)', () => {
+    for (const backend of [synthBackend(), synthBackend({ webOrigin: WEB_ORIGIN })]) {
+      const apis = Object.values(httpApiCors(backend));
+      expect(apis).toHaveLength(1);
+      expect(apis[0].Properties.CorsConfiguration.AllowOrigins).toEqual(['*']);
     }
   });
 });

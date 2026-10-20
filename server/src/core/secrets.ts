@@ -8,7 +8,9 @@ import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
  * `Environment` blocks, and plaintext env vars leak via
  * `lambda:GetFunctionConfiguration` / the console (ADR 0025). The stack
  * therefore injects only the parameter *name* (`*_PARAM`); the value is
- * fetched decrypted at first use and cached for the container's lifetime.
+ * fetched decrypted at first use and cached for SECRET_CACHE_TTL_MS, which
+ * bounds how long a warm container keeps verifying and minting with a rotated
+ * secret (one GetParameter + KMS decrypt per container per TTL).
  *
  * A direct env value short-circuits the fetch — that is how the offline
  * harnesses (scripts/offlineEnv.mjs) and unit tests inject secrets without SSM.
@@ -16,12 +18,14 @@ import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
  * secret) and are not cached, so a transient SSM error heals on the next call.
  */
 
+export const SECRET_CACHE_TTL_MS = 10 * 60 * 1000;
+
 let ssm: SSMClient | undefined;
-const cache = new Map<string, Promise<string>>();
+const cache = new Map<string, { pending: Promise<string>; fetchedAt: number }>();
 
 const fetchSecureParameter = (name: string): Promise<string> => {
   const cached = cache.get(name);
-  if (cached) return cached;
+  if (cached && Date.now() - cached.fetchedAt < SECRET_CACHE_TTL_MS) return cached.pending;
   ssm ??= new SSMClient({});
   const pending = ssm
     .send(new GetParameterCommand({ Name: name, WithDecryption: true }))
@@ -30,8 +34,12 @@ const fetchSecureParameter = (name: string): Promise<string> => {
       if (!value) throw new Error(`SSM parameter ${name} is empty`);
       return value;
     });
-  cache.set(name, pending);
-  pending.catch(() => cache.delete(name));
+  const entry = { pending, fetchedAt: Date.now() };
+  cache.set(name, entry);
+  // Identity check: a slow rejection must not evict a newer entry.
+  pending.catch(() => {
+    if (cache.get(name) === entry) cache.delete(name);
+  });
   return pending;
 };
 

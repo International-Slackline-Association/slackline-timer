@@ -893,8 +893,10 @@ so the params were provisioned correctly the first time:
    resource.
 2. The stack injects only the parameter **name** (`READ_TOKEN_SECRET_PARAM` /
    `PHOTO_PRIVATE_KEY_PARAM`); `core/secrets.ts` fetches the decrypted value on
-   first use (`GetParameter` with `WithDecryption`) and caches it for the
-   container lifetime. A fetch failure resolves `undefined` — every caller
+   first use (`GetParameter` with `WithDecryption`) and caches it for 10
+   minutes (`SECRET_CACHE_TTL_MS`), so a rotation reaches warm containers
+   without a redeploy, at one fetch per container per TTL. A fetch failure
+   resolves `undefined` — every caller
    already denies/degrades on a missing secret — and is not cached, so a
    transient SSM error heals on the next invocation.
 3. A direct env value (`READ_TOKEN_SECRET` / `PHOTO_PRIVATE_KEY`)

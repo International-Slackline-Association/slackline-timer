@@ -25,13 +25,18 @@ import { SlacklineTimerV1WebStack } from './web-stack';
 const DEPLOY_ENV = fileURLToPath(new URL('../../.env.deploy', import.meta.url));
 if (existsSync(DEPLOY_ENV)) process.loadEnvFile(DEPLOY_ENV);
 
+/** CDK context (`-c key=value`) → `.env.deploy` / the ambient environment. */
+function optionalDeployConfig(app: App, contextKey: string, envKey: string): string | undefined {
+  const value = (app.node.tryGetContext(contextKey) as string | undefined) ?? process.env[envKey];
+  return value || undefined;
+}
+
 /**
- * CDK context (`-c key=value`) → `.env.deploy` / the ambient environment →
- * throw. No default: a wrong Cognito pool would fail at auth time on a live
- * event, not at synth.
+ * optionalDeployConfig, else throw. No default: a wrong Cognito pool would fail
+ * at auth time on a live event, not at synth.
  */
 function requireDeployConfig(app: App, contextKey: string, envKey: string): string {
-  const value = (app.node.tryGetContext(contextKey) as string | undefined) ?? process.env[envKey];
+  const value = optionalDeployConfig(app, contextKey, envKey);
   if (!value) {
     throw new Error(
       `Missing required deployment config "${envKey}" — set it in the repo-root .env.deploy ` +
@@ -75,6 +80,9 @@ export function createApp(context?: Record<string, unknown>): App {
     // One alert address for both topics: the ops alarms here (eu-central-2) and
     // the billing alarm in us-east-1, which reads the same key itself.
     alertEmail: requireDeployConfig(app, 'billingAlertEmail', 'BILLING_ALERT_EMAIL'),
+    // Optional: the first deploy precedes the web stack, and ADR 0054 rules out
+    // a cross-region reference to its WebUrl output.
+    webOrigin: optionalDeployConfig(app, 'webOrigin', 'WEB_ORIGIN'),
     env: { region: 'eu-central-2', account },
     description: `slackline-timer-v1 backend (${stage}) — WS relay + competition data plane + photo CDN`,
   });

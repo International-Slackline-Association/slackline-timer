@@ -11,7 +11,7 @@ vi.mock('@aws-sdk/client-ssm', () => ({
   },
 }));
 
-import { getPhotoPrivateKey, getReadTokenSecret } from 'core/secrets';
+import { getPhotoPrivateKey, getReadTokenSecret, SECRET_CACHE_TTL_MS } from 'core/secrets';
 
 // The per-container cache is module state, so each test uses its own parameter
 // name — no cross-test bleed without resetting modules.
@@ -19,12 +19,14 @@ import { getPhotoPrivateKey, getReadTokenSecret } from 'core/secrets';
 const DIRECT_SECRET = 'direct-read-token-secret-0123456789';
 const SSM_SECRET = 'ssm-read-token-secret-0123456789abc';
 const RECOVERED_SECRET = 'recovered-read-token-secret-012345';
+const ROTATED_SECRET = 'rotated-read-token-secret-0123456789';
 
 beforeEach(() => {
   sendMock.mockReset();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   delete process.env.READ_TOKEN_SECRET;
   delete process.env.READ_TOKEN_SECRET_PARAM;
   delete process.env.PHOTO_PRIVATE_KEY;
@@ -76,6 +78,38 @@ describe('getReadTokenSecret / getPhotoPrivateKey', () => {
     await expect(getReadTokenSecret()).resolves.toBe(RECOVERED_SECRET);
     expect(sendMock).toHaveBeenCalledTimes(2);
     expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('refetches after the TTL so a rotated secret reaches warm containers', async () => {
+    vi.useFakeTimers();
+    process.env.READ_TOKEN_SECRET_PARAM = '/test/ttl/read-token-secret';
+    sendMock
+      .mockResolvedValueOnce({ Parameter: { Value: SSM_SECRET } })
+      .mockResolvedValueOnce({ Parameter: { Value: ROTATED_SECRET } });
+    await expect(getReadTokenSecret()).resolves.toBe(SSM_SECRET);
+    vi.advanceTimersByTime(SECRET_CACHE_TTL_MS - 1);
+    await expect(getReadTokenSecret()).resolves.toBe(SSM_SECRET);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(2);
+    await expect(getReadTokenSecret()).resolves.toBe(ROTATED_SECRET);
+    await expect(getReadTokenSecret()).resolves.toBe(ROTATED_SECRET);
+    expect(sendMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not cache a failed refetch after the TTL: undefined now, a retry on the next read', async () => {
+    vi.useFakeTimers();
+    process.env.PHOTO_PRIVATE_KEY_PARAM = '/test/ttl-retry/photo-private-key';
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    sendMock
+      .mockResolvedValueOnce({ Parameter: { Value: 'pem-1' } })
+      .mockRejectedValueOnce(new Error('ssm down'))
+      .mockResolvedValueOnce({ Parameter: { Value: 'pem-2' } });
+    await expect(getPhotoPrivateKey()).resolves.toBe('pem-1');
+    vi.advanceTimersByTime(SECRET_CACHE_TTL_MS + 1);
+    await expect(getPhotoPrivateKey()).resolves.toBeUndefined();
+    await expect(getPhotoPrivateKey()).resolves.toBe('pem-2');
+    expect(sendMock).toHaveBeenCalledTimes(3);
     errorSpy.mockRestore();
   });
 
