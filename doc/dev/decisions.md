@@ -2115,7 +2115,8 @@ compared only lane `startTime`s, which a `resume` does not move.
 1. `SpeedlineSnapshot` gains an optional **`at`** — the sender's wall clock at
    build, in the same control-minted clock as the `startTime`/`stopTime` epochs
    beside it. `buildSpeedlineSnapshot` stamps it; `speedlineLaneState` carries it
-   onto the recovered lane as `assertedAt`. `mergeRecovery` then un-freezes a
+   onto the recovered lane as `assertedAt`. The display's lane merge
+   (`app/util/previewLanes`, ADR 0051 §5) then un-freezes a
    frozen lane on a same-run `running` snapshot **only** when `assertedAt` is
    later than the `stopTime` the lane froze on — a snapshot built before that stop
    is merely describing the lane as it was, and still changes nothing. Optional
@@ -2406,9 +2407,12 @@ carries both lanes) reached the console as one press.
    dropped (`SEQ_MAX_LEAD_MS`): it would win every LWW tiebreak until the wall
    clock caught up. Drops are a `console.warn`, with the payload in dev builds
    only.
-5. **No page holds a frame.** A consumer whose children need a frame sets it as
-   state inside its handler (`SpeedlineTimerDisplay` → `Stopwatch` `laneFrame`,
-   the Freestyle feed's `countdownMessage`). Control pages chain through
+5. **No page holds a frame.** A consumer whose children need a frame folds it
+   into state inside its handler: `SpeedlineTimerDisplay` dispatches every frame
+   (and its own GO ignition) into one pure lane reducer
+   (`app/util/previewLanes`, newer-wins snapshot merge included) and the
+   `Stopwatch`es render the lane state handed down; the Freestyle feed sets its
+   `countdownMessage`. Control pages chain through
    `useControlSession`'s `onPeerMessage`, called after the hook's own peer
    bookkeeping in the same delivery, so both halves' writes share one commit.
    A handler reads its props from the render that handles the frame, so a
@@ -2416,7 +2420,11 @@ carries both lanes) reached the console as one press.
 6. **Input events are timestamped callbacks, never state tokens.**
    `useGamepads(onPress)` delivers each rising edge of a poll as
    `{ button, seq, at }`, in button order, each inside `flushSync`, so the
-   second press reads what the first committed. `at` is the HID report's time
+   second press reads what the first committed. There is one poll per board:
+   `GamepadSelectionProvider` owns a `createGamepadPoller` loop that runs while
+   any `useGamepads` is subscribed, and each press is one `flushSync` calling
+   every subscriber in registration order (same `seq` for all; a throwing
+   subscriber is logged and contained). `at` is the HID report's time
    (`Date.now()` minus the report's age, clamped to 250 ms), and a stop takes
    `at` rather than the time its handler ran. A new input source follows the
    same shape.
@@ -2433,8 +2441,7 @@ handle is logged and contained, and the socket keeps delivering. An
 operator's edit and a peer frame can no longer share a commit: the edit
 commits (and pushes its own claim) before any frame is handled, which is what
 the mirror forward's causality test assumes. A `Stopwatch` that mounts late
-replays the last lane frame (it replayed the last frame of any type), then its
-recovery row; both are idempotent over a running lane. The test harness
+paints from the display's lane state; nothing is replayed. The test harness
 (`web/test/util/wsMock.ts`) runs every fixture through `isRelayFrame` and
 delivers it the same way, so a fixture production would drop fails its test.
 Owes the peer-mirroring and control+preview smokes.

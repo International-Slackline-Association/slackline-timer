@@ -1,22 +1,21 @@
 import { act, render, screen } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Stopwatch } from 'app/pages/Speedline/Stopwatch';
 import { colors, OVERLAY_LANE } from 'app/theme/tokens';
-import type { StopwatchWSMessage } from 'app/hooks/useWebSocket';
 import { refVw } from 'app/util/overlayScale';
 
 import { px, vwPx } from '../../../util/computedUnits';
 
 describe('Stopwatch hero time numerals', () => {
   it('renders the time in the monospace numeral face with tabular-nums', () => {
-    // A recovered "finished" lane sets the frozen elapsed synchronously, so the
-    // formatted time renders without driving the live interval.
+    // A finished lane renders its frozen elapsed without driving the live
+    // interval.
     render(
       <Stopwatch
         isReady
-        timerId={1}
-        recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
+        laneState={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
       />,
     );
 
@@ -43,8 +42,7 @@ describe('Stopwatch hero time numerals', () => {
     render(
       <Stopwatch
         isReady
-        timerId={1}
-        recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
+        laneState={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
         size="control"
       />,
     );
@@ -59,8 +57,7 @@ describe('Stopwatch hero time numerals', () => {
     render(
       <Stopwatch
         isReady
-        timerId={1}
-        recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
+        laneState={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
       />,
     );
     // Uppercase status tag (design-system label style).
@@ -69,7 +66,7 @@ describe('Stopwatch hero time numerals', () => {
   });
 
   it('renders an idle lane in slate (ink.hi)', () => {
-    render(<Stopwatch isReady timerId={1} recovery={{ kind: 'idle' }} />);
+    render(<Stopwatch isReady laneState={{ kind: 'idle' }} />);
     const time = screen.getByText('0:00.00');
     expect(window.getComputedStyle(time).color).toBe('rgb(51, 60, 78)');
   });
@@ -78,7 +75,7 @@ describe('Stopwatch hero time numerals', () => {
     // The slate idle digits are otherwise dim; keyed over dark footage they need
     // the standard protection halo (slate stack) to survive — not just running/
     // finished states.
-    render(<Stopwatch isReady timerId={1} recovery={{ kind: 'idle' }} />);
+    render(<Stopwatch isReady laneState={{ kind: 'idle' }} />);
     const shadow = window.getComputedStyle(screen.getByText('0:00.00')).textShadow;
     expect(shadow).not.toBe('');
     expect(shadow).not.toBe('none');
@@ -93,8 +90,7 @@ describe('Stopwatch hero time numerals', () => {
     render(
       <Stopwatch
         isReady
-        timerId={1}
-        recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
+        laneState={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
       />,
     );
     const time = screen.getByText('1:23.45');
@@ -106,16 +102,13 @@ describe('Stopwatch hero time numerals', () => {
   });
 
   it('inks idle and stopped plate digits in the overlay name ink (one black per frame)', () => {
-    const { unmount } = render(
-      <Stopwatch isReady timerId={1} recovery={{ kind: 'idle' }} size="plate" />,
-    );
+    const { unmount } = render(<Stopwatch isReady laneState={{ kind: 'idle' }} size="plate" />);
     expect(window.getComputedStyle(screen.getByText('0:00.00')).color).toBe('rgb(35, 31, 32)');
     unmount();
     render(
       <Stopwatch
         isReady
-        timerId={1}
-        recovery={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
+        laneState={{ kind: 'finished', startTime: 0, stopTime: 83_450, elapsedMs: 83_450 }}
         size="plate"
       />,
     );
@@ -124,12 +117,7 @@ describe('Stopwatch hero time numerals', () => {
 
   it('keeps running plate digits in running teal', () => {
     render(
-      <Stopwatch
-        isReady
-        timerId={1}
-        recovery={{ kind: 'running', startTime: Date.now() }}
-        size="plate"
-      />,
+      <Stopwatch isReady laneState={{ kind: 'running', startTime: Date.now() }} size="plate" />,
     );
     expect(window.getComputedStyle(screen.getByText(/^\d+:\d\d\.\d\d$/)).color).toBe(
       colors.race.running,
@@ -137,286 +125,56 @@ describe('Stopwatch hero time numerals', () => {
   });
 
   it('renders a running lane in running teal', () => {
-    render(<Stopwatch isReady timerId={1} recovery={{ kind: 'running', startTime: Date.now() }} />);
+    render(<Stopwatch isReady laneState={{ kind: 'running', startTime: Date.now() }} />);
     const time = screen.getByText(/^\d+:\d\d\.\d\d$/);
     // Running resolves through --tl-running (canonical #13A89E in tokens.css;
     // jsdom doesn't resolve var()).
     expect(window.getComputedStyle(time).color).toBe(colors.race.running);
   });
 
-  it('records a sub-50ms stop (the interval has not ticked, so time is still 0)', () => {
-    // A start then an immediate stop arrive in the same render batch, before the
-    // 50ms tick interval has run once — so `time` is still 0 when the stop lands.
-    // The lane is genuinely running, so the stop must freeze and show UNOFFICIAL,
-    // not be swallowed by a `time === 0` guard.
-    const start: StopwatchWSMessage = {
-      sessionId: 's',
-      type: 'start',
-      data: { startTime: 1_000_000, lanes: [1, 2] },
-    };
-    const { rerender } = render(<Stopwatch laneFrame={start} isReady timerId={1} />);
-    // The marker row stays mounted (space reserved so the numeral never jumps)
-    // but is only VISIBLE once the lane resolves.
-    expect(screen.getByText('UNOFFICIAL')).not.toBeVisible();
-
-    const stop: StopwatchWSMessage = {
-      sessionId: 's',
-      type: 'stop',
-      data: { timerId: 1, stopTime: 1_000_030 },
-    };
-    rerender(<Stopwatch laneFrame={stop} isReady timerId={1} />);
-
-    // Frozen at 30ms → 0:00.03, with the resolved marker shown.
-    expect(screen.getByText('0:00.03')).toBeInTheDocument();
-    expect(screen.getByText('UNOFFICIAL')).toBeVisible();
-  });
-
-  it('stays dormant on a solo start that excludes this lane, clearing a prior run', () => {
-    // Quali: one athlete selected, so the start lists only that lane. The other
-    // lane must not tick — and a frozen time left from a previous run clears
-    // back to idle (the control page resets both lanes on start).
-    const finished = {
-      kind: 'finished',
-      startTime: 0,
-      stopTime: 83_450,
-      elapsedMs: 83_450,
-    } as const;
-    const { rerender } = render(<Stopwatch isReady timerId={2} recovery={finished} />);
-    expect(screen.getByText('1:23.45')).toBeInTheDocument();
-
-    const soloStart: StopwatchWSMessage = {
-      sessionId: 's',
-      type: 'start',
-      data: { startTime: 1_000_000, lanes: [1] },
-    };
-    rerender(<Stopwatch laneFrame={soloStart} isReady timerId={2} recovery={finished} />);
-
-    expect(screen.getByText('0:00.00')).toBeInTheDocument();
-    expect(screen.getByText('UNOFFICIAL')).not.toBeVisible();
-
-    // A stray stop for the dormant lane stays a no-op (it never started).
-    const stop: StopwatchWSMessage = {
-      sessionId: 's',
-      type: 'stop',
-      data: { timerId: 2, stopTime: 1_005_000 },
-    };
-    rerender(<Stopwatch laneFrame={stop} isReady timerId={2} recovery={finished} />);
-    expect(screen.getByText('0:00.00')).toBeInTheDocument();
-  });
-
-  it('starts normally when the solo start lists this lane', () => {
-    const soloStart: StopwatchWSMessage = {
-      sessionId: 's',
-      type: 'start',
-      data: { startTime: 1_000_000, lanes: [2] },
-    };
-    const { rerender } = render(<Stopwatch laneFrame={soloStart} isReady timerId={2} />);
-
-    const stop: StopwatchWSMessage = {
-      sessionId: 's',
-      type: 'stop',
-      data: { timerId: 2, stopTime: 1_000_030 },
-    };
-    rerender(<Stopwatch laneFrame={stop} isReady timerId={2} />);
-    expect(screen.getByText('0:00.03')).toBeInTheDocument();
-    expect(screen.getByText('UNOFFICIAL')).toBeVisible();
-  });
-
-  it('ignores a stop for an idle lane (no start seen)', () => {
-    // Without a preceding start the lane is not running; a stray stop message
-    // must be a no-op (no frozen time, no UNOFFICIAL marker).
-    const stop: StopwatchWSMessage = {
-      sessionId: 's',
-      type: 'stop',
-      data: { timerId: 1, stopTime: 1_000_030 },
-    };
-    render(<Stopwatch laneFrame={stop} isReady timerId={1} />);
-
-    expect(screen.getByText('UNOFFICIAL')).not.toBeVisible();
-    expect(screen.getByText('0:00.00')).toBeInTheDocument();
-  });
-
-  describe('snapshot recovery merge (preview)', () => {
-    // A display that missed a live frame is re-synced only by a snapshot that is
-    // demonstrably NEWER than the frame it did apply — `assertedAt` is the
-    // control's own wall clock at snapshot build, comparable with the
-    // control-minted `stopTime` the lane froze on.
+  describe('renders the lane state it is handed', () => {
     beforeEach(() => {
       vi.useFakeTimers();
-      vi.setSystemTime(1_000_000);
+      vi.setSystemTime(2_000_000);
     });
     afterEach(() => vi.useRealTimers());
 
-    const start: StopwatchWSMessage = {
-      sessionId: 's',
-      type: 'start',
-      data: { startTime: 1_000_000, lanes: [1, 2] },
-    };
-    const stop: StopwatchWSMessage = {
-      sessionId: 's',
-      type: 'stop',
-      data: { timerId: 1, stopTime: 1_004_000 },
-    };
-
-    /** Run lane 1 and freeze it at 4.00s, the state a missed `resume` leaves. */
-    const frozenLane = () => {
-      const view = render(<Stopwatch laneFrame={start} isReady timerId={1} />);
-      view.rerender(<Stopwatch laneFrame={stop} isReady timerId={1} />);
-      expect(screen.getByText('0:04.00')).toBeInTheDocument();
-      return view;
-    };
-
-    it('un-freezes a lane on a snapshot stamped after the stop it applied', () => {
-      const { rerender } = frozenLane();
-      vi.setSystemTime(1_006_000);
-
-      rerender(
-        <Stopwatch
-          laneFrame={stop}
-          isReady
-          timerId={1}
-          recovery={{ kind: 'running', startTime: 1_000_000, assertedAt: 1_005_000 }}
-        />,
+    it('paints a running lane on its first render (a late mount replays nothing)', () => {
+      // No effect has run in a server render, so this is the frame a lane
+      // mounting mid-race paints first.
+      const html = renderToStaticMarkup(
+        <Stopwatch isReady laneState={{ kind: 'running', startTime: 1_999_000 }} />,
       );
-
-      // Ticking again off the ORIGINAL GO epoch — the withdrawn stop is undone.
-      expect(screen.getByText('0:06.00')).toBeInTheDocument();
-      expect(screen.getByText('UNOFFICIAL')).not.toBeVisible();
+      expect(html).toContain('0:01.00');
     });
 
-    it('leaves a frozen lane frozen on a snapshot stamped before that stop', () => {
-      const { rerender } = frozenLane();
-
-      rerender(
+    it('ticks a resumed lane off its original start epoch', () => {
+      const { rerender } = render(
         <Stopwatch
-          laneFrame={stop}
           isReady
-          timerId={1}
-          recovery={{ kind: 'running', startTime: 1_000_000, assertedAt: 1_003_000 }}
-        />,
-      );
-
-      expect(screen.getByText('0:04.00')).toBeInTheDocument();
-      expect(screen.getByText('UNOFFICIAL')).toBeVisible();
-    });
-
-    it('leaves a frozen lane frozen on an unstamped snapshot (pre-feature sender)', () => {
-      const { rerender } = frozenLane();
-
-      rerender(
-        <Stopwatch
-          laneFrame={stop}
-          isReady
-          timerId={1}
-          recovery={{ kind: 'running', startTime: 1_000_000 }}
-        />,
-      );
-
-      expect(screen.getByText('0:04.00')).toBeInTheDocument();
-    });
-
-    it('still freezes a running lane on a snapshot of the same run that finished', () => {
-      // The HWC 2026 missed-stop rule, unchanged by the stamp: a snapshot is the
-      // only way a display that never received the stop stops running forever.
-      const { rerender } = render(<Stopwatch laneFrame={start} isReady timerId={1} />);
-
-      rerender(
-        <Stopwatch
-          laneFrame={start}
-          isReady
-          timerId={1}
-          recovery={{
+          laneState={{
             kind: 'finished',
-            startTime: 1_000_000,
-            stopTime: 1_004_000,
-            elapsedMs: 4_000,
+            startTime: 1_996_000,
+            stopTime: 1_999_000,
+            elapsedMs: 3_000,
           }}
         />,
       );
+      expect(screen.getByText('0:03.00')).toBeInTheDocument();
 
+      rerender(<Stopwatch isReady laneState={{ kind: 'running', startTime: 1_996_000 }} />);
       expect(screen.getByText('0:04.00')).toBeInTheDocument();
-      expect(screen.getByText('UNOFFICIAL')).toBeVisible();
-    });
-  });
-
-  it('renders from the controlled laneState prop, ignoring the loopback message', () => {
-    // On the control page the Stopwatch is presentational: the page owns lane
-    // state and passes it down as `laneState`. The loopback `laneFrame`
-    // must NOT drive it (no AWS-echo dependency), so a start message present in
-    // the same render is ignored while an idle laneState keeps the lane at rest.
-    const start: StopwatchWSMessage = {
-      sessionId: 's',
-      type: 'start',
-      data: { startTime: Date.now(), lanes: [1, 2] },
-    };
-    const { rerender } = render(
-      <Stopwatch laneFrame={start} isReady timerId={1} laneState={{ kind: 'idle' }} />,
-    );
-    expect(screen.getByText('0:00.00')).toBeInTheDocument();
-    expect(screen.getByText('UNOFFICIAL')).not.toBeVisible();
-
-    // A new controlled finished laneState freezes the elapsed and shows UNOFFICIAL,
-    // driven purely by the prop change (not a message).
-    rerender(
-      <Stopwatch
-        laneFrame={start}
-        isReady
-        timerId={1}
-        laneState={{ kind: 'finished', startTime: 0, stopTime: 12_340, elapsedMs: 12_340 }}
-      />,
-    );
-    expect(screen.getByText('0:12.34')).toBeInTheDocument();
-    expect(screen.getByText('UNOFFICIAL')).toBeVisible();
-  });
-
-  describe('stop() freezes against a stale tick (skew-free by construction)', () => {
-    beforeEach(() => vi.useFakeTimers());
-    afterEach(() => vi.useRealTimers());
-
-    it('a 50ms tick landing after stop() must not unfreeze the authoritative time', () => {
-      // Under relay latency a 50ms tick can be queued before the stop lands and
-      // fire just after stop() froze the lane. Clearing the interval one commit
-      // later (an [isRunning] effect) would let that stale tick overwrite
-      // stopTime−startTime with Date.now()−startTime — breaking the "finished
-      // lane is skew-free by construction" guarantee (ADR 0021).
-      const setSpy = vi.spyOn(globalThis, 'setInterval');
-      vi.setSystemTime(1_000_000);
-      const start: StopwatchWSMessage = {
-        sessionId: 's',
-        type: 'start',
-        data: { startTime: 1_000_000, lanes: [1, 2] },
-      };
-      const { rerender } = render(<Stopwatch laneFrame={start} isReady timerId={1} />);
-      // The 50ms tick callback the running lane scheduled.
-      const tick = setSpy.mock.calls[0]?.[0] as () => void;
-      expect(tick).toBeTypeOf('function');
-
-      // Operator stops at +30ms: the frozen authoritative time is 0:00.03.
-      vi.setSystemTime(1_000_500);
-      const stop: StopwatchWSMessage = {
-        sessionId: 's',
-        type: 'stop',
-        data: { timerId: 1, stopTime: 1_000_030 },
-      };
-      rerender(<Stopwatch laneFrame={stop} isReady timerId={1} />);
-      expect(screen.getByText('0:00.03')).toBeInTheDocument();
-
-      // A tick queued before the stop now runs its callback body. It must NOT
-      // rewrite the display to Date.now()−startTime (~0:00.50).
-      act(() => {
-        tick();
-      });
-      expect(screen.getByText('0:00.03')).toBeInTheDocument();
-      expect(screen.queryByText('0:00.50')).not.toBeInTheDocument();
-      setSpy.mockRestore();
+      act(() => vi.advanceTimersByTime(1_000));
+      expect(screen.getByText('0:05.00')).toBeInTheDocument();
+      expect(screen.getByText('UNOFFICIAL')).not.toBeVisible();
     });
 
-    it('a stale tick must not unfreeze a controlled finished laneState', () => {
-      // Same race on the control page's owned-state path (applyLaneState finished).
+    it('a stale tick must not unfreeze a finished lane (skew-free by construction)', () => {
+      // A 50ms tick queued before the freeze can fire just after it; it must not
+      // overwrite stopTime−startTime with Date.now()−startTime (ADR 0021).
       const setSpy = vi.spyOn(globalThis, 'setInterval');
-      vi.setSystemTime(2_000_000);
       const { rerender } = render(
-        <Stopwatch isReady timerId={1} laneState={{ kind: 'running', startTime: 2_000_000 }} />,
+        <Stopwatch isReady laneState={{ kind: 'running', startTime: 2_000_000 }} />,
       );
       const tick = setSpy.mock.calls[0]?.[0] as () => void;
       expect(tick).toBeTypeOf('function');
@@ -425,7 +183,6 @@ describe('Stopwatch hero time numerals', () => {
       rerender(
         <Stopwatch
           isReady
-          timerId={1}
           laneState={{ kind: 'finished', startTime: 2_000_000, stopTime: 2_000_030, elapsedMs: 30 }}
         />,
       );
@@ -445,8 +202,7 @@ describe('Stopwatch clock plate', () => {
     const view = render(
       <Stopwatch
         isReady
-        timerId={1}
-        recovery={{ kind: 'finished', startTime: 0, stopTime: elapsedMs, elapsedMs }}
+        laneState={{ kind: 'finished', startTime: 0, stopTime: elapsedMs, elapsedMs }}
         size="plate"
         plateAlign={plateAlign}
       />,
@@ -468,8 +224,7 @@ describe('Stopwatch clock plate', () => {
     rerender(
       <Stopwatch
         isReady
-        timerId={1}
-        recovery={{ kind: 'finished', startTime: 1, stopTime: 600_001, elapsedMs: 600_000 }}
+        laneState={{ kind: 'finished', startTime: 1, stopTime: 600_001, elapsedMs: 600_000 }}
         size="plate"
       />,
     );

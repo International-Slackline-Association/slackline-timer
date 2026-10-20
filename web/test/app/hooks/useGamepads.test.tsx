@@ -1,6 +1,6 @@
 import { ReactNode, useRef, useState } from 'react';
 
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type GamepadPress, useGamepads } from 'app/hooks/useGamepads';
@@ -225,5 +225,115 @@ describe('useGamepads — press callback', () => {
     pollOnce();
 
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useGamepads — one poll loop per provider', () => {
+  it('fans one poll out to every subscriber: same press, same seq, one getGamepads call', () => {
+    connected = [fakePad(0, buzz())];
+    const first = vi.fn<(press: GamepadPress) => void>();
+    const second = vi.fn<(press: GamepadPress) => void>();
+    renderHook(
+      () => {
+        useGamepads(first);
+        useGamepads(second);
+      },
+      { wrapper },
+    );
+    expect(rafCallbacks).toHaveLength(1);
+
+    const getGamepads = vi.spyOn(navigator, 'getGamepads');
+    connected = [fakePad(0, buzz(10))];
+    pollOnce();
+
+    expect(getGamepads).toHaveBeenCalledTimes(1);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second.mock.calls).toEqual(first.mock.calls);
+  });
+
+  it('delivers each press to every subscriber, in registration order, before the next press', () => {
+    connected = [fakePad(0, buzz())];
+    const log: string[] = [];
+    renderHook(
+      () => {
+        const [count, setCount] = useState(0);
+        const committed = useRef(count);
+        committed.current = count;
+        useGamepads(({ button }) => {
+          log.push(`a${button}@${committed.current}`);
+          setCount((c) => c + 1);
+        });
+        useGamepads(({ button }) => log.push(`b${button}@${committed.current}`));
+      },
+      { wrapper },
+    );
+
+    connected = [fakePad(0, buzz(10, 15))];
+    pollOnce();
+    // b reads the same pre-commit render as a; the second press reads a's commit.
+    expect(log).toEqual(['a10@0', 'b10@0', 'a15@1', 'b15@1']);
+  });
+
+  it('starts the loop on the first subscriber and cancels it after the last', () => {
+    const raf = vi.fn((cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return 42;
+    });
+    const caf = vi.fn();
+    vi.stubGlobal('requestAnimationFrame', raf);
+    vi.stubGlobal('cancelAnimationFrame', caf);
+    const Subscriber = () => {
+      useGamepads(() => {});
+      return null;
+    };
+    const board = (subscribers: number) => (
+      <GamepadSelectionProvider>
+        {Array.from({ length: subscribers }, (_, i) => (
+          <Subscriber key={i} />
+        ))}
+      </GamepadSelectionProvider>
+    );
+
+    // An admin page under the provider polls nothing.
+    const view = render(board(0));
+    expect(raf).not.toHaveBeenCalled();
+
+    view.rerender(board(2));
+    expect(raf).toHaveBeenCalledTimes(1);
+
+    view.rerender(board(1));
+    expect(caf).not.toHaveBeenCalled();
+
+    view.rerender(board(0));
+    expect(caf).toHaveBeenCalledExactlyOnceWith(42);
+    expect(raf).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps polling and delivering after a subscriber throws', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    connected = [fakePad(0, buzz())];
+    const after = vi.fn<(press: GamepadPress) => void>();
+    renderHook(
+      () => {
+        useGamepads(() => {
+          throw new Error('handler blew up');
+        });
+        useGamepads(after);
+      },
+      { wrapper },
+    );
+
+    connected = [fakePad(0, buzz(10))];
+    pollOnce();
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalled();
+
+    connected = [fakePad(0, buzz())];
+    pollOnce();
+    vi.advanceTimersByTime(120);
+    connected = [fakePad(0, buzz(10))];
+    pollOnce();
+    expect(after).toHaveBeenCalledTimes(2);
+    error.mockRestore();
   });
 });

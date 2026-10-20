@@ -4,9 +4,12 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
 } from 'react';
+
+import { createGamepadPoller, type GamepadPoller } from './gamepadPoller';
 
 /**
  * Which physical game controller drives the timer. The controller is a property
@@ -19,6 +22,9 @@ import {
  * derives the chosen pad's `selectedIndex`. Persists the pad `id`, not the
  * numeric `index` (the browser can reuse it across re-plugs), so a re-plug
  * re-selects the same controller.
+ *
+ * Also owns the board's one Gamepad API poll (`gamepadPoller`), in its own
+ * context so a subscriber does not re-render on a pad connect/disconnect.
  */
 
 const STORAGE_KEY = 'speedline.selectedGamepad';
@@ -46,6 +52,7 @@ interface GamepadSelectionValue {
 }
 
 const GamepadSelectionContext = createContext<GamepadSelectionValue | undefined>(undefined);
+const GamepadPollerContext = createContext<GamepadPoller | undefined>(undefined);
 
 const readStored = (): string | null => {
   try {
@@ -104,13 +111,19 @@ export const GamepadSelectionProvider = ({ children }: { children: ReactNode }) 
     return undefined;
   }, [selectedPadId, connectedPads]);
 
+  const [poller] = useState(createGamepadPoller);
+  // Layout, so the poll never runs a frame on the previous pad after a commit.
+  useLayoutEffect(() => poller.setSelectedIndex(selectedIndex), [poller, selectedIndex]);
+
   const value = useMemo<GamepadSelectionValue>(
     () => ({ connectedPads, selectedPadId, setSelectedPadId, selectedIndex }),
     [connectedPads, selectedPadId, setSelectedPadId, selectedIndex],
   );
 
   return (
-    <GamepadSelectionContext.Provider value={value}>{children}</GamepadSelectionContext.Provider>
+    <GamepadSelectionContext.Provider value={value}>
+      <GamepadPollerContext.Provider value={poller}>{children}</GamepadPollerContext.Provider>
+    </GamepadSelectionContext.Provider>
   );
 };
 
@@ -120,4 +133,13 @@ export const useGamepadSelection = (): GamepadSelectionValue => {
     throw new Error('useGamepadSelection must be used within a GamepadSelectionProvider');
   }
   return ctx;
+};
+
+/** The provider's pad poll; `useGamepads` subscribes to it. */
+export const useGamepadPoller = (): GamepadPoller => {
+  const poller = useContext(GamepadPollerContext);
+  if (!poller) {
+    throw new Error('useGamepads must be used within a GamepadSelectionProvider');
+  }
+  return poller;
 };

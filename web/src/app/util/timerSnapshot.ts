@@ -127,7 +127,8 @@ export type SpeedlineLaneState = (
   /** The carrying snapshot's `at` — when the control ASSERTED this lane state,
    * as opposed to the epochs the state itself is made of. Only the snapshot
    * path sets it (the control page drives its own lanes from live state, where
-   * the question doesn't arise), and only `mergeRecovery` reads it. */
+   * the question doesn't arise), and only the display's lane merge
+   * (`app/util/previewLanes`) reads it. */
   assertedAt?: number;
 };
 

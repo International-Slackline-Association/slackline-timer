@@ -279,7 +279,7 @@ export interface SpeedlineSnapshot {
    * clock as the `startTime`/`stopTime` epochs beside it (all control-minted).
    * A display that already applied a live frame for a lane compares the two to
    * tell a genuinely newer snapshot from a stale one and un-freeze a lane whose
-   * `resume` it missed (`Stopwatch.mergeRecovery`). Absent (pre-feature sender):
+   * `resume` it missed (`app/util/previewLanes`). Absent (pre-feature sender):
    * never un-freezes. */
   at?: number;
   signalPhase: number;

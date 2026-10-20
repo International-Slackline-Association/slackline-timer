@@ -11,8 +11,9 @@ import type { GamepadPressHandler } from 'app/hooks/useGamepads';
  *   vi.mock('app/hooks/useGamepads', () => import('<relative>/util/gamepadMock'));
  *
  * and drive presses with `pressPad` / `pressPads`. Delivery matches the real
- * hook: each mounted instance, in mount order, receives every button of the
- * frame in order, each press flushed before the next.
+ * poller (`createGamepadPoller`): each button of the frame in order, one
+ * `flushSync` per press calling every mounted instance in mount order, one
+ * `seq` per press.
  */
 
 const handlers: { current: GamepadPressHandler }[] = [];
@@ -32,13 +33,11 @@ export const useGamepads = (onPress: GamepadPressHandler): void => {
 /** Buttons rising in ONE poll — e.g. both lanes' reds on a dead heat. */
 export const pressPads = (buttons: number[], at: number = Date.now()): void => {
   act(() => {
-    for (const handler of [...handlers]) {
-      for (const button of buttons) {
-        seq += 1;
-        const press = { button, seq, at };
-        // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- mirrors the real hook
-        flushSync(() => handler.current(press));
-      }
+    for (const button of buttons) {
+      seq += 1;
+      const press = { button, seq, at };
+      // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- mirrors the real poller
+      flushSync(() => [...handlers].forEach((handler) => handler.current(press)));
     }
   });
 };

@@ -6,18 +6,15 @@ import { useLinkPhase } from 'app/hooks/useLinkPhase';
 import { useQueryParams, useRelaySessionId } from 'app/hooks/useQueryParams';
 import { useReadToken } from 'app/hooks/useReadToken';
 import { StopwatchWSMessage, useWS } from 'app/hooks/useWebSocket';
-import {
-  isSpeedlineSnapshot,
-  speedlineLaneState,
-  type SpeedlineLaneState,
-} from 'app/util/timerSnapshot';
+import { isSpeedlineSnapshot } from 'app/util/timerSnapshot';
+import { INITIAL_PREVIEW_LANES, previewLanesReducer } from 'app/util/previewLanes';
 import { overlayTextShadow } from 'app/theme/tokens';
 import {
   INITIAL_SELECTION_STAMP,
   acceptSelectionStamp,
   type SelectionStamp,
 } from 'app/util/selectionLww';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ReadyState } from 'react-use-websocket';
 import { applyOverlayBodyStyle, SURFACE_GROUND } from 'app/pages/Stream/overlayBg';
@@ -102,13 +99,9 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
   // `signalPhase` holds the static states the sequence doesn't run — a peer's
   // abort/reset echo (-1/0) and a snapshot's recovered phase (no anchor to seed).
   const [signalPhase, setSignalPhase] = useState<number>(0);
-  // Recovered lane states, applied through the Stopwatch's newer-wins merge.
-  // Fed by two producers: a peer `state_snapshot` (reconnect recovery) and the
-  // mirrored sequence's GO ignition below.
-  const [recovery, setRecovery] = useState<{
-    1?: SpeedlineLaneState;
-    2?: SpeedlineLaneState;
-  }>({});
+  // Both lane clocks: every relay frame and the mirrored sequence's GO ignition
+  // go through one pure reducer (ADR 0051 §5); the Stopwatches render from it.
+  const [lanes, dispatchLanes] = useReducer(previewLanesReducer, INITIAL_PREVIEW_LANES);
   // The pending seed's ignition lanes; null = disarmed (after ignition, or on
   // abort/reset — nothing to ignite at the GO edge).
   const mirrorLanesRef = useRef<number[] | null>(null);
@@ -118,13 +111,10 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
     resetSignal: cancelSignal,
   } = useStartSignalTimer({
     onSignalComplete: (goEpoch) => {
-      const lanes = mirrorLanesRef.current;
-      if (!lanes) return;
+      const seeded = mirrorLanesRef.current;
+      if (!seeded) return;
       mirrorLanesRef.current = null; // one ignition per seed
-      setRecovery({
-        1: lanes.includes(1) ? { kind: 'running', startTime: goEpoch } : { kind: 'idle' },
-        2: lanes.includes(2) ? { kind: 'running', startTime: goEpoch } : { kind: 'idle' },
-      });
+      dispatchLanes({ type: 'ignite', lanes: seeded, goEpoch });
     },
   });
   const mirrorAnchorRef = useRef<number>(0);
@@ -161,11 +151,6 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
     prevFalseStartsRef.current = next;
     setFalseStarts(next);
   };
-
-  // The last lane-scoped frame, handed to both Stopwatches. Set inside the
-  // flushed delivery (ADR 0051), so each one commits — and runs the Stopwatch
-  // effects — before the next frame is handled.
-  const [laneFrame, setLaneFrame] = useState<StopwatchWSMessage | undefined>(undefined);
 
   const { readyState, sendWSMessage, sendAck } = useWS<StopwatchWSMessage>({
     sessionId,
@@ -211,19 +196,14 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         page: window.location.pathname,
       });
     }
-    if (type === 'start' || type === 'stop' || type === 'resume' || type === 'reset') {
-      setLaneFrame(message);
-    }
+    // Inside the flushed delivery (ADR 0051): each frame is its own commit.
+    dispatchLanes(message);
     switch (type) {
       case 'reset':
         cancelSignal();
         mirrorLanesRef.current = null;
         setSignalPhase(0);
         setTextDisplay('');
-        // A Stopwatch that mounts later (a dormant lane re-assigned, a lane's
-        // false-start badge cleared) replays `recovery` on mount; past a reset
-        // the last ignition would restart it on the previous race's epoch.
-        setRecovery({});
         break;
       case 'updatePreview':
         setIsPreviewEnabled(data.enabled);
@@ -262,10 +242,10 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
         }
         // Signal light / text / badges roll back easily, so a live message that
         // arrived since open outranks the snapshot for them. Lane TIMER state
-        // always flows through (below): the stopwatches merge it newer-wins per
-        // lane, so a snapshot generated AFTER a stop this display never received
-        // (operator-side connectivity loss) freezes the lane instead of leaving
-        // it running forever.
+        // always flows through (the reducer above merges it newer-wins per
+        // lane), so a snapshot generated AFTER a stop this display never
+        // received (operator-side connectivity loss) freezes the lane instead
+        // of leaving it running forever.
         if (!liveSinceOpenRef.current) {
           setIsPreviewEnabled(data.isPreviewEnabled);
           setSignalPhase(data.signalPhase);
@@ -273,27 +253,6 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
           // Recover a flagged lane's badge without re-alerting (this is a re-sync).
           applyFalseStarts(data.falseStarts ?? { 1: 0, 2: 0 }, false);
         }
-        // `data.at` rides along as the lane state's assertion time: it is what
-        // lets the merge un-freeze a lane whose `resume` this display missed
-        // without a stale snapshot doing the same (`Stopwatch.mergeRecovery`).
-        setRecovery({
-          1: speedlineLaneState(
-            data.timers.find((t) => t.timerId === 1) ?? {
-              timerId: 1,
-              startTime: null,
-              stopTime: null,
-            },
-            data.at,
-          ),
-          2: speedlineLaneState(
-            data.timers.find((t) => t.timerId === 2) ?? {
-              timerId: 2,
-              startTime: null,
-              stopTime: null,
-            },
-            data.at,
-          ),
-        });
         break;
       // The board re-pushes its selection on every change + socket OPEN; track
       // the per-lane false-start counts off it and alert on a fresh flag (S2–S4).
@@ -337,7 +296,7 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
   // One lane's lower-third: the flag+name banner over the false-start badge or
   // the Stopwatch's own TIME plate, anchored to a bottom corner. Called as a
   // function, NOT rendered as a component, so the Stopwatch keeps stable
-  // element identity and never remounts (which would reset its live tick).
+  // element identity and its tick interval survives every display render.
   const renderLane = (lane: 1 | 2, side: 'left' | 'right') => {
     const athleteId = laneAthleteIds[lane];
     const athlete = athleteId ? athleteById(athleteId) : undefined;
@@ -347,9 +306,7 @@ export const SpeedlineTimerDisplay = ({ variant }: { variant: 'projector' | 'bro
       ) : (
         <Stopwatch
           isReady={isReadyToDisplay}
-          timerId={lane}
-          laneFrame={laneFrame}
-          recovery={recovery[lane]}
+          laneState={lanes[lane]}
           size="plate"
           plateAlign={side}
         />
