@@ -401,9 +401,11 @@ type scales off, its width following the card's 298.81 × 498.02 aspect.
 
 A board's measured floors, caps and reserved rows (`boardGeometry` in `tokens.ts`). They are not a scale: each value
 is a fold-budget measurement its brief signed off, so a change re-measures the board. The Freestyle set is
-tabulated in [`freestyle-board-ux.md`](./freestyle-board-ux.md) §6. Speedline holds two: the 880 px live-deck ceiling
-(`deckMax.speedline`, the Freestyle rule with the start strip between the lanes) and the start strip's 184 px floor
-(`speedline.startStrip`), the slot the race pair's why-line wraps in.
+tabulated in [`freestyle-board-ux.md`](./freestyle-board-ux.md) §6. Speedline holds three: the 880 px live-deck ceiling
+(`deckMax.speedline`, the Freestyle rule with the start strip between the lanes), the start strip's 184 px floor
+(`speedline.startStrip`), the slot the race pair's why-line wraps in, and the 300 px lane-column width from which a
+peer save chip spells "other panel" beside the quali attempts badge (`speedline.peerWords`, a container query — the
+column is 200 px at 1280 and 280 at 1440, and a second chip row would push the race pair under the fold).
 
 `boardMax` is the one derived entry: each board's frame cap, `deskRails.setup + deckMax[board] + deskRails.record` plus
 the desk grid's two 16 px gaps, so Speedline 1520 px and Freestyle 1440 px (the battle deck; quali's narrower deck

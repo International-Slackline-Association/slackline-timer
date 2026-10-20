@@ -367,7 +367,7 @@ describe('board geometry', () => {
         tryField: 96,
         selectionBasis: { round: 140, gender: 110, match: 210, athlete: 170, assignment: 480 },
       },
-      speedline: { startStrip: 184 },
+      speedline: { startStrip: 184, peerWords: 300 },
     });
   });
 

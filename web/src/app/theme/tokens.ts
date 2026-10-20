@@ -356,6 +356,10 @@ export const boardGeometry = {
     // every desk width up to the deck ceiling, so the race pair's why-line
     // wraps in it.
     startStrip: 184,
+    // The lane column width from which a peer save chip spells 'other panel'
+    // beside the quali attempts badge (badge + full chip + glyph ≈ 294 px; the
+    // column is 200 px at 1280 and 280 at 1440).
+    peerWords: 300,
   },
 } as const;
 

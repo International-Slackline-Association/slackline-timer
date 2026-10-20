@@ -1,5 +1,6 @@
-import { Chip, Link, Stack, TextField, Typography } from '@mui/material';
-import { useEffect, useState } from 'react';
+import GroupIcon from '@mui/icons-material/Group';
+import { Box, Chip, Link, Stack, TextField, Typography } from '@mui/material';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import type { TimeInput } from 'app/api/times';
 import { LockedControl } from 'app/components/LockedControl';
@@ -7,7 +8,7 @@ import { RaceButton, blurOnClickProps } from 'app/components/RaceButton';
 import { SelectField } from 'app/components/SelectField';
 import { WhyLine } from 'app/components/WhyLine';
 import type { LaneId, RaceRecorder } from 'app/hooks/useRaceRecorder';
-import { space } from 'app/theme/tokens';
+import { boardGeometry, space } from 'app/theme/tokens';
 import { FIELD_LIMITS, type Athlete } from 'app/types';
 import { athleteOptions } from 'app/util/athleteOptions';
 import { laneName } from 'app/util/raceNames';
@@ -30,6 +31,43 @@ const TimesPageLink = ({ input }: { input: TimeInput }) => (
   >
     Times page ↗
   </Link>
+);
+
+/** Spelt out only where the column fits them beside the quali attempts badge
+ * (`boardGeometry.speedline.peerWords`); narrower, the peer glyph says it. */
+const PEER_WORDS_SX = {
+  display: 'none',
+  [`@container (min-width: ${boardGeometry.speedline.peerWords}px)`]: { display: 'inline' },
+} as const;
+
+const PeerWords = ({ children }: { children: ReactNode }) => (
+  <Box component="span" data-peer-words sx={PEER_WORDS_SX}>
+    {children}
+  </Box>
+);
+
+/**
+ * A lane another panel recorded, read-only. The glyph is the header's peer
+ * chip's, and the full words ride the accessible name and tooltip at any width.
+ */
+const PeerChip = ({
+  name,
+  tone,
+  label,
+}: {
+  name: string;
+  tone: 'awaiting' | 'saved';
+  label: ReactNode;
+}) => (
+  <Chip
+    size="small"
+    role="status"
+    aria-label={name}
+    title={name}
+    icon={<GroupIcon />}
+    {...(tone === 'saved' ? { color: 'success' as const } : { variant: 'outlined' as const })}
+    label={label}
+  />
 );
 
 /**
@@ -150,6 +188,7 @@ export const RaceLaneColumn = ({
     fsCounts,
     clearFs,
     laneFeedback,
+    peerSaves,
     selectedGender,
     selectedMatchId,
     matches,
@@ -171,8 +210,43 @@ export const RaceLaneColumn = ({
     Boolean(laneAthletes[lane]) &&
     saved.input.athleteId !== laneAthletes[lane];
 
+  // Read-only: the other panel's save, and every correction of it, stays on
+  // that panel (ADR 0038 — only it holds the row's id from the POST reply).
+  const peerSave = peerSaves[lane];
+
   const statusChip = () => {
-    if (!feedback) return null;
+    if (!feedback) {
+      if (peerSave?.status === 'saved') {
+        const value = formatMs(peerSave.time.timeMs);
+        return (
+          <PeerChip
+            tone="saved"
+            name={`Saved ${value} · other panel`}
+            label={
+              <>
+                <PeerWords>Saved </PeerWords>
+                {value}
+                <PeerWords> · other panel</PeerWords>
+              </>
+            }
+          />
+        );
+      }
+      if (peerSave)
+        return (
+          <PeerChip
+            tone="awaiting"
+            name="Awaiting save · other panel"
+            label={
+              <>
+                Awaiting
+                <PeerWords> save · other panel</PeerWords>
+              </>
+            }
+          />
+        );
+      return null;
+    }
     const value = formatMs(feedback.valueMs);
     const bound = boundElsewhere ? ` · ${athleteName(saved?.input.athleteId)}` : '';
     if (feedback.status === 'pending')
@@ -183,7 +257,7 @@ export const RaceLaneColumn = ({
   };
 
   return (
-    <Stack spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+    <Stack spacing={0.75} sx={{ alignItems: 'center', minWidth: 0, containerType: 'inline-size' }}>
       <StopwatchControl
         id={lane}
         laneState={laneState}
@@ -290,6 +364,11 @@ export const RaceLaneColumn = ({
             <TimesPageLink input={feedback.failed.input} />
           </Typography>
         </Stack>
+      )}
+      {peerSave?.status === 'saved' && (
+        <Typography variant="body2">
+          <TimesPageLink input={peerSave.time} />
+        </Typography>
       )}
       {saved && (
         <LaneTimeEdit

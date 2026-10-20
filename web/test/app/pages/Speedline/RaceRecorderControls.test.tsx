@@ -5,7 +5,13 @@ import { RaceRecorderControls } from 'app/pages/Speedline/RaceRecorderControls';
 
 import { px } from '../../../util/computedUnits';
 
-import { ATHLETES, expectRaceControl, makeRecorder, savedFeedback } from './recorderStub';
+import {
+  ATHLETES,
+  expectRaceControl,
+  makeRecorder,
+  peerSaved,
+  savedFeedback,
+} from './recorderStub';
 
 /** The rail is the cross-lane half of the desk; the per-lane half is pinned by
  * `RaceLaneColumn.test.tsx`. */
@@ -524,6 +530,72 @@ describe('RaceRecorderControls', () => {
       expect(button).toBeDisabled();
       expect(button).toHaveAccessibleDescription('locked while a lane runs');
       expect(screen.getByText('why: locked while a lane runs')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * A run whose times another panel recorded is voided there: only that panel
+   * holds the rows' ids, so a void here would delete nothing and still clear
+   * this board's run.
+   */
+  describe('Void on a run another panel recorded', () => {
+    const OTHER_PANEL = 'recorded on the other panel — void it there';
+
+    it.each([
+      ['saved', peerSaved(5720)],
+      ['still on its way', { status: 'awaiting' as const }],
+    ])('locks Void run and names the other panel (%s)', (_, peerSave) => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({ peerSaves: { 1: peerSave, 2: null } })}
+          athletes={ATHLETES}
+        />,
+      );
+      const button = screen.getByRole('button', { name: /^void run$/i });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAccessibleDescription(OTHER_PANEL);
+      expect(screen.getByText(`why: ${OTHER_PANEL}`)).toBeInTheDocument();
+    });
+
+    it('locks the false-start strip’s void the same way', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            selectedMatchId: 'm1',
+            laneAthletes: { 1: 'a1', 2: 'a2' },
+            fsOutcome: { kind: 'rerun-start', offender: 1 },
+            peerSaves: { 1: peerSaved(5720), 2: null },
+          })}
+          athletes={ATHLETES}
+        />,
+      );
+      expect(screen.getByRole('button', { name: /void run & rerun/i })).toBeDisabled();
+      expect(screen.getByText(`why: ${OTHER_PANEL}`)).toBeInTheDocument();
+    });
+
+    it('defers to the run lock while a lane still runs', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({ peerSaves: { 1: peerSaved(5720), 2: null } })}
+          athletes={ATHLETES}
+          voidLock="locked while a lane runs"
+        />,
+      );
+      expect(screen.getByText('why: locked while a lane runs')).toBeInTheDocument();
+    });
+
+    it('stays live for the time this panel saved itself', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            laneFeedback: { 1: null, 2: savedFeedback('t2', 6000, 'a2') },
+            peerSaves: { 1: peerSaved(5720), 2: null },
+          })}
+          athletes={ATHLETES}
+        />,
+      );
+      expect(screen.getByRole('button', { name: /^void run$/i })).toBeEnabled();
+      expect(screen.queryByTestId('why-line')).toBeNull();
     });
   });
 

@@ -62,6 +62,7 @@ export const makeRecorder = (over: Partial<RaceRecorder> = {}): RaceRecorder =>
     updateTime: { isError: false, error: null } as never,
     deleteTime: { isError: false, error: null } as never,
     laneFeedback: { 1: null, 2: null },
+    peerSaves: { 1: null, 2: null },
     toast: null,
     clearToast: vi.fn(),
     selectedGender: 'male',
@@ -83,6 +84,19 @@ export const savedFeedback = (timeId: string, valueMs: number, athleteId = 'a1')
   saved: {
     timeId,
     input: { athleteId, round: 'final' as const, timeMs: valueMs, startTime: 1000 },
+  },
+});
+
+/** The row another panel saved for a lane (see `useRaceRecorder`'s `peerSaves`). */
+export const peerSaved = (timeMs: number, athleteId = 'a1') => ({
+  status: 'saved' as const,
+  time: {
+    timeId: 'p1',
+    compId: 'c1',
+    athleteId,
+    round: 'final' as const,
+    timeMs,
+    startTime: 1000,
   },
 });
 

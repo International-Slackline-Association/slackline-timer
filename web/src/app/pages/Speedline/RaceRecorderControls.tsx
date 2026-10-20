@@ -62,6 +62,7 @@ export const RaceRecorderControls = ({
     updateTime,
     deleteTime,
     laneFeedback,
+    peerSaves,
     selectedGender,
     selectedMatchId,
     selectMatch,
@@ -76,6 +77,14 @@ export const RaceRecorderControls = ({
 
   // A run can be voided once at least one lane has a persisted Time to delete.
   const canVoid = Boolean(laneFeedback[1]?.saved || laneFeedback[2]?.saved);
+  // A run whose times only another panel recorded is voided there: only it
+  // holds the rows' ids, so a void here would delete nothing yet clear this
+  // board's run.
+  const voidWhy =
+    voidLock ??
+    (!canVoid && (peerSaves[1] || peerSaves[2])
+      ? 'recorded on the other panel — void it there'
+      : null);
 
   /**
    * The two rail presses that spend something the operator cannot get back —
@@ -331,12 +340,12 @@ export const RaceRecorderControls = ({
             </Typography>
             {(fsAdvised.kind === 'rerun-round' || fsAdvised.kind === 'rerun-start') && (
               <Stack sx={{ ml: 'auto', alignItems: 'flex-end' }}>
-                <LockedControl reason={voidLock}>
-                  <RaceButton tone="stop" disabled={voidLock !== null} onClick={requestVoid}>
+                <LockedControl reason={voidWhy}>
+                  <RaceButton tone="stop" disabled={voidWhy !== null} onClick={requestVoid}>
                     Void run &amp; rerun
                   </RaceButton>
                 </LockedControl>
-                <WhyLine reason={voidLock} reserve={false} />
+                <WhyLine reason={voidWhy} reserve={false} />
               </Stack>
             )}
             {fsAdvised.kind === 'round-to-opponent' && (
@@ -359,10 +368,10 @@ export const RaceRecorderControls = ({
               useFlexGap
               sx={{ alignItems: 'center', flexWrap: 'wrap' }}
             >
-              <LockedControl reason={voidLock}>
+              <LockedControl reason={voidWhy}>
                 <RaceButton
                   tone="stop"
-                  disabled={!canVoid || voidLock !== null}
+                  disabled={!canVoid || voidWhy !== null}
                   onClick={requestVoid}
                 >
                   Void run
@@ -372,7 +381,7 @@ export const RaceRecorderControls = ({
                 Deletes this run&apos;s recorded times
               </Typography>
             </Stack>
-            <WhyLine reason={voidLock} reserve={false} />
+            <WhyLine reason={voidWhy} reserve={false} />
           </Stack>
         )}
 

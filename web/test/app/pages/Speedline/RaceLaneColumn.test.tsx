@@ -8,7 +8,13 @@ import { speedlineLaneState, type SpeedlineLaneState } from 'app/util/timerSnaps
 
 import { px } from '../../../util/computedUnits';
 
-import { ATHLETES, expectRaceControl, makeRecorder, savedFeedback } from './recorderStub';
+import {
+  ATHLETES,
+  expectRaceControl,
+  makeRecorder,
+  peerSaved,
+  savedFeedback,
+} from './recorderStub';
 
 const idle = (lane: LaneId) =>
   speedlineLaneState({ timerId: lane, startTime: null, stopTime: null });
@@ -374,6 +380,84 @@ describe('RaceLaneColumn', () => {
       );
       expect(screen.getByText('Saved 1:23.45')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /move time to/i })).toBeNull();
+    });
+  });
+
+  /**
+   * The lane another panel stopped: its save, and every correction of it, live
+   * on that panel (ADR 0038 — the timeId is its alone). This one reports the
+   * row read-only and offers nothing that would act on it.
+   */
+  describe('a lane another panel recorded', () => {
+    const peerLane = (peerSave: ReturnType<typeof peerSaved> | { status: 'awaiting' }) =>
+      makeRecorder({ laneAthletes: { 1: 'a1', 2: '' }, peerSaves: { 1: peerSave, 2: null } });
+
+    it('says the save is on its way, in the outlined tone', () => {
+      render(column(1, peerLane({ status: 'awaiting' })));
+
+      const chip = screen.getByRole('status', { name: 'Awaiting save · other panel' });
+      expect(chip).toHaveClass('MuiChip-outlined');
+    });
+
+    it('shows the row the server holds once it lands, with its Times page link', () => {
+      render(column(1, peerLane(peerSaved(5720))));
+
+      const chip = screen.getByRole('status', { name: 'Saved 0:05.72 · other panel' });
+      expect(chip).toHaveClass('MuiChip-colorSuccess');
+      expect(screen.getByRole('link', { name: 'Times page ↗' })).toHaveAttribute(
+        'href',
+        '/admin/times?athlete=a1&round=final',
+      );
+    });
+
+    it('reads a DNF the other panel recorded as DNF', () => {
+      render(column(1, peerLane(peerSaved(DNF_SENTINEL))));
+      expect(screen.getByRole('status', { name: /^Saved DNF · other panel$/ })).toBeInTheDocument();
+    });
+
+    /**
+     * Beside the quali attempts badge the full words need ~294 px; the lane
+     * column is 200 px at 1280x720 and 280 at 1440x900. Below the threshold the
+     * chip keeps the peer glyph and the value and drops the words — a second
+     * chip row would push the race pair under the fold.
+     */
+    it('spells "other panel" only where the column has room for it beside the badge', () => {
+      render(column(1, peerLane(peerSaved(5720))));
+
+      const chip = screen.getByRole('status', { name: 'Saved 0:05.72 · other panel' });
+      expect(chip.querySelector('[data-testid="GroupIcon"]')).not.toBeNull();
+      expect(chip).toHaveAttribute('title', 'Saved 0:05.72 · other panel');
+      const words = [...chip.querySelectorAll('[data-peer-words]')];
+      expect(words.map((w) => w.textContent)).toEqual(['Saved ', ' · other panel']);
+      for (const w of words) expect(window.getComputedStyle(w).display).toBe('none');
+    });
+
+    it('offers no correction, retry or re-attribution — those stay on the other panel', () => {
+      const { container } = render(
+        column(
+          1,
+          makeRecorder({
+            laneAthletes: { 1: 'a2', 2: '' },
+            peerSaves: { 1: peerSaved(5720), 2: null },
+          }),
+        ),
+      );
+
+      expect(screen.queryByLabelText(/correct time/i)).toBeNull();
+      expect(Array.from(container.querySelectorAll('button')).map((b) => b.textContent)).toEqual([
+        'Stop',
+        'Resume Lane 1',
+        'False start · Lane 1',
+        'Lane 1 DNF',
+      ]);
+    });
+
+    it('lands in the reserved status row, so the race pair holds still', () => {
+      render(column(1, peerLane(peerSaved(5720))));
+
+      const row = screen.getByTestId('lane-1-status');
+      expect(row).toHaveTextContent('Saved 0:05.72 · other panel');
+      expect(px(window.getComputedStyle(row).minHeight)).toBe(24);
     });
   });
 

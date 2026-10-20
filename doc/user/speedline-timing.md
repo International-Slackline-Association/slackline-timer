@@ -55,7 +55,10 @@ the clocks and the stop buttons stay on screen without scrolling.
    down, and _Not connected_ if it never arrives. The clocks keep running
    through all of it; only the audience screens stop receiving — the line under
    the chips says so on every reading but _Connecting…_, and stays there, empty,
-   the rest of the time so the row never shifts.
+   the rest of the time so the row never shifts. The **peer** chip says whether
+   a second operator's panel is on this board: **peer: awaiting** just after
+   you open it, then **peer: answered** or **peer: none** — see
+   [Two panels on one board](#two-panels-on-one-board).
 4. **Pick the round and gender** in the right-hand column.
 
 ## Timing a run
@@ -192,6 +195,14 @@ recorded** for it.
   run that should not have counted. It asks first and names each time it would
   delete; **Keep times** leaves everything as it is. It is locked while the
   lights run or a lane is still timing.
+- **Saved … · other panel.** A lane stopped on a second operator's panel is
+  saved there, not here. Its chip carries the two-person icon of the **peer**
+  chip and reads **Awaiting save · other panel** until the server has the time,
+  then **Saved 0:05.72 · other panel**, with a **Times page ↗** link under the
+  lane. Where the lane column is narrow (a laptop screen, in qualification) it
+  shortens to the icon and **Awaiting**, then the icon and the time. It is for
+  reading only: correct, retry, move or void that time on the panel that saved
+  it — see [Two panels on one board](#two-panels-on-one-board).
 - Corrections to a **DNF**, or to anything from an earlier run, are made on the
   **Times** page. A lane holding a DNF links straight to its row — **Times
   page ↗** under the **Correct time** box opens it in a new tab.
@@ -216,6 +227,33 @@ The match winner is set automatically the moment a lane wins its second run —
 first to 2 of 3. Until then the line under **Void run** shows the series score
 and the run it is waiting for, for example _Winner: — series 1–0, awaiting run
 2_.
+
+## Two panels on one board
+
+A second timekeeper can open the Speedline console for the same competition on
+another device. Both panels drive the same race: whatever one presses shows up
+on the other within a moment, and neither is the master.
+
+- The status chips say who else is there — **peer: awaiting** just after you
+  open the console, then **peer: answered** (another panel replied) or
+  **peer: none** (you have this board to yourself).
+- **Shared by both panels:** the start light and its beeps (both run the lights
+  off the same start, so they go green together), both clocks, **Stop**,
+  **Resume Lane n**, **Reset**, **Abort start** and its _START ABORTED_, the
+  false-start flags, the best-of-3 score, the round, gender and match, the
+  athlete on each lane, **Swap**, and the **Preview** switch.
+- **Kept on the panel that did it:** a time is saved by the panel whose lane was
+  stopped, so its **Saved** chip, **Correct time**, **Retry save**, **Move
+  time**, **Void run** and a DNF over a stopped lane are all on that panel. The
+  other panel reads the lane as **Awaiting save · other panel**, then
+  **Saved 0:05.72 · other panel** once the server has it, and its **Void run**
+  stays locked with _why: recorded on the other panel — void it there_.
+- **Resume Lane n** works from either panel: the panel that saved the time
+  deletes it, so there is nothing to tidy up on the **Times** page.
+- A lane judge's buzzer plugs into either computer. The press works on the
+  panel it is connected to, and the other panel follows it.
+- A panel that joins mid-race picks up the clocks that are running, and a
+  **Stop** pressed on it then saves that lane's time as usual.
 
 ## Buzzer buttons
 

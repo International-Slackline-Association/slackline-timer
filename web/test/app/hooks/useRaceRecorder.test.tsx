@@ -10,6 +10,7 @@ vi.mock('app/api/client', async (importOriginal) => {
 });
 
 import { ApiError } from 'app/api/client';
+import { timeKeys } from 'app/api/times';
 import { useRaceRecorder, type RaceRecorder } from 'app/hooks/useRaceRecorder';
 import type { Match, Time } from 'app/types';
 import { DNF_SENTINEL } from 'app/util/time';
@@ -824,6 +825,141 @@ describe('useRaceRecorder', () => {
       act(() => result.current.recordDnf(2));
       await waitFor(() => expect(result.current.laneFeedback[2]?.status).toBe('saved'));
       expect(result.current.runWins).toEqual({ 1: 0, 2: 0 });
+    });
+  });
+
+  /**
+   * The lane another panel stopped: its Time POSTs there (ADR 0038), and this
+   * panel learns of the row only through the `db_update` refetch — so the strip
+   * says what it is waiting for, then what the server holds.
+   */
+  describe('a lane another panel recorded (peerSaves)', () => {
+    const peerRow = (over: Partial<Time> = {}): Time => ({
+      timeId: 'p1',
+      compId: COMP,
+      athleteId: 'a1',
+      round: 'qualification',
+      timeMs: 4720,
+      startTime: 1000,
+      ...over,
+    });
+
+    /** A recorder whose cache the test refetches, as a `db_update` would. */
+    const peerRecorder = () => {
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const rendered = renderHook(() => useRaceRecorder(COMP), {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      });
+      const refetch = (times: Time[]) => {
+        seededTimes = times;
+        return act(() => queryClient.invalidateQueries({ queryKey: timeKeys.all(COMP) }));
+      };
+      act(() => rendered.result.current.setLaneAthlete(1, 'a1'));
+      act(() => rendered.result.current.onRaceStart(1000));
+      return { ...rendered, refetch };
+    };
+
+    it('awaits the other panel’s save, then shows the row it persisted', async () => {
+      const { result, refetch } = peerRecorder();
+      await waitFor(() => expect(result.current.times.isSuccess).toBe(true));
+
+      act(() => result.current.notePeerFinish(1, 4720));
+      expect(result.current.peerSaves).toEqual({ 1: { status: 'awaiting' }, 2: null });
+
+      await refetch([peerRow()]);
+      await waitFor(() =>
+        expect(result.current.peerSaves[1]).toEqual({ status: 'saved', time: peerRow() }),
+      );
+      // The attempt badge counts the other panel's row too.
+      expect(result.current.laneAttempts[1].used).toBe(1);
+      expect(bodies('POST', '/times')).toHaveLength(0);
+    });
+
+    it('clears on the other panel’s resume, a reset and a new start', () => {
+      const { result } = peerRecorder();
+      const stopped = () => act(() => result.current.notePeerFinish(1, 4720));
+
+      stopped();
+      act(() => result.current.notePeerResume(1));
+      expect(result.current.peerSaves[1]).toBeNull();
+
+      stopped();
+      act(() => result.current.onReset());
+      expect(result.current.peerSaves[1]).toBeNull();
+
+      act(() => result.current.onRaceStart(2000));
+      stopped();
+      act(() => result.current.onRaceStart(3000));
+      expect(result.current.peerSaves[1]).toBeNull();
+    });
+
+    it('expects nothing where the other panel records nothing', () => {
+      const { result } = peerRecorder();
+      // An unassigned lane, and a lane on its 2nd false start (rule S2/S3).
+      act(() => result.current.notePeerFinish(2, 5000));
+      act(() => result.current.flagFs(1));
+      act(() => result.current.flagFs(1));
+      act(() => result.current.notePeerFinish(1, 4720));
+
+      expect(result.current.peerSaves).toEqual({ 1: null, 2: null });
+    });
+
+    it('drops the chip once the row it showed is gone (a void on the other panel)', async () => {
+      const { result, refetch } = peerRecorder();
+      await waitFor(() => expect(result.current.times.isSuccess).toBe(true));
+      act(() => result.current.notePeerFinish(1, 4720));
+      await refetch([peerRow()]);
+      await waitFor(() => expect(result.current.peerSaves[1]?.status).toBe('saved'));
+
+      // Corrected, then re-filed under another athlete there: the same row,
+      // still this run's.
+      await refetch([peerRow({ timeMs: 4700, athleteId: 'a2' })]);
+      await waitFor(() =>
+        expect(result.current.peerSaves[1]).toMatchObject({
+          time: { timeMs: 4700, athleteId: 'a2' },
+        }),
+      );
+
+      await refetch([]);
+      await waitFor(() => expect(result.current.peerSaves[1]).toBeNull());
+    });
+
+    it('awaits the re-stop’s row past a resumed stop’s row not yet refetched away', async () => {
+      const { result, refetch } = peerRecorder();
+      await waitFor(() => expect(result.current.times.isSuccess).toBe(true));
+      act(() => result.current.notePeerFinish(1, 4720));
+      await refetch([peerRow()]);
+      await waitFor(() => expect(result.current.peerSaves[1]?.status).toBe('saved'));
+      act(() => result.current.notePeerResume(1));
+
+      act(() => result.current.notePeerFinish(1, 9100));
+      expect(result.current.peerSaves[1]).toEqual({ status: 'awaiting' });
+
+      await refetch([peerRow({ timeId: 'p2', timeMs: 9100 })]);
+      await waitFor(() =>
+        expect(result.current.peerSaves[1]).toMatchObject({ time: { timeId: 'p2' } }),
+      );
+    });
+
+    it('moves with its lane on a swap, like the lane’s own feedback', () => {
+      const { result } = peerRecorder();
+      act(() => result.current.notePeerFinish(1, 4720));
+
+      act(() => result.current.swapLanes());
+
+      expect(result.current.peerSaves).toEqual({ 1: null, 2: { status: 'awaiting' } });
+    });
+
+    it('yields to a result this panel records on the lane itself', async () => {
+      const { result } = peerRecorder();
+      act(() => result.current.notePeerFinish(1, 4720));
+
+      act(() => result.current.recordDnf(1));
+
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('saved'));
+      expect(result.current.peerSaves[1]).toBeNull();
     });
   });
 

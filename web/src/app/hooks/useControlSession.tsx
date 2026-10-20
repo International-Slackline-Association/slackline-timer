@@ -1,3 +1,4 @@
+import { useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ReadyState } from 'react-use-websocket';
 
@@ -12,6 +13,7 @@ import {
   type SpeedlineSnapshot,
   type WSMessage,
 } from 'app/hooks/useWebSocket';
+import { allDbUpdateQueryKeys, dbUpdateQueryKeys } from 'app/pages/Stream/dbUpdateInvalidation';
 import { useSelectedCompetition } from 'app/state/selectedCompetition';
 import {
   clearSelfSnapshot,
@@ -104,7 +106,9 @@ export interface PeerEvent {
 }
 
 /** Which mirrored messages are a peer-visible board change; the rest (a
- * `request_state` ask, a preview toggle) move nothing the operator watches. */
+ * `request_state` ask, a preview toggle) move nothing the operator watches. A
+ * `db_update` is the write Lambda's, not a panel's — the acting panel gets its
+ * own write's frame too — so it proves no peer either. */
 const peerEventKind = (message: WSMessage): PeerEvent['kind'] | null => {
   if (LIVE_TIMER_TYPES.has(message.type)) return 'timer';
   if (message.type === 'updateSelection') return 'selection';
@@ -287,6 +291,14 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
 
   useRunGuard(runLive);
 
+  // A peer's save reaches this board only as the write Lambda's `db_update`
+  // (ADR 0038: the panels relay no data-plane state), so the board refetches
+  // what it names — the same targeted keys the overlays use.
+  const queryClient = useQueryClient();
+  const invalidate = (queryKeys: QueryKey[]) => {
+    for (const queryKey of queryKeys) void queryClient.invalidateQueries({ queryKey });
+  };
+
   /**
    * Write this panel's current state to the device. The snapshot is built the
    * same way a `request_state` answer is, so there is exactly one definition of
@@ -462,6 +474,9 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
     liveSinceOpenRef.current = false;
     peerAnsweredRef.current = false;
     pristineRef.current = boardFingerprint();
+    // Relay delivery is at-most-once: a `db_update` lost while the link was down
+    // names nothing, so every branch refetches.
+    invalidate(allDbUpdateQueryKeys(sessionIdRef.current));
     sendRaw({ type: 'request_state', data: {} } as DistributiveOmit<T, 'sessionId'>);
     setPeerState('awaiting');
     const timeoutId = window.setTimeout(() => {
@@ -569,6 +584,9 @@ export const useControlSession = <T extends WSMessage>(params: UseControlSession
         // Write-free like the snapshot path: setting the ref+state never
         // re-broadcasts, so there is no cross-panel echo to terminate.
         applyPreviewEnabled(message.data.enabled);
+        break;
+      case 'db_update':
+        invalidate(dbUpdateQueryKeys(sessionId, message.data.entity));
         break;
       case 'state_snapshot':
         if (liveSinceOpenRef.current || !applySnapshot) break;

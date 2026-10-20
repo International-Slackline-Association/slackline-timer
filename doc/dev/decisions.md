@@ -1607,6 +1607,22 @@ tiebreak. Load-bearing for `PEER_HINT`
 battle boards rebuild `lastRan` from each other's relayed `nextUp`, so an
 outstamping joiner would teach the live panels the wrong alternation.
 
+**Addendum (2026-10-21, a peer's save reaches the mirror as data, not as a
+claim).** §2 binds every write to the panel whose operator acted, and the row's
+id comes back only in that panel's POST reply — so a mirroring panel had no way
+to know a peer's Time had landed, and its attempt badge and `attemptCapBlocks`
+read a stale count. The boards now consume the write Lambda's `db_update`
+(0006) like the overlays do: `useControlSession` invalidates the entity's keys
+per frame and every branch once per OPEN (at-most-once relay). Nothing new
+rides the wire. The Speedline lane strip derives its read-only
+'Awaiting save · other panel' / 'Saved <t> · other panel' chip from the
+persisted row, found on the relayed start and stop epochs exactly
+(`raceTime.peerSavedTime` — so neither an earlier run's row nor a resumed stop's
+still-cached row can pass) and then followed by its `timeId`, which a
+correction or re-attribution there keeps — so the mirror never claims a save
+the server did not accept. Corrections, retry, move and void stay on the posting panel; the
+mirror's Void is locked with the reason when only a peer recorded the run.
+
 ## 0039 — Freestyle score values: no imposed judging resolution, float noise normalized at the formula boundary, 2-decimal display
 
 **Accepted · 2026-07-19** (owner request; spec in PLANS
