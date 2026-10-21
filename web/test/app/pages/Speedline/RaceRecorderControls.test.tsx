@@ -61,12 +61,6 @@ describe('RaceRecorderControls', () => {
     expect(screen.queryByTestId('why-line')).toBeNull();
   });
 
-  /**
-   * The lane column's Retry sits below the race pair, a scroll under the
-   * 1280×720 fold; the rail strip is the same retry within reach. One strip per
-   * lane that holds a failed POST — never the shared create mutation's last
-   * result, which a later lane's success wipes while lane 1 is still unsaved.
-   */
   describe('a failed lane save on the rail', () => {
     const input = (athleteId: string) => ({
       athleteId,
@@ -120,8 +114,7 @@ describe('RaceRecorderControls', () => {
       expect(retrySave).toHaveBeenLastCalledWith(1);
     });
 
-    // A playoff rail runs ~630 px; at its foot the strip ended 84 px under the
-    // 1280×720 fold. It heads the rail, above the setup rows.
+    // A playoff rail runs ~630 px, its foot under the 1280×720 fold.
     it('heads the rail, ahead of the round and match setup', () => {
       render(
         <RaceRecorderControls
@@ -533,11 +526,6 @@ describe('RaceRecorderControls', () => {
     });
   });
 
-  /**
-   * A run whose times another panel recorded is voided there: only that panel
-   * holds the rows' ids, so a void here would delete nothing and still clear
-   * this board's run.
-   */
   describe('Void on a run another panel recorded', () => {
     const OTHER_PANEL = 'recorded on the other panel — void it there';
 
@@ -598,8 +586,7 @@ describe('RaceRecorderControls', () => {
       expect(screen.queryByTestId('why-line')).toBeNull();
     });
 
-    // ADR 0038 §2: a panel retracts only the rows it wrote, so the question
-    // names the other panel's row as staying rather than leaving it unsaid.
+    // ADR 0038 §2: a panel retracts only the rows it wrote.
     it('names the other panel’s row as staying on a mixed run', () => {
       const voidRun = vi.fn();
       render(

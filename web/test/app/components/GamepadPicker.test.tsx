@@ -76,9 +76,6 @@ describe('GamepadPicker', () => {
     expect(document.querySelector('[role="listbox"]')).toBeNull();
     expect(document.activeElement).not.toBe(picker);
   });
-  // The Speedline setup strip: one row beside the press readout, at a tablet's
-  // width. The pad id is the browser's whole descriptor string, so inline it
-  // is a phrase that truncates, and the select keeps the compact floor.
   it('shortens to a phrase inline, the whole id in the title', () => {
     const longId = 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)';
     withPads([{ index: 0, id: longId }]);

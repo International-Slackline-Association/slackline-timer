@@ -820,19 +820,15 @@ describe('useRaceRecorder', () => {
       expect(bodies('POST', '/times')).toHaveLength(0);
       expect(bodies('PUT', '/matches/')).toHaveLength(0);
 
-      // A DNF over a peer-stopped lane is the other panel's to record (ADR 0038
-      // §2): refused, so it neither POSTs a second row nor re-fires the tally.
+      // The other panel's to record (ADR 0038 §2): no second row, no tally.
       act(() => result.current.recordDnf(2));
       expect(bodies('POST', '/times')).toHaveLength(0);
       expect(result.current.runWins).toEqual({ 1: 0, 2: 0 });
     });
   });
 
-  /**
-   * The lane another panel stopped: its Time POSTs there (ADR 0038), and this
-   * panel learns of the row only through the `db_update` refetch — so the strip
-   * says what it is waiting for, then what the server holds.
-   */
+  // The other panel POSTs the lane's Time (ADR 0038); this one sees the row only
+  // through the `db_update` refetch.
   describe('a lane another panel recorded (peerSaves)', () => {
     const peerRow = (over: Partial<Time> = {}): Time => ({
       timeId: 'p1',
@@ -952,11 +948,8 @@ describe('useRaceRecorder', () => {
       expect(result.current.peerSaves).toEqual({ 1: null, 2: { status: 'awaiting' } });
     });
 
-    /**
-     * The row is the other panel's (ADR 0038 §2): a DNF here would POST a
-     * second row for the one attempt. An awaiting save is a POST in flight, so
-     * it locks too — and the hook refuses, not just the button.
-     */
+    // ADR 0038 §2. An awaiting save is a POST in flight, so it locks too, and
+    // the hook refuses, not just the button.
     it('refuses a DNF on the lane the other panel is saving or saved', async () => {
       const OTHER_PANEL = 'recorded on the other panel — DNF it there';
       const { result, refetch } = peerRecorder();

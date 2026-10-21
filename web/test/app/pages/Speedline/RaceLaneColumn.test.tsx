@@ -387,11 +387,8 @@ describe('RaceLaneColumn', () => {
     });
   });
 
-  /**
-   * The lane another panel stopped: its save, and every correction of it, live
-   * on that panel (ADR 0038 — the timeId is its alone). This one reports the
-   * row read-only and offers nothing that would act on it.
-   */
+  // Read-only: the row's corrections live on the panel that holds its timeId
+  // (ADR 0038).
   describe('a lane another panel recorded', () => {
     const peerLane = (peerSave: ReturnType<typeof peerSaved> | { status: 'awaiting' }) =>
       makeRecorder({
@@ -423,12 +420,9 @@ describe('RaceLaneColumn', () => {
       expect(screen.getByRole('status', { name: /^Saved DNF · other panel$/ })).toBeInTheDocument();
     });
 
-    /**
-     * Beside the quali attempts badge the full words need ~294 px; the lane
-     * column is 200 px at 1280x720 and 280 at 1440x900. Below the threshold the
-     * chip keeps the peer glyph and the value and drops the words — a second
-     * chip row would push the race pair under the fold.
-     */
+    // Below `boardGeometry.speedline.peerWords` the chip keeps the peer glyph
+    // and the value and drops the words: a second chip row would push the race
+    // pair under the fold.
     it('spells "other panel" only where the column has room for it beside the badge', () => {
       render(column(1, peerLane(peerSaved(5720))));
 
@@ -440,11 +434,6 @@ describe('RaceLaneColumn', () => {
       for (const w of words) expect(window.getComputedStyle(w).display).toBe('none');
     });
 
-    /**
-     * A DNF here would POST a second row for the attempt (ADR 0038 §2: the row
-     * is the saving panel's). Unreserved, like Void's: the pair is the fold
-     * contract's last row, and every idle board would pay for a two-panel line.
-     */
     it.each([
       ['saved', peerSaved(5720)],
       ['still on its way', { status: 'awaiting' as const }],
@@ -487,10 +476,9 @@ describe('RaceLaneColumn', () => {
   });
 
   /**
-   * The quali column is 200 px at 1280x720: the badge, an FS chip and a
-   * spelt-out save chip need ~268, and a second strip row would push the race
-   * pair under the fold. Narrower than `stripWords`, each chip keeps its figure
-   * and the words ride its accessible name and title at every width.
+   * Narrower than `boardGeometry.speedline.stripWords`, each chip keeps its
+   * figure (a second strip row would push the race pair under the fold); the
+   * words ride its accessible name and title at every width.
    */
   describe('the status strip in a narrow column', () => {
     const words = (chip: HTMLElement) => [...chip.querySelectorAll('[data-strip-words]')];

@@ -1281,12 +1281,8 @@ describe('useControlSession peer presence (freestyle-board-ux §3/§4.10)', () =
   });
 });
 
-/**
- * A peer panel's save reaches this board through the write Lambda's
- * `db_update`, not through the peer: the panels relay no data-plane state, so
- * the mirroring board refetches what the entity names (ADR 0038 writes stay
- * bound to the panel that made them).
- */
+// A peer panel's save reaches this board only as the write Lambda's `db_update`
+// (ADR 0038).
 describe('useControlSession data-plane refresh', () => {
   const invalidated = (): unknown[] =>
     invalidateQueriesMock.mock.calls.map(([filters]) => filters.queryKey);
@@ -1333,8 +1329,6 @@ describe('useControlSession data-plane refresh', () => {
     expect(invalidated()).toEqual(dbUpdateQueryKeys('comp-1', 'time'));
   });
 
-  // The Lambda, not a panel, sends it — and the acting panel receives its own
-  // write's frame too, so it cannot prove a peer or flash a peer cue.
   it('reads a db_update as no peer action: no presence, no cue', () => {
     const { result, rerender } = renderHook(() => useControlSession(baseParams()));
 

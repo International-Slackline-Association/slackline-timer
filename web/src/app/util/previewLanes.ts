@@ -57,7 +57,7 @@ const fromRecovered = (state: Exclude<SpeedlineLaneState, { kind: 'idle' }>): Pr
  *  - an idle row is never newer than anything — keep the lane;
  *  - a blank lane, or a later run (newer startTime), takes the row;
  *  - the same run `finished` while we still run is a stop this display missed
- *    — freeze (the running-forever fix);
+ *    — freeze, or the lane runs forever;
  *  - the same run `running` while we are frozen is a missed `resume` — but only
  *    if the snapshot was asserted after the stop we applied (the control's own
  *    clock on both sides); an earlier snapshot describes the lane as it was;

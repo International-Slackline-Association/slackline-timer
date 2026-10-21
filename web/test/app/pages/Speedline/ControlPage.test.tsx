@@ -196,10 +196,6 @@ describe('SpeedlineControlPage peer mirroring (ADR 0038)', () => {
     expect(writeCalls()).toHaveLength(0);
   });
 
-  /**
-   * The lane another panel stopped: the Time POSTs there, and reaches this
-   * board only as the write Lambda's `db_update` and the refetch it causes.
-   */
   it('reads the other panel’s save off the db_update refetch, writing nothing', async () => {
     let persisted: unknown[] = [];
     apiFetchMock.mockImplementation((path: string) =>

@@ -34,9 +34,8 @@ export const GamepadPicker = ({ inline = false }: { inline?: boolean }) => {
         variant="caption"
         color="text.secondary"
         // Inline (the Speedline setup strip) the browser's whole descriptor
-        // string would take the line the press readout needs: presence holds a
-        // phrase and does not shrink, so the readout is what gives way after
-        // it. The id stays in the title.
+        // string would take the press readout's line: presence is capped and
+        // does not shrink, the readout gives way. The id stays in the title.
         noWrap={inline}
         title={inline ? id : undefined}
         sx={{

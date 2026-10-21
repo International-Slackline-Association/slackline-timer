@@ -109,10 +109,8 @@ export const RaceRecorderControls = ({
   const [resetSeriesAsked, setResetSeriesAsked] = useState<string | null>(null);
 
   // What a void deletes and what it leaves, in the words the lane chips use.
-  // A void deletes this panel's rows only (ADR 0038 §2): the other panel's
-  // `timeId` reached this one as a read, not authorship. Gating the void on
-  // both rows living here would strand a run with one own row, so the
-  // question names the other panel's row as staying instead.
+  // A void deletes this panel's rows only (ADR 0038 §2); a run with one own row
+  // stays voidable, and the question names the other panel's row as staying.
   const voidCost: VoidCost = {
     deletes: ([1, 2] as const).flatMap((lane) => {
       const feedback = laneFeedback[lane];
@@ -193,8 +191,7 @@ export const RaceRecorderControls = ({
         {/* Per lane, off the lane's own feedback: both lanes share one create
             mutation, whose last result a later lane's save would clear while
             this lane is still unsaved. The lane column's Retry is the same
-            press, a scroll under the 1280×720 fold; at the rail's head this
-            one clears it even with a playoff match's rows below. */}
+            press, but under the 1280×720 fold; this one heads the rail. */}
         {([1, 2] as const).map((lane) => {
           const feedback = laneFeedback[lane];
           if (!feedback?.failed) return null;

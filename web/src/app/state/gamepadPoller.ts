@@ -31,10 +31,9 @@ const MAX_REPORT_AGE_MS = 250;
 
 /**
  * The epoch of the HID report that carried the press. `gamepad.timestamp` is on
- * the `performance.now()` clock, so only its AGE is taken from it and applied to
- * `Date.now()` — no cross-clock arithmetic — rounded to whole ms, since the
- * stop it times is an integer epoch every surface formats (`formatMs` throws on
- * a fraction). Browsers that leave it 0/absent get the poll time. Read at a report's first edge, before it is delivered: every
+ * the `performance.now()` clock, so only its AGE is applied to `Date.now()`,
+ * rounded to whole ms (`formatMs` throws on a fraction). A 0/absent timestamp
+ * gets the poll time. Read once per report, before its first delivery: every
  * edge of the report shares it, so a dead heat's second stop does not absorb
  * the first one's commit.
  */

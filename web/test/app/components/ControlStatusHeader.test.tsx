@@ -250,8 +250,8 @@ describe('ControlStatusHeader', () => {
     );
 
     const grid = screen.getByTestId('control-health-grid');
-    // One row of four from `md`, the 1024 tablet included: a 2x2 block there
-    // is the row that put the Speedline transport under the 768 px fold.
+    // One row of four from `md`, the 1024 tablet included: a 2x2 block puts the
+    // Speedline transport under the 768 px fold.
     expect(deskMediaValue(grid, 'grid-template-columns', MD_MEDIA)).toBe(
       'repeat(3, minmax(0, auto)) auto',
     );
@@ -261,11 +261,8 @@ describe('ControlStatusHeader', () => {
     expect(window.getComputedStyle(grid.children[3]).gridColumn).not.toBe('1 / -1');
   });
 
-  // Below the Speedline desk the setup strip runs under the plates and the
-  // recording line instead of in a row of its own, the ~100 px that would put
-  // `Lane n DNF` on the 768 px fold. At 1024 the strip is wider than what the
-  // one-row health block leaves it, so the block opens up: plates over two
-  // tracks, the caption under the last one only, the strip under the rest.
+  // A setup row of its own costs the ~100 px that would put `Lane n DNF` on the
+  // 768 px fold; the layout is `SETUP_GRID_SX`'s docblock.
   describe('with a setup slot', () => {
     const renderWithSetup = () =>
       render(
@@ -323,9 +320,6 @@ describe('ControlStatusHeader', () => {
       );
     });
 
-    // Without one, health takes its own width at the tablet — a third of it is
-    // narrower than the one-row block — and the outer columns split evenly from
-    // lg, centring the recording line on the page.
     it('leaves the three-column header unsplit without one', () => {
       render(<ControlStatusHeader {...baseProps} recording={{ active: true }} />);
       const grid = headerGrid();
