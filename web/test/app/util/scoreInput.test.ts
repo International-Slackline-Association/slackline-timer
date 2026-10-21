@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Match, Score } from 'app/types';
 import {
+  awaitsRestore,
   deriveFreestyleMatchWinner,
   dnfScoreInput,
   entryDraft,
@@ -698,5 +699,27 @@ describe('hasDraft', () => {
     ['a half-typed negative override', true, editing({}, '-')],
   ])('%s → %s', (_label, expected, entry) => {
     expect(hasDraft(entry)).toBe(expected);
+  });
+});
+
+describe('awaitsRestore', () => {
+  const result = { overall: 6, dnf: false };
+  const blank = { fields: ZERO_FIELDS, override: null };
+
+  // Another panel's save may lock only a panel holding nothing of its own.
+  it.each<[string, boolean, SlotEntry]>([
+    ['an empty panel', true, { status: 'empty' }],
+    ['a panel edited back to blank', true, { status: 'editing', ...blank }],
+    [
+      'a typed draft',
+      false,
+      { status: 'editing', fields: { ...ZERO_FIELDS, style: 4 }, override: null },
+    ],
+    ['a save in flight', false, { status: 'pending', ...blank, result }],
+    ['a failed save', false, { status: 'error', ...blank, result, reason: 'boom' }],
+    ['the board’s own save', false, { status: 'saved', ...blank, result, origin: 'live' }],
+    ['a restored save', false, { status: 'saved', ...blank, result, origin: 'restored' }],
+  ])('%s → %s', (_label, expected, entry) => {
+    expect(awaitsRestore(entry)).toBe(expected);
   });
 });

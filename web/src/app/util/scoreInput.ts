@@ -390,6 +390,13 @@ export const hasDraft = (entry: SlotEntry): boolean => {
   return override !== null || Object.values(fields).some((value) => value !== 0);
 };
 
+/** Would a persisted score for this slot's athlete be taken in? Only by a panel
+ * holding nothing of its own — no save in flight, landed or failed, and nothing
+ * typed — so another panel's save never replaces a draft or downgrades this
+ * board's own `live` save to `restored`. */
+export const awaitsRestore = (entry: SlotEntry): boolean =>
+  (entry.status === 'empty' || entry.status === 'editing') && !hasDraft(entry);
+
 /** A panel taking input: neither locked by a save nor mid-POST. */
 export const isEntryOpen = (entry: SlotEntry): boolean =>
   entry.status !== 'pending' && entry.status !== 'saved';

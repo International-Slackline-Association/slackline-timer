@@ -581,6 +581,11 @@ neither is the master.
   read the same on each. A try is counted where it is started, once — the other
   panel follows it rather than counting it again. Moving on to another match
   ends the series on both panels, not only on the one that picked it.
+- A score the other panel saves shows up on yours too: that athlete's panel
+  locks on the saved value, with the **Scores page** link for corrections, and
+  **Reset lanes for the next match** is offered once both athletes are saved,
+  whichever panel saved them. A score you are typing for that athlete is kept,
+  never replaced; clear its fields and the saved one appears.
 - After a reload the board picks the turn order back up from the other panel:
   the athlete who has not had their turn is still the one ADVANCE starts next.
 - The audience screens are not disturbed by a panel opening: a projector or

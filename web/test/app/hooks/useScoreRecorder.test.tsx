@@ -684,6 +684,85 @@ describe('useScoreRecorder', () => {
       expect(result.current.entries[2]).toMatchObject({ status: 'saved', origin: 'live' });
       expect(isLocked(result, 1)).toBe(false);
     });
+
+    // The other panel's save reaches this board only as a refetch (the
+    // `db_update` invalidation), long after this slot was seeded empty.
+    describe('a score another panel saves', () => {
+      const peerSaves = async (
+        rendered: { result: { current: ScoreRecorder } },
+        scores: Score[],
+      ) => {
+        seededScores = scores;
+        await act(() => rendered.result.current.scores.refetch());
+      };
+
+      const seededPair = async () => {
+        const rendered = renderRecorder();
+        await waitFor(() => expect(rendered.result.current.scores.isSuccess).toBe(true));
+        act(() => rendered.result.current.setAthlete(1, 'a1'));
+        act(() => rendered.result.current.setAthlete(2, 'a2'));
+        return rendered;
+      };
+
+      it('locks an empty slot on the persisted score, without writing', async () => {
+        const rendered = await seededPair();
+        const { result } = rendered;
+        expect(result.current.entries[1].status).toBe('empty');
+
+        await peerSaves(rendered, [qualiScore('a1', 6)]);
+
+        await waitFor(() => expect(isLocked(result, 1)).toBe(true));
+        expect(result.current.entries[1]).toMatchObject({
+          origin: 'restored',
+          result: { overall: 6, dnf: false },
+        });
+        expect(result.current.records[1]).toMatchObject({ scoreId: 's-a1' });
+        expect(fieldsOf(result, 1).difficulty).toBe(6);
+        expect(bodies('POST', '/scores')).toHaveLength(0);
+      });
+
+      it('locks both slots whichever panel saved each', async () => {
+        const rendered = await seededPair();
+        const { result } = rendered;
+        seededScores = [qualiScore('a2', 3)];
+        await saveScore(result, 1, 8);
+
+        await peerSaves(rendered, [qualiScore('a1', 8), qualiScore('a2', 3)]);
+
+        await waitFor(() => expect(isLocked(result, 2)).toBe(true));
+        expect(result.current.entries[1]).toMatchObject({ status: 'saved', origin: 'live' });
+        expect(result.current.entries[2]).toMatchObject({ status: 'saved', origin: 'restored' });
+      });
+
+      it('keeps a typed draft, and locks once its fields are cleared', async () => {
+        const rendered = await seededPair();
+        const { result } = rendered;
+        act(() => result.current.setField(1, 'style', 4));
+
+        await peerSaves(rendered, [qualiScore('a1', 6)]);
+
+        expect(result.current.entries[1]).toMatchObject({ status: 'editing' });
+        expect(fieldsOf(result, 1).style).toBe(4);
+
+        act(() => result.current.setField(1, 'style', 0));
+
+        await waitFor(() => expect(isLocked(result, 1)).toBe(true));
+        expect(result.current.entries[1]).toMatchObject({ origin: 'restored' });
+        expect(fieldsOf(result, 1).difficulty).toBe(6);
+      });
+
+      it('leaves a failed save editable over the persisted score', async () => {
+        const rendered = await seededPair();
+        const { result } = rendered;
+        apiFetchMock.mockImplementationOnce(() => Promise.reject(new Error('boom')));
+        act(() => result.current.recordScore(1));
+        await waitFor(() => expect(result.current.entries[1].status).toBe('error'));
+
+        await peerSaves(rendered, [qualiScore('a1', 6)]);
+
+        expect(result.current.entries[1].status).toBe('error');
+      });
+    });
   });
 
   describe('round filter + confirm-on-round-change (ADR 0033)', () => {

@@ -59,6 +59,15 @@ fold is measured are the [responsive contract](./design-system.md#responsive-con
 > scores saved and the winner line up, `Reset lanes for the next match` ends at 894 on the 1440×900
 > desk; on the compact Score tab it ends at 597 (1280×720) / 676 (1024×768), and quali's
 > `Reset lane for the next athlete` at 659 / 738.
+>
+> That budget is the turn path; step 5 sits outside it. Measured 2026-10-21 (both turns taken,
+> desk app chrome included): at 1440×900 the bare `[Begin best trick]` ends at 969 (`scrollHeight`
+> 1032), and the armed panel opens at 916 and ends at 1249 (`scrollHeight` 1282) in the armed,
+> try-open and both-spent states alike; at 1920×1080 it runs 918–1252. It starts under the fold, so
+> no geometry inside the panel recovers it: the ~570 px above it is the selection row and the run
+> deck, both locked while a series is armed. The sticky plate keeps End try / ADVANCE, the tallies
+> and the try clock in view, and the compact **Best trick** tab holds the whole panel (last control
+> 671 at 1280×720, 714 at 1024×768). Every target measures ≥ 44 px.
 
 ## 1. Thesis
 

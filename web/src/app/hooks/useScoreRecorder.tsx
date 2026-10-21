@@ -7,6 +7,7 @@ import type { LiveSelection } from 'app/hooks/useWebSocket';
 import { computeOverall, isMatchRound, type MatchRound, type ScoreInput } from 'app/types';
 import { apiErrorMessage } from 'app/util/apiError';
 import {
+  awaitsRestore,
   deriveFreestyleMatchWinner,
   dnfScoreInput,
   entryDraft,
@@ -137,9 +138,12 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
    * runs in both modes: qualification has no match to select and is where
    * nearly every save happens, and an unlocked panel there would upsert
    * straight over the persisted `SCORE#<round>#<athleteId>` row. `seededKey`
-   * makes it once per pair — a Save invalidates the scores query, and
-   * re-seeding would downgrade the board's own save to a `restored` one (which
-   * is what decides whether it outranks a stored `Match.winnerId`).
+   * makes it once per pair for a panel holding anything of its own — a Save
+   * invalidates the scores query, and re-seeding would downgrade the board's
+   * own save to a `restored` one (which is what decides whether it outranks a
+   * stored `Match.winnerId`). A panel still holding nothing (`awaitsRestore`)
+   * keeps looking: another panel's save reaches this board only as a refetch
+   * (the `db_update` invalidation), and a draft cleared to zero lets one in.
    */
   useEffect(() => {
     const scoresData = scores.data;
@@ -151,13 +155,13 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
         return;
       }
       const key = `${round}#${athleteId}`;
-      if (seededKey.current[slot] === key) return;
+      if (seededKey.current[slot] === key && !awaitsRestore(entries[slot])) return;
       seededKey.current[slot] = key;
       const restored = restoreSlotFromScores(athleteId, round, scoresData);
       if (!restored) return;
       dispatch({ type: 'RESTORE', player: slot, ...restored });
     });
-  }, [round, athletes, scores.data]);
+  }, [round, athletes, entries, scores.data]);
 
   const clearToast = (): void => setToast(null);
 
