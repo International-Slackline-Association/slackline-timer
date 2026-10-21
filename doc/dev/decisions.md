@@ -2461,7 +2461,7 @@ the mirror forward's causality test assumes. A `Stopwatch` that mounts late
 paints from the display's lane state; nothing is replayed. The test harness
 (`web/test/util/wsMock.ts`) runs every fixture through `isRelayFrame` and
 delivers it the same way, so a fixture production would drop fails its test.
-Owes the peer-mirroring and control+preview smokes.
+The peer-mirroring and control+preview driver smokes pass; a real Buzz! dongle (one HID report, shared `at`) is still a manual check.
 
 ## 0052 — Data-plane integrity: shared input bounds, audit before tightening, cheap referential rules
 
