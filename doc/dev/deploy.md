@@ -588,7 +588,8 @@ deploy's `create-invalidation --paths /*` reaches AWS **literally, un-mangled**
    carrying the photos-bucket presigned-POST CORS **and** the throttling guardrails (§6.2);
    the reserved-concurrency caps were deferred (account concurrency limit 10 — §6.2).
 3. **Deploy web** `slackline-timer-v1-web` / eu-central-1 (§3), then set
-   `WEB_ORIGIN` to its `WebUrl` and redeploy the backend (§2).
+   `WEB_ORIGIN` to its `WebUrl` and redeploy the backend (§2). A `cdk watch` dev stack
+   takes `-c webOrigin=http://localhost:5173` per deploy (`WEB_ORIGIN` is one origin).
 4. **Cognito harden** (§0.1 `hardenAppClient.mjs --apply`) — ✅ **done 2026-07-07**
    (`verifyAppClient.mjs` clean).
 5. **Bootstrap us-east-1 + deploy billing** (§6.1) — ✅ **done 2026-07-07** (stack live,
