@@ -256,7 +256,7 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
   useEffect(() => {
     if (store.effects.length === 0) return;
     writeMatchWinner();
-    dispatch({ type: 'DRAIN' });
+    dispatch({ type: 'DRAIN', count: store.effects.length });
   }, [store.effects]);
 
   /**

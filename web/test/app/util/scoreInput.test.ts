@@ -447,7 +447,7 @@ describe('the per-athlete-slot entry machine', () => {
 
     expect(store.entries[1]).toMatchObject({ status: 'saved', result: RESULT, origin: 'live' });
     expect(store.effects).toEqual([{ kind: 'resolve_match' }]);
-    expect(scoreEntryReducer(store, { type: 'DRAIN' }).effects).toEqual([]);
+    expect(scoreEntryReducer(store, { type: 'DRAIN', count: 1 }).effects).toEqual([]);
   });
 
   it('refuses edits and a second save while one is in flight or landed', () => {
@@ -514,7 +514,7 @@ describe('the per-athlete-slot entry machine', () => {
       edit(26),
       SUBMIT,
       SAVED,
-      { type: 'DRAIN' },
+      { type: 'DRAIN', count: 1 },
       {
         type: 'RESTORE',
         player: 2,
@@ -524,6 +524,26 @@ describe('the per-athlete-slot entry machine', () => {
     );
 
     expect(store.entries[2]).toMatchObject({ status: 'saved', origin: 'restored' });
+    expect(store.effects).toEqual([{ kind: 'resolve_match' }]);
+  });
+
+  it('keeps a resolution queued after the one the edge drained', () => {
+    // Concurrent split save: the save's refetch already carries the other
+    // panel's row, so SAVED and RESTORE commit together and the edge drains
+    // with the pre-restore entries. Its DRAIN must not take the restore's write.
+    const store = run(
+      edit(26),
+      SUBMIT,
+      SAVED,
+      {
+        type: 'RESTORE',
+        player: 2,
+        draft: { fields: { ...EMPTY, difficulty: 8 }, override: null },
+        record: record('a2', 8),
+      },
+      { type: 'DRAIN', count: 1 },
+    );
+
     expect(store.effects).toEqual([{ kind: 'resolve_match' }]);
   });
 
@@ -555,7 +575,7 @@ describe('the per-athlete-slot entry machine', () => {
       SAVED,
       // The save's own resolution has been drained by the edge; this is the
       // second one, queued by the move.
-      { type: 'DRAIN' },
+      { type: 'DRAIN', count: 1 },
       { type: 'CLEAR', player: P },
       { type: 'MOVED', player: P, record: record('a2') },
     );

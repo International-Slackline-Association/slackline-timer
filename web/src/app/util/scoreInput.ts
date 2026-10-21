@@ -442,7 +442,7 @@ type SlotAction =
   | { type: 'CLEAR'; player: 1 | 2 };
 
 export type ScoreEntryAction =
-  SlotAction | { type: 'CLEAR_BOTH' } | { type: 'SWAP' } | { type: 'DRAIN' };
+  SlotAction | { type: 'CLEAR_BOTH' } | { type: 'SWAP' } | { type: 'DRAIN'; count: number };
 
 /** One slot's whole state: the panel, and the row it has on the server. */
 interface SlotState {
@@ -596,7 +596,11 @@ export const scoreEntryReducer = (
 ): ScoreEntryStore => {
   switch (action.type) {
     case 'DRAIN':
-      return drainEffects(store);
+      // Drop only what the edge performed: a RESTORE committed alongside the
+      // drained SAVED queues its resolve_match after the edge read `entries`.
+      return action.count >= store.effects.length
+        ? drainEffects(store)
+        : { ...store, effects: store.effects.slice(action.count) };
 
     case 'CLEAR_BOTH':
       // A selection cascade is a new pair: the rows go with the panels, since
