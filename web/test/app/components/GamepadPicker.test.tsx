@@ -3,6 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GamepadPicker } from 'app/components/GamepadPicker';
+import { fieldWidths } from 'app/theme/tokens';
+
+import { px } from '../../util/computedUnits';
 
 const { selectionMock, setSelectedPadId } = vi.hoisted(() => ({
   selectionMock: vi.fn(),
@@ -72,5 +75,31 @@ describe('GamepadPicker', () => {
 
     expect(document.querySelector('[role="listbox"]')).toBeNull();
     expect(document.activeElement).not.toBe(picker);
+  });
+  // The Speedline setup strip: one row beside the press readout, at a tablet's
+  // width. The pad id is the browser's whole descriptor string, so inline it
+  // is a phrase that truncates, and the select keeps the compact floor.
+  it('shortens to a phrase inline, the whole id in the title', () => {
+    const longId = 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)';
+    withPads([{ index: 0, id: longId }]);
+    const { unmount } = render(<GamepadPicker inline />);
+    const caption = screen.getByText(`Controller: ${longId}`);
+    const style = window.getComputedStyle(caption);
+    expect(style.whiteSpace).toBe('nowrap');
+    expect(style.textOverflow).toBe('ellipsis');
+    // A fixed phrase (jsdom reports the `ch` cap in px): the readout beside it
+    // is what gives way.
+    expect(px(style.maxWidth)).toBeGreaterThan(0);
+    expect(style.flexShrink).toBe('0');
+    expect(caption).toHaveAttribute('title', longId);
+    unmount();
+
+    withPads(twoPads);
+    render(<GamepadPicker inline />);
+    const field = screen
+      .getByRole('combobox', { name: 'Controller' })
+      .closest('.MuiFormControl-root') as HTMLElement;
+    expect(window.getComputedStyle(field).minWidth).toBe(`${fieldWidths.compact}px`);
+    expect(window.getComputedStyle(field).maxWidth).toBe(`${fieldWidths.compact}px`);
   });
 });

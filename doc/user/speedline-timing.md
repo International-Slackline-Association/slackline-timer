@@ -36,7 +36,9 @@ Setup collapses to a **single strip** inside the status header, under the
 round and gender and beside the connection and audio chips: the **Preview**
 switch and its link, whether a handset is connected, the line saying what the
 last press did, and **Open handset map** — the same controls, on one line, so
-the clocks and the stop buttons stay on screen without scrolling.
+the clocks and the stop buttons stay on screen without scrolling. A long
+controller name or press line is cut short with "…" rather than wrapped; hover
+it to read the whole line.
 
 ## Before the first run
 

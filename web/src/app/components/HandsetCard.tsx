@@ -1,4 +1,4 @@
-import { Paper, Stack, Typography } from '@mui/material';
+import { Box, Paper, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 
 import { BuzzerMappingDialog } from 'app/components/BuzzerMappingDialog';
@@ -30,10 +30,11 @@ interface Props {
   describe: (button: number) => string;
   /**
    * `card` is the desk's setup column; `strip` is the same live proof in one
-   * wrapping row, for the widths where the desk columns stack and a ~220 px
-   * setup card would push the lane transport under the fold. The page picks ONE — the card owns a pad
-   * listener and a once-a-second ticker, so a CSS display toggle over both
-   * would double them and report the press twice.
+   * row that truncates rather than wraps, for the widths where the desk
+   * columns stack and a ~220 px setup card would push the lane transport under
+   * the fold. The page picks ONE — the card owns a pad listener and a
+   * once-a-second ticker, so a CSS display toggle over both would double them
+   * and report the press twice.
    */
   variant?: 'card' | 'strip';
 }
@@ -77,51 +78,69 @@ export const HandsetCard = ({ title, rows, describe, variant = 'card' }: Props) 
 
   // The same three things in both shells — presence, the last press, the sheet —
   // so what an operator reads and presses does not change with the viewport.
+  const strip = variant === 'strip';
+  const readoutLine =
+    last === null ? 'last: —' : `last: ${last.line} (${agoLabel(now - last.at)} ago)`;
   const readout = (
     <Typography
       variant="body2"
       component="div"
       aria-live="polite"
       data-testid="handset-readout"
-      sx={{ ...liveCaption, color: 'text.primary' }}
+      // In the strip it takes what the row leaves and clips, never wraps: a
+      // second line is a row of header height, `Lane n DNF` under the 768 px
+      // fold. Clipped, not lost: the sentence is the title, and still spoken.
+      noWrap={strip}
+      title={strip ? readoutLine : undefined}
+      sx={{
+        ...liveCaption,
+        color: 'text.primary',
+        ...(strip ? { flex: '1 1 auto', minWidth: 0 } : {}),
+      }}
     >
-      {last === null ? 'last: —' : `last: ${last.line} (${agoLabel(now - last.at)} ago)`}
+      {readoutLine}
     </Typography>
   );
   const mappingSheet = (
     <BuzzerMappingDialog title={title} rows={rows} triggerLabel="Open handset map" />
   );
 
-  if (variant === 'strip') {
+  if (strip) {
     return (
       <Paper
         component="section"
         aria-label="Handsets"
         variant="outlined"
         data-testid="handset-strip"
-        // Grows into the row and wraps out of it on its own — the strip shares a
-        // line with the Preview switch and may not pin a desk track
-        // (design-system §9 "Responsive contract").
-        sx={{ px: 1, py: 0.5, flex: '1 1 20rem', minWidth: 0 }}
+        // Grows into the row beside the Preview switch and may not pin a desk
+        // track (design-system §9 "Responsive contract"). `py` holds a caption
+        // strip to the switch's height, so only a multi-pad select adds to the
+        // setup row.
+        sx={{ px: 1, py: 0.25, flex: '1 1 20rem', minWidth: 0 }}
       >
         <Stack
           direction="row"
-          spacing={1.5}
+          spacing={1}
           useFlexGap
-          sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+          sx={{ flexWrap: 'nowrap', alignItems: 'center' }}
         >
           {connectedPads.length === 0 ? (
             // The card's own sentence, said in a row's worth of words — the
             // instruction survives (it is the state the operator is looking
             // here to resolve), the heading does not.
-            <Typography variant="body2" sx={{ ...liveCaption, color: 'text.secondary' }}>
+            <Typography
+              variant="body2"
+              noWrap
+              sx={{ ...liveCaption, color: 'text.secondary', flexShrink: 0 }}
+            >
               no handset — press any button
             </Typography>
           ) : (
-            <GamepadPicker />
+            <GamepadPicker inline />
           )}
           {readout}
-          {mappingSheet}
+          {/* The press, whole: the text lines give way around it. */}
+          <Box sx={{ flexShrink: 0 }}>{mappingSheet}</Box>
         </Stack>
       </Paper>
     );
