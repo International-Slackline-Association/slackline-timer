@@ -131,8 +131,9 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
   /**
    * Restore each athlete slot's already-recorded Score into its panel: the five
    * components refill and the panel comes back locked on the persisted
-   * overall/DNF. A slot with no saved Score is left empty and editable. No
-   * Match is written — a restore only re-displays, so it queues no effect.
+   * overall/DNF. A slot with no saved Score is left empty and editable. A
+   * restore writes no Match on its own: it queues the winner write only when
+   * the other slot holds this board's live save (a split save across panels).
    *
    * Driven by the (round, athlete) pair rather than a Match selection, so it
    * runs in both modes: qualification has no match to select and is where
@@ -243,15 +244,15 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
   // PUT the winner the persisted scores now resolve to, if any.
   // `deriveFreestyleMatchWinner` returns null until BOTH athlete slots' scores are
   // persisted, so no Match is ever written off a POST in flight — and a
-  // restore, which queues nothing, never writes at all.
+  // restore queues a write only when it completes a pair this board saved live.
   const writeMatchWinner = (): void => {
     if (!match) return;
     const input = deriveFreestyleMatchWinner(match, athletes, matchResultsOf(entries));
     if (input) updateMatch.mutate({ id: match.matchId, input });
   };
 
-  // Drain the entry machine's `resolve_match`: a save has landed, so re-derive
-  // the winner and write it.
+  // Drain the entry machine's `resolve_match`: a save has landed (or a restore
+  // completed this board's live save), so re-derive the winner and write it.
   useEffect(() => {
     if (store.effects.length === 0) return;
     writeMatchWinner();

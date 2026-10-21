@@ -556,6 +556,25 @@ describe('useScoreRecorder', () => {
       expect(bodies('PUT', '/matches/')).toHaveLength(0);
     });
 
+    // Split save: this panel saves Athlete 1 while the other panel saves
+    // Athlete 2, neither having seen the other's row yet. The own save finds
+    // one persisted result; the refetch that brings the peer's row completes
+    // the pair, and the winner write still binds to this panel's own save.
+    it('PUTs the winner once when a peer’s save completes a pair this panel saved live', async () => {
+      const { result } = await matchRecorder();
+      await saveScore(result, 1, 8);
+      expect(bodies('PUT', '/matches/')).toHaveLength(0);
+
+      seededScores = [score('a1', 8, { scoreId: 's1' }), score('a2', 5)];
+      await act(() => result.current.scores.refetch());
+
+      await waitFor(() => expect(isLocked(result, 2)).toBe(true));
+      expect(result.current.entries[2]).toMatchObject({ origin: 'restored' });
+      await waitFor(() => expect(bodies('PUT', '/matches/')).toHaveLength(1));
+      expect(bodies('PUT', '/matches/')[0]).toMatchObject({ winnerId: 'a1' });
+      expect(result.current.derivedWinner).toEqual({ winnerId: 'a1', source: 'derived' });
+    });
+
     it('leaves an unscored slot editable and does not write the match', async () => {
       // Only slot 1 has a saved score.
       seededScores = [score('a1', 8)];

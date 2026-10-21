@@ -586,6 +586,10 @@ neither is the master.
   **Reset lanes for the next match** is offered once both athletes are saved,
   whichever panel saved them. A score you are typing for that athlete is kept,
   never replaced; clear its fields and the saved one appears.
+- When each panel saves one athlete of a battle, the match winner is still
+  recorded: whichever panel saved an athlete itself stores the winner as soon
+  as the other athlete's score reaches it. A board that only shows two scores
+  saved elsewhere never stores one.
 - After a reload the board picks the turn order back up from the other panel:
   the athlete who has not had their turn is still the one ADVANCE starts next.
 - The audience screens are not disturbed by a panel opening: a projector or

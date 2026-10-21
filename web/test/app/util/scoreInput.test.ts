@@ -506,6 +506,38 @@ describe('the per-athlete-slot entry machine', () => {
     expect(store.effects).toEqual([]);
   });
 
+  it('queues the match resolution when a restore completes a pair this panel saved live', () => {
+    // Split save: this panel saved Athlete 1, the other panel saved Athlete 2
+    // before either saw the other's row. The restore is the first moment this
+    // panel holds both results, and the write still binds to its own save.
+    const store = run(
+      edit(26),
+      SUBMIT,
+      SAVED,
+      { type: 'DRAIN' },
+      {
+        type: 'RESTORE',
+        player: 2,
+        draft: { fields: { ...EMPTY, difficulty: 8 }, override: null },
+        record: record('a2', 8),
+      },
+    );
+
+    expect(store.entries[2]).toMatchObject({ status: 'saved', origin: 'restored' });
+    expect(store.effects).toEqual([{ kind: 'resolve_match' }]);
+  });
+
+  it('queues no write when both halves of the pair are restored', () => {
+    const restore = (player: 1 | 2, athleteId: string): ScoreEntryAction => ({
+      type: 'RESTORE',
+      player,
+      draft: { fields: { ...EMPTY, difficulty: 8 }, override: null },
+      record: record(athleteId, 8),
+    });
+
+    expect(run(restore(1, 'a1'), restore(2, 'a2')).effects).toEqual([]);
+  });
+
   it('keeps the persisted row on the slot when the panel clears for the next athlete', () => {
     // The whole re-attribution feature: the panel reopens for whoever is picked
     // next, but the row it wrote stays addressable — cleared with the entry, a

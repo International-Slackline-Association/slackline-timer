@@ -362,7 +362,8 @@ export type SlotEntry =
   | ({ status: 'pending'; result: ScoreResult } & EntryDraft)
   /** Persisted. `origin` separates a save this board made from one restored off
    * the server — only the former outranks a `Match.winnerId` the operator may
-   * have resolved by hand, and only the former ever writes the Match. */
+   * have resolved by hand, and only a pair holding the former ever writes the
+   * Match (a restore completing it included; two restored halves never do). */
   | ({ status: 'saved'; result: ScoreResult; origin: 'live' | 'restored' } & EntryDraft)
   /** The POST failed; the draft stays editable and `reason` is rendered. */
   | ({ status: 'error'; result: ScoreResult; reason: string } & EntryDraft);
@@ -415,8 +416,9 @@ export const matchResultsOf = (entries: Record<1 | 2, SlotEntry>): Record<1 | 2,
 });
 
 /**
- * The one effect the machine emits: a save landed, so the selected Match's
- * winner may now be resolvable. Performed at the edge (it PUTs).
+ * The one effect the machine emits: a save landed (or a restore completed a
+ * pair this board saved live), so the selected Match's winner may now be
+ * resolvable. Performed at the edge (it PUTs).
  */
 export type ScoreEntryEffect = { kind: 'resolve_match' };
 
@@ -464,7 +466,11 @@ const draftOfInput = (input: ScoreInput): EntryDraft => ({
   override: input.overall === undefined ? null : String(input.overall),
 });
 
-const reduceSlot = ({ entry, record }: SlotState, action: SlotAction): SlotTransition => {
+const reduceSlot = (
+  { entry, record }: SlotState,
+  action: SlotAction,
+  sibling: SlotEntry,
+): SlotTransition => {
   const idle: SlotTransition = { entry, record, effects: [] };
   switch (action.type) {
     case 'EDIT_FIELD': {
@@ -525,6 +531,10 @@ const reduceSlot = ({ entry, record }: SlotState, action: SlotAction): SlotTrans
       };
 
     case 'RESTORE':
+      // A restore that completes a pair this board saved live is the first
+      // moment it holds both results (a split save: the other panel saved this
+      // athlete before either saw the other's row), and the write still binds
+      // to the local save (ADR 0038). Two restored halves never write.
       return {
         entry: {
           status: 'saved',
@@ -533,7 +543,10 @@ const reduceSlot = ({ entry, record }: SlotState, action: SlotAction): SlotTrans
           origin: 'restored',
         },
         record: action.record,
-        effects: [],
+        effects:
+          sibling.status === 'saved' && sibling.origin === 'live'
+            ? [{ kind: 'resolve_match' }]
+            : [],
       };
 
     case 'MOVED':
@@ -606,7 +619,8 @@ export const scoreEntryReducer = (
         entry: store.entries[action.player],
         record: store.records[action.player],
       };
-      const { entry, record, effects } = reduceSlot(current, action);
+      const sibling = store.entries[action.player === 1 ? 2 : 1];
+      const { entry, record, effects } = reduceSlot(current, action, sibling);
       if (entry === current.entry && record === current.record && effects.length === 0)
         return store;
       return {
