@@ -11,6 +11,7 @@ import {
   controlTargets,
   deskGate,
   deskMedia,
+  deskRails,
   fieldWidths,
   fonts,
   marks,
@@ -18,6 +19,8 @@ import {
   OVERLAY_LANE,
   OVERLAY_NAME_STRIP,
 } from 'app/theme/tokens';
+
+import { DESK_GAP_PX } from '../../util/deskGeometry';
 
 /**
  * tokens.ts ↔ tokens.css parity. The TELEMETRY tokens have two hand-kept
@@ -99,6 +102,7 @@ const CSS_VAR_BY_EXTRA_PATH: Record<string, string> = {
   'overlayArt.headingTracking': '--tl-overlay-heading-tracking',
   'overlayArt.bannerTracking': '--tl-overlay-banner-tracking',
   'overlayArt.nameTracking': '--tl-overlay-name-tracking',
+  'overlayArt.flagKeyline': '--tl-overlay-flag-keyline',
 };
 
 const extraEntries: [string, string][] = [
@@ -351,6 +355,7 @@ describe('board geometry', () => {
   it('holds the board floors and reserves', () => {
     expect(boardGeometry).toEqual({
       deckMax: { freestyle: 800, freestyleQuali: 500, speedline: 880 },
+      boardMax: { speedline: 1520, freestyle: 1440 },
       freestyle: {
         panelFloor: 394,
         cardFloor: 258,
@@ -363,8 +368,20 @@ describe('board geometry', () => {
         tryField: 96,
         selectionBasis: { round: 140, gender: 110, match: 210, athlete: 170, assignment: 480 },
       },
-      speedline: { startStrip: 184 },
+      speedline: { startStrip: 184, stripWords: 270, peerWords: 300 },
     });
+  });
+
+  // Derived, never retuned on its own: the two rails, the board's widest deck
+  // and the desk grid's two gaps, so a deckMax retune moves the cap.
+  it.each(['speedline', 'freestyle'] as const)('derives the %s boardMax from its desk', (board) => {
+    expect(boardGeometry.boardMax[board]).toBe(
+      deskRails.setup + boardGeometry.deckMax[board] + deskRails.record + 2 * DESK_GAP_PX,
+    );
+  });
+
+  it('design-system §5 names boardMax beside the board geometry', () => {
+    expect(designSystem).toMatch(/### Board geometry[\s\S]*?`boardMax`[\s\S]*?### Marks/);
   });
 
   it('freestyle-board-ux §6 names boardGeometry as their home', () => {

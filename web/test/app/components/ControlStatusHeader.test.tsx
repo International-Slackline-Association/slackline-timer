@@ -9,8 +9,9 @@ import { chosenKey } from 'app/theme/tokens';
 import { px } from '../../util/computedUnits';
 import { deskMediaValue } from '../../util/deskGeometry';
 
-/** MUI's `md`/`lg` breakpoints — the two widths the health block folds at —
- * and `xs`, which MUI emits as a media block of its own. */
+/** MUI's `md` breakpoint — where the health block folds into one row — `lg`,
+ * which must carry no second health layout, and `xs`, which MUI emits as a media
+ * block of its own. */
 const XS_MEDIA = '(min-width:0px)';
 const MD_MEDIA = '(min-width:900px)';
 const LG_MEDIA = '(min-width:1200px)';
@@ -240,7 +241,7 @@ describe('ControlStatusHeader', () => {
   // fsux-desk-fold-budget: a 2x2 plate grid over a full-width sound button costs
   // ~125 px, enough to push the lane transport off a 1440x900 desk. jsdom
   // applies no `@media`, so the fold is read off the rule the element carries.
-  it('folds the health block into one row of cells at the desk widths', () => {
+  it('folds the health block into one row of cells from md', () => {
     render(
       <ControlStatusHeader
         {...baseProps}
@@ -249,23 +250,19 @@ describe('ControlStatusHeader', () => {
     );
 
     const grid = screen.getByTestId('control-health-grid');
-    // One row of four from `lg` (the desk starts at 1280); two of two between
-    // `md` and there, where the four cells share a third of a tablet.
-    expect(deskMediaValue(grid, 'grid-template-columns', LG_MEDIA)).toBe(
+    // One row of four from `md`, the 1024 tablet included: a 2x2 block puts the
+    // Speedline transport under the 768 px fold.
+    expect(deskMediaValue(grid, 'grid-template-columns', MD_MEDIA)).toBe(
       'repeat(3, minmax(0, auto)) auto',
     );
-    expect(deskMediaValue(grid, 'grid-template-columns', MD_MEDIA)).toBe(
-      'repeat(2, minmax(0, auto))',
-    );
+    expect(() => deskMediaValue(grid, 'grid-template-columns', LG_MEDIA)).toThrow();
     // Link · Audio · peer · sound — four cells, the sound toggle one of them.
     expect(grid.children).toHaveLength(4);
     expect(window.getComputedStyle(grid.children[3]).gridColumn).not.toBe('1 / -1');
   });
 
-  // Below the Speedline desk the header's plates and recording line leave ~60 px
-  // of empty column beside the two-row health block; the setup strip takes that
-  // column instead of a row of its own, the ~100 px that would put `Lane n DNF`
-  // on the 768 px fold.
+  // A setup row of its own costs the ~100 px that would put `Lane n DNF` on the
+  // 768 px fold; the layout is `SETUP_GRID_SX`'s docblock.
   describe('with a setup slot', () => {
     const renderWithSetup = () =>
       render(
@@ -284,24 +281,32 @@ describe('ControlStatusHeader', () => {
       ).toBeInTheDocument();
     });
 
-    it('lays plates + recording over the setup, beside a health block spanning both', () => {
+    it('runs the setup strip under the plates, the recording line and the health plates', () => {
       renderWithSetup();
       const grid = headerGrid();
 
       expect(deskMediaValue(grid, 'grid-template-areas', MD_MEDIA)).toBe(
-        '"meta recording health" "setup setup health"',
+        '"meta recording health health" "setup setup setup caption"',
       );
+      // The caption track holds the audio sentence whole, in `ch` of it.
       expect(deskMediaValue(grid, 'grid-template-columns', MD_MEDIA)).toBe(
-        'auto minmax(0,1fr) auto',
+        `auto minmax(0,1fr) auto ${AUDIO_DETAIL.length}ch`,
       );
-      // The health block's surplus height lands in the setup row, never
-      // between the plates and the strip.
-      expect(deskMediaValue(grid, 'grid-template-rows', MD_MEDIA)).toBe('auto 1fr');
 
       const area = (testId: string) =>
         window.getComputedStyle(screen.getByTestId(testId)).gridArea.split(' ')[0];
       expect(area('control-recording')).toBe('recording');
       expect(area('control-health')).toBe('health');
+      // From md the block is no box of its own: plates and caption are the
+      // header's grid items.
+      const health = screen.getByTestId('control-health');
+      expect(deskMediaValue(health, 'display', MD_MEDIA)).toBe('contents');
+      expect(
+        deskMediaValue(screen.getByTestId('control-health-grid'), 'grid-area', MD_MEDIA),
+      ).toMatch(/^health/);
+      expect(
+        deskMediaValue(screen.getByTestId('control-link-detail'), 'grid-area', MD_MEDIA),
+      ).toMatch(/^caption/);
       expect(
         window.getComputedStyle(screen.getByTestId('setup-probe').parentElement as HTMLElement)
           .gridArea,
@@ -315,14 +320,20 @@ describe('ControlStatusHeader', () => {
       );
     });
 
-    it('leaves the three-column header alone without one', () => {
+    it('leaves the three-column header unsplit without one', () => {
       render(<ControlStatusHeader {...baseProps} recording={{ active: true }} />);
       const grid = headerGrid();
       expect(deskMediaValue(grid, 'grid-template-columns', MD_MEDIA)).toBe(
+        'auto minmax(0,1fr) auto',
+      );
+      expect(deskMediaValue(grid, 'grid-template-columns', LG_MEDIA)).toBe(
         'minmax(0,1fr) auto minmax(0,1fr)',
       );
       expect(window.getComputedStyle(grid).gridTemplateAreas).toBe('none');
       expect(() => deskMediaValue(grid, 'grid-template-areas', MD_MEDIA)).toThrow();
+      expect(() =>
+        deskMediaValue(screen.getByTestId('control-health'), 'display', MD_MEDIA),
+      ).toThrow();
     });
   });
 

@@ -27,6 +27,14 @@ vi.mock('app/state/selectedCompetition', () => ({
   useSelectedCompetition: useSelectedCompetitionMock,
 }));
 
+// The board's data-plane refresh reads the app's QueryClient; the suite asserts
+// the keys it invalidates, not the refetches behind them.
+const { invalidateQueriesMock } = vi.hoisted(() => ({ invalidateQueriesMock: vi.fn() }));
+vi.mock('@tanstack/react-query', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-query')>()),
+  useQueryClient: () => ({ invalidateQueries: invalidateQueriesMock }),
+}));
+
 import { deliver as deliverFrames, deliverTo, useCapturedSocket } from '../../util/wsMock';
 import {
   PEER_ANSWER_MS,
@@ -36,6 +44,7 @@ import {
   useSessionId,
 } from 'app/hooks/useControlSession';
 import { GRACE_MS } from 'app/hooks/useStaleAfterGrace';
+import { allDbUpdateQueryKeys, dbUpdateQueryKeys } from 'app/pages/Stream/dbUpdateInvalidation';
 import {
   SELF_SNAPSHOT_MAX_AGE_MS,
   readSelfSnapshot,
@@ -1269,6 +1278,68 @@ describe('useControlSession peer presence (freestyle-board-ux §3/§4.10)', () =
     deliver(rerender, { type: 'request_state', senderId: 'peer-panel', data: {} });
 
     expect(result.current.lastPeerEvent).toBeNull();
+  });
+});
+
+// A peer panel's save reaches this board only as the write Lambda's `db_update`
+// (ADR 0038).
+describe('useControlSession data-plane refresh', () => {
+  const invalidated = (): unknown[] =>
+    invalidateQueriesMock.mock.calls.map(([filters]) => filters.queryKey);
+
+  it('refetches every db_update-reachable branch once per socket open', () => {
+    socketState = { readyState: ReadyState.CONNECTING };
+    configureSocket();
+    const { rerender } = renderHook(() => useControlSession(baseParams()));
+    expect(invalidateQueriesMock).not.toHaveBeenCalled();
+
+    socketState = { readyState: ReadyState.OPEN };
+    configureSocket();
+    rerender();
+    rerender();
+
+    expect(invalidated()).toEqual(allDbUpdateQueryKeys('comp-1'));
+  });
+
+  it('refetches again on a reconnect (relay delivery is at-most-once)', () => {
+    const { rerender } = renderHook(() => useControlSession(baseParams()));
+    invalidateQueriesMock.mockClear();
+
+    socketState = { readyState: ReadyState.CLOSED };
+    configureSocket();
+    rerender();
+    expect(invalidateQueriesMock).not.toHaveBeenCalled();
+    socketState = { readyState: ReadyState.OPEN };
+    configureSocket();
+    rerender();
+
+    expect(invalidated()).toEqual(allDbUpdateQueryKeys('comp-1'));
+  });
+
+  it('invalidates exactly the branches a db_update names, for this session', () => {
+    const { rerender } = renderHook(() => useControlSession(baseParams()));
+    invalidateQueriesMock.mockClear();
+
+    receive(rerender, {
+      type: 'db_update',
+      sessionId: 'comp-1',
+      data: { entity: 'time', action: 'created', id: 't1' },
+    });
+
+    expect(invalidated()).toEqual(dbUpdateQueryKeys('comp-1', 'time'));
+  });
+
+  it('reads a db_update as no peer action: no presence, no cue', () => {
+    const { result, rerender } = renderHook(() => useControlSession(baseParams()));
+
+    receive(rerender, {
+      type: 'db_update',
+      sessionId: 'comp-1',
+      data: { entity: 'time', action: 'created', id: 't1' },
+    });
+
+    expect(result.current.lastPeerEvent).toBeNull();
+    expect(result.current.peerState).toBe('awaiting');
   });
 });
 

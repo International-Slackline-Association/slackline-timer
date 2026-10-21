@@ -4,6 +4,9 @@ import { SelectField } from 'app/components/SelectField';
 import { useGamepadSelection } from 'app/state/gamepadSelection';
 import { fieldWidths, liveCaption } from 'app/theme/tokens';
 
+/** Presence, in a phrase: `Controller:` and the head of the id. */
+const INLINE_CAPTION_MAX = '10ch';
+
 /**
  * Operator control for choosing which connected game controller drives the
  * timer. Mounted once per control page — inside the handset card, which is what
@@ -19,15 +22,28 @@ import { fieldWidths, liveCaption } from 'app/theme/tokens';
  * §4.3), so a MUI popup would make the whole board inert as a `[role=listbox]`
  * overlay, and the combobox it hands focus back to would own every press after.
  */
-export const GamepadPicker = () => {
+export const GamepadPicker = ({ inline = false }: { inline?: boolean }) => {
   const { connectedPads, selectedPadId, setSelectedPadId, selectedIndex } = useGamepadSelection();
 
   if (connectedPads.length === 0) return null;
 
   if (connectedPads.length === 1) {
+    const { id } = connectedPads[0];
     return (
-      <Typography variant="caption" sx={liveCaption} color="text.secondary">
-        Controller: {connectedPads[0].id}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        // Inline (the Speedline setup strip) the browser's whole descriptor
+        // string would take the press readout's line: presence is capped and
+        // does not shrink, the readout gives way. The id stays in the title.
+        noWrap={inline}
+        title={inline ? id : undefined}
+        sx={{
+          ...liveCaption,
+          ...(inline ? { flexShrink: 0, maxWidth: INLINE_CAPTION_MAX } : {}),
+        }}
+      >
+        Controller: {id}
       </Typography>
     );
   }
@@ -40,7 +56,12 @@ export const GamepadPicker = () => {
     <SelectField
       label="Controller"
       size="small"
-      sx={{ minWidth: fieldWidths.field }}
+      // Inline it is capped too: a native select is as wide as its longest id.
+      sx={
+        inline
+          ? { minWidth: fieldWidths.compact, maxWidth: fieldWidths.compact }
+          : { minWidth: fieldWidths.field }
+      }
       value={value}
       onChange={(event) => {
         setSelectedPadId(event.target.value || null);

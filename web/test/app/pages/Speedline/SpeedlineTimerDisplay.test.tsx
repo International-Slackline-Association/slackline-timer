@@ -334,9 +334,9 @@ describe('SpeedlineTimerDisplay start-signal from the anchor seed', () => {
     expect(screen.queryByTestId('timer-lane-2')).toBeNull();
   });
 
-  // A lane that re-appears (solo → pair) mounts a fresh Stopwatch, which replays
-  // the display's last recovered lane state; a reset must void that, or the
-  // re-mounted lane resumes ticking on the previous race's GO epoch.
+  // A lane that re-appears (solo → pair) mounts a fresh Stopwatch on the
+  // display's lane state; past a reset that state is idle, not the previous
+  // race's GO ignition.
   it('re-mounts a dormant lane idle after a reset, not on the last ignition', () => {
     const { deliver } = setup();
     deliver(selection('a1', 'a2'));
@@ -365,6 +365,68 @@ describe('SpeedlineTimerDisplay start-signal from the anchor seed', () => {
 
     // Both lanes still hold the idle clock — nothing started.
     expect(screen.getAllByText('0:00.00').length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('SpeedlineTimerDisplay lane clocks (one reducer over the relay frames)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000_000);
+    readyState.current = 1;
+    renderDisplay('broadcast', '?compId=worlds-2026&token=abc');
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const lane = (n: 1 | 2) => within(screen.getByTestId(`timer-lane-${n}`));
+  const start: StopwatchWSMessage = {
+    type: 'start',
+    sessionId: 'worlds-2026',
+    data: { startTime: 1_000_000, lanes: [1, 2] },
+  };
+  const stop = (timerId: number, stopTime: number): StopwatchWSMessage => ({
+    type: 'stop',
+    sessionId: 'worlds-2026',
+    data: { timerId, stopTime },
+  });
+
+  it('mounts a lane mid-race on the running clock, from state', () => {
+    deliverFrames(selection('a1', null), start);
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.queryByTestId('timer-lane-2')).toBeNull();
+
+    // Lane 2's plate mounts after the only frame that started it.
+    deliverFrames(selection('a1', 'a2'));
+    expect(lane(2).getByText('0:01.00')).toBeInTheDocument();
+  });
+
+  it('freezes both lanes of a dead heat landing in one task', () => {
+    deliverFrames(selection('a1', 'a2'), start);
+    act(() => vi.advanceTimersByTime(4_000));
+    deliverFrames(stop(1, 1_003_210), stop(2, 1_003_210));
+    expect(lane(1).getByText('0:03.21')).toBeInTheDocument();
+    expect(lane(2).getByText('0:03.21')).toBeInTheDocument();
+  });
+
+  it('freezes a lane whose stop it missed when a newer snapshot reports it', () => {
+    deliverFrames(selection('a1', 'a2'), start);
+    act(() => vi.advanceTimersByTime(5_000));
+    deliverFrames({
+      type: 'state_snapshot',
+      sessionId: 'worlds-2026',
+      data: {
+        isPreviewEnabled: true,
+        at: 1_005_000,
+        signalPhase: 0,
+        text: '',
+        timers: [
+          { timerId: 1, startTime: 1_000_000, stopTime: 1_004_000 },
+          { timerId: 2, startTime: 1_000_000, stopTime: null },
+        ],
+      },
+    });
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(lane(1).getByText('0:04.00')).toBeInTheDocument();
+    expect(lane(2).getByText('0:06.00')).toBeInTheDocument();
   });
 });
 

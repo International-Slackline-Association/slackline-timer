@@ -893,8 +893,10 @@ so the params were provisioned correctly the first time:
    resource.
 2. The stack injects only the parameter **name** (`READ_TOKEN_SECRET_PARAM` /
    `PHOTO_PRIVATE_KEY_PARAM`); `core/secrets.ts` fetches the decrypted value on
-   first use (`GetParameter` with `WithDecryption`) and caches it for the
-   container lifetime. A fetch failure resolves `undefined` — every caller
+   first use (`GetParameter` with `WithDecryption`) and caches it for 10
+   minutes (`SECRET_CACHE_TTL_MS`), so a rotation reaches warm containers
+   without a redeploy, at one fetch per container per TTL. A fetch failure
+   resolves `undefined` — every caller
    already denies/degrades on a missing secret — and is not cached, so a
    transient SSM error heals on the next invocation.
 3. A direct env value (`READ_TOKEN_SECRET` / `PHOTO_PRIVATE_KEY`)
@@ -1605,6 +1607,22 @@ tiebreak. Load-bearing for `PEER_HINT`
 battle boards rebuild `lastRan` from each other's relayed `nextUp`, so an
 outstamping joiner would teach the live panels the wrong alternation.
 
+**Addendum (2026-10-21, a peer's save reaches the mirror as data, not as a
+claim).** §2 binds every write to the panel whose operator acted, and the row's
+id comes back only in that panel's POST reply — so a mirroring panel had no way
+to know a peer's Time had landed, and its attempt badge and `attemptCapBlocks`
+read a stale count. The boards now consume the write Lambda's `db_update`
+(0006) like the overlays do: `useControlSession` invalidates the entity's keys
+per frame and every branch once per OPEN (at-most-once relay). Nothing new
+rides the wire. The Speedline lane strip derives its read-only
+'Awaiting save · other panel' / 'Saved <t> · other panel' chip from the
+persisted row, found on the relayed start and stop epochs exactly
+(`raceTime.peerSavedTime` — so neither an earlier run's row nor a resumed stop's
+still-cached row can pass) and then followed by its `timeId`, which a
+correction or re-attribution there keeps — so the mirror never claims a save
+the server did not accept. Corrections, retry, move and void stay on the posting panel; the
+mirror's Void is locked with the reason when only a peer recorded the run.
+
 ## 0039 — Freestyle score values: no imposed judging resolution, float noise normalized at the formula boundary, 2-decimal display
 
 **Accepted · 2026-07-19** (owner request; spec in PLANS
@@ -2113,7 +2131,8 @@ compared only lane `startTime`s, which a `resume` does not move.
 1. `SpeedlineSnapshot` gains an optional **`at`** — the sender's wall clock at
    build, in the same control-minted clock as the `startTime`/`stopTime` epochs
    beside it. `buildSpeedlineSnapshot` stamps it; `speedlineLaneState` carries it
-   onto the recovered lane as `assertedAt`. `mergeRecovery` then un-freezes a
+   onto the recovered lane as `assertedAt`. The display's lane merge
+   (`app/util/previewLanes`, ADR 0051 §5) then un-freezes a
    frozen lane on a same-run `running` snapshot **only** when `assertedAt` is
    later than the `stopTime` the lane froze on — a snapshot built before that stop
    is merely describing the lane as it was, and still changes nothing. Optional
@@ -2404,9 +2423,12 @@ carries both lanes) reached the console as one press.
    dropped (`SEQ_MAX_LEAD_MS`): it would win every LWW tiebreak until the wall
    clock caught up. Drops are a `console.warn`, with the payload in dev builds
    only.
-5. **No page holds a frame.** A consumer whose children need a frame sets it as
-   state inside its handler (`SpeedlineTimerDisplay` → `Stopwatch` `laneFrame`,
-   the Freestyle feed's `countdownMessage`). Control pages chain through
+5. **No page holds a frame.** A consumer whose children need a frame folds it
+   into state inside its handler: `SpeedlineTimerDisplay` dispatches every frame
+   (and its own GO ignition) into one pure lane reducer
+   (`app/util/previewLanes`, newer-wins snapshot merge included) and the
+   `Stopwatch`es render the lane state handed down; the Freestyle feed sets its
+   `countdownMessage`. Control pages chain through
    `useControlSession`'s `onPeerMessage`, called after the hook's own peer
    bookkeeping in the same delivery, so both halves' writes share one commit.
    A handler reads its props from the render that handles the frame, so a
@@ -2414,9 +2436,14 @@ carries both lanes) reached the console as one press.
 6. **Input events are timestamped callbacks, never state tokens.**
    `useGamepads(onPress)` delivers each rising edge of a poll as
    `{ button, seq, at }`, in button order, each inside `flushSync`, so the
-   second press reads what the first committed. `at` is the HID report's time
-   (`Date.now()` minus the report's age, clamped to 250 ms), and a stop takes
-   `at` rather than the time its handler ran. A new input source follows the
+   second press reads what the first committed. There is one poll per board:
+   `GamepadSelectionProvider` owns a `createGamepadPoller` loop that runs while
+   any `useGamepads` is subscribed, and each press is one `flushSync` calling
+   every subscriber in registration order (same `seq` for all; a throwing
+   subscriber is logged and contained). `at` is the HID report's time
+   (`Date.now()` minus the report's age rounded to whole ms, clamped to
+   250 ms), read once per report so a dead heat's two edges share it, and a stop takes `at` rather
+   than the time its handler ran. A new input source follows the
    same shape.
 
 **Rejected.** A frame queue drained by an effect (a second mechanism for what
@@ -2431,11 +2458,10 @@ handle is logged and contained, and the socket keeps delivering. An
 operator's edit and a peer frame can no longer share a commit: the edit
 commits (and pushes its own claim) before any frame is handled, which is what
 the mirror forward's causality test assumes. A `Stopwatch` that mounts late
-replays the last lane frame (it replayed the last frame of any type), then its
-recovery row; both are idempotent over a running lane. The test harness
+paints from the display's lane state; nothing is replayed. The test harness
 (`web/test/util/wsMock.ts`) runs every fixture through `isRelayFrame` and
 delivers it the same way, so a fixture production would drop fails its test.
-Owes the peer-mirroring and control+preview smokes.
+The peer-mirroring and control+preview driver smokes pass; a real Buzz! dongle (one HID report, shared `at`) is still a manual check.
 
 ## 0052 — Data-plane integrity: shared input bounds, audit before tightening, cheap referential rules
 

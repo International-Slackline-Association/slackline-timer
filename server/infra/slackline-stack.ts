@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { CfnOutput, Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { Annotations, CfnOutput, Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import {
   CorsHttpMethod,
   HttpApi,
@@ -93,6 +93,12 @@ export interface SlacklineTimerV1StackProps extends StackProps {
   cognito: CognitoConfig;
   /** Subscribed to the ops alarm topic (defineAlarms); the billing stack's address. */
   alertEmail: string;
+  /**
+   * The web app's origin (the web stack's `WebUrl`), the only origin the photos
+   * bucket accepts presigned POSTs from. Unset → any origin, with a synth
+   * warning.
+   */
+  webOrigin?: string;
 }
 
 /**
@@ -106,10 +112,10 @@ export interface SlacklineTimerV1StackProps extends StackProps {
 export class SlacklineTimerV1Stack extends Stack {
   constructor(scope: Construct, id: string, props: SlacklineTimerV1StackProps) {
     super(scope, id, props);
-    const { stage, cognito, alertEmail } = props;
+    const { stage, cognito, alertEmail, webOrigin } = props;
 
     const tables = defineTables(this, stage);
-    const photoCdn = definePhotoCdn(this, stage);
+    const photoCdn = definePhotoCdn(this, stage, webOrigin);
     const fns = defineFunctions(this, stage, tables, photoCdn, cognito);
     const wsStage = defineWsRelay(this, stage, fns);
     const httpApi = defineHttpApi(this, stage, fns);
@@ -189,7 +195,26 @@ interface PhotoCdn {
   distribution: Distribution;
 }
 
-function definePhotoCdn(stack: Stack, stage: string): PhotoCdn {
+// The browser's Origin header is exactly scheme://host[:port]; a path or a
+// trailing slash would match no upload, so it fails the synth instead.
+function photoUploadOrigins(stack: Stack, webOrigin: string | undefined): string[] {
+  if (!webOrigin) {
+    Annotations.of(stack).addWarningV2(
+      'slackline:photosCorsAnyOrigin',
+      'WEB_ORIGIN is unset, so the photos bucket accepts presigned-POST uploads from any origin. ' +
+        "Set it to the web stack's WebUrl output and redeploy (doc/dev/deploy.md §2).",
+    );
+    return ['*'];
+  }
+  if (!URL.canParse(webOrigin) || new URL(webOrigin).origin !== webOrigin) {
+    throw new Error(
+      `WEB_ORIGIN must be a bare origin (https://host[:port], no path or trailing slash), got "${webOrigin}".`,
+    );
+  }
+  return [webOrigin];
+}
+
+function definePhotoCdn(stack: Stack, stage: string, webOrigin: string | undefined): PhotoCdn {
   const bucket = new Bucket(stack, 'PhotosBucket', {
     bucketName: `slackline-timer-v1-photos-${stage}`,
     blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
@@ -209,7 +234,7 @@ function definePhotoCdn(stack: Stack, stage: string): PhotoCdn {
     ],
     cors: [
       {
-        allowedOrigins: ['*'],
+        allowedOrigins: photoUploadOrigins(stack, webOrigin),
         allowedMethods: [HttpMethods.POST],
         allowedHeaders: ['*'],
         maxAge: 3600,

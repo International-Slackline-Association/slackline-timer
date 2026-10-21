@@ -7,6 +7,7 @@ import type { LiveSelection } from 'app/hooks/useWebSocket';
 import { computeOverall, isMatchRound, type MatchRound, type ScoreInput } from 'app/types';
 import { apiErrorMessage } from 'app/util/apiError';
 import {
+  awaitsRestore,
   deriveFreestyleMatchWinner,
   dnfScoreInput,
   entryDraft,
@@ -130,16 +131,20 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
   /**
    * Restore each athlete slot's already-recorded Score into its panel: the five
    * components refill and the panel comes back locked on the persisted
-   * overall/DNF. A slot with no saved Score is left empty and editable. No
-   * Match is written — a restore only re-displays, so it queues no effect.
+   * overall/DNF. A slot with no saved Score is left empty and editable. A
+   * restore writes no Match on its own: it queues the winner write only when
+   * the other slot holds this board's live save (a split save across panels).
    *
    * Driven by the (round, athlete) pair rather than a Match selection, so it
    * runs in both modes: qualification has no match to select and is where
    * nearly every save happens, and an unlocked panel there would upsert
    * straight over the persisted `SCORE#<round>#<athleteId>` row. `seededKey`
-   * makes it once per pair — a Save invalidates the scores query, and
-   * re-seeding would downgrade the board's own save to a `restored` one (which
-   * is what decides whether it outranks a stored `Match.winnerId`).
+   * makes it once per pair for a panel holding anything of its own — a Save
+   * invalidates the scores query, and re-seeding would downgrade the board's
+   * own save to a `restored` one (which is what decides whether it outranks a
+   * stored `Match.winnerId`). A panel still holding nothing (`awaitsRestore`)
+   * keeps looking: another panel's save reaches this board only as a refetch
+   * (the `db_update` invalidation), and a draft cleared to zero lets one in.
    */
   useEffect(() => {
     const scoresData = scores.data;
@@ -151,13 +156,13 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
         return;
       }
       const key = `${round}#${athleteId}`;
-      if (seededKey.current[slot] === key) return;
+      if (seededKey.current[slot] === key && !awaitsRestore(entries[slot])) return;
       seededKey.current[slot] = key;
       const restored = restoreSlotFromScores(athleteId, round, scoresData);
       if (!restored) return;
       dispatch({ type: 'RESTORE', player: slot, ...restored });
     });
-  }, [round, athletes, scores.data]);
+  }, [round, athletes, entries, scores.data]);
 
   const clearToast = (): void => setToast(null);
 
@@ -239,19 +244,19 @@ export const useScoreRecorder = (compId: string, initialRound: MatchRound = 'qua
   // PUT the winner the persisted scores now resolve to, if any.
   // `deriveFreestyleMatchWinner` returns null until BOTH athlete slots' scores are
   // persisted, so no Match is ever written off a POST in flight — and a
-  // restore, which queues nothing, never writes at all.
+  // restore queues a write only when it completes a pair this board saved live.
   const writeMatchWinner = (): void => {
     if (!match) return;
     const input = deriveFreestyleMatchWinner(match, athletes, matchResultsOf(entries));
     if (input) updateMatch.mutate({ id: match.matchId, input });
   };
 
-  // Drain the entry machine's `resolve_match`: a save has landed, so re-derive
-  // the winner and write it.
+  // Drain the entry machine's `resolve_match`: a save has landed (or a restore
+  // completed this board's live save), so re-derive the winner and write it.
   useEffect(() => {
     if (store.effects.length === 0) return;
     writeMatchWinner();
-    dispatch({ type: 'DRAIN' });
+    dispatch({ type: 'DRAIN', count: store.effects.length });
   }, [store.effects]);
 
   /**

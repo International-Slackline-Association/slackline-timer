@@ -5,7 +5,13 @@ import { RaceRecorderControls } from 'app/pages/Speedline/RaceRecorderControls';
 
 import { px } from '../../../util/computedUnits';
 
-import { ATHLETES, expectRaceControl, makeRecorder, savedFeedback } from './recorderStub';
+import {
+  ATHLETES,
+  expectRaceControl,
+  makeRecorder,
+  peerSaved,
+  savedFeedback,
+} from './recorderStub';
 
 /** The rail is the cross-lane half of the desk; the per-lane half is pinned by
  * `RaceLaneColumn.test.tsx`. */
@@ -55,16 +61,116 @@ describe('RaceRecorderControls', () => {
     expect(screen.queryByTestId('why-line')).toBeNull();
   });
 
-  it('surfaces a save error without implying timing broke', () => {
-    render(
-      <RaceRecorderControls
-        recorder={makeRecorder({
-          createTime: { isError: true, error: new Error('boom') } as never,
-        })}
-        athletes={ATHLETES}
-      />,
-    );
-    expect(screen.getByText(/time not saved.*timing is unaffected/i)).toBeInTheDocument();
+  describe('a failed lane save on the rail', () => {
+    const input = (athleteId: string) => ({
+      athleteId,
+      round: 'qualification' as const,
+      timeMs: 4000,
+      startTime: 1000,
+    });
+    const failedFeedback = (
+      athleteId: string,
+      reason: string,
+      status: 'error' | 'pending' = 'error',
+    ) => ({ status, valueMs: 4000, failed: { input: input(athleteId), reason } });
+
+    it('names the lane and the reason, without implying timing broke', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            laneFeedback: { 1: failedFeedback('a1', 'service unavailable'), 2: null },
+          })}
+          athletes={ATHLETES}
+        />,
+      );
+      const alerts = screen.getAllByRole('alert');
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]).toHaveTextContent(
+        'Lane 1 time not saved: service unavailable (timing is unaffected)',
+      );
+    });
+
+    it('carries one strip per failed lane, each retrying its own lane', () => {
+      const retrySave = vi.fn();
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            retrySave,
+            laneFeedback: {
+              1: failedFeedback('a1', 'service unavailable'),
+              2: failedFeedback('a2', 'network error'),
+            },
+          })}
+          athletes={ATHLETES}
+        />,
+      );
+      const [lane1, lane2] = screen.getAllByRole('alert');
+      expect(lane1).toHaveTextContent(/^Lane 1 time not saved: service unavailable/);
+      expect(lane2).toHaveTextContent(/^Lane 2 time not saved: network error/);
+
+      fireEvent.click(within(lane2).getByRole('button', { name: 'Retry lane 2' }));
+      expect(retrySave).toHaveBeenCalledWith(2);
+      fireEvent.click(within(lane1).getByRole('button', { name: 'Retry lane 1' }));
+      expect(retrySave).toHaveBeenLastCalledWith(1);
+    });
+
+    // A playoff rail runs ~630 px, its foot under the 1280×720 fold.
+    it('heads the rail, ahead of the round and match setup', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            round: 'quarter',
+            laneFeedback: { 1: failedFeedback('a1', 'service unavailable'), 2: null },
+          })}
+          athletes={ATHLETES}
+        />,
+      );
+      const strip = screen.getByRole('alert');
+      expect(
+        strip.compareDocumentPosition(screen.getByLabelText(/^round$/i)) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('paints the Retry as a race control', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({ laneFeedback: { 1: null, 2: failedFeedback('a2', 'x') } })}
+          athletes={ATHLETES}
+        />,
+      );
+      expectRaceControl(screen.getByRole('button', { name: 'Retry lane 2' }));
+    });
+
+    it('holds the strip with its Retry disabled while that lane retries', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            laneFeedback: {
+              1: failedFeedback('a1', 'service unavailable', 'pending'),
+              2: failedFeedback('a2', 'network error'),
+            },
+          })}
+          athletes={ATHLETES}
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Retry lane 1' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Retry lane 2' })).toBeEnabled();
+    });
+
+    it('shows nothing when no lane holds a failure, whatever the create mutation last did', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            createTime: { isError: true, error: new Error('boom') },
+            laneFeedback: { 1: savedFeedback('t1', 4000), 2: null },
+          } as never)}
+          athletes={ATHLETES}
+        />,
+      );
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByText(/not saved/i)).not.toBeInTheDocument();
+    });
   });
 
   it('selects a speed match for winner derivation (auto-fills via selectMatch)', () => {
@@ -417,6 +523,91 @@ describe('RaceRecorderControls', () => {
       expect(button).toBeDisabled();
       expect(button).toHaveAccessibleDescription('locked while a lane runs');
       expect(screen.getByText('why: locked while a lane runs')).toBeInTheDocument();
+    });
+  });
+
+  describe('Void on a run another panel recorded', () => {
+    const OTHER_PANEL = 'recorded on the other panel — void it there';
+
+    it.each([
+      ['saved', peerSaved(5720)],
+      ['still on its way', { status: 'awaiting' as const }],
+    ])('locks Void run and names the other panel (%s)', (_, peerSave) => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({ peerSaves: { 1: peerSave, 2: null } })}
+          athletes={ATHLETES}
+        />,
+      );
+      const button = screen.getByRole('button', { name: /^void run$/i });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAccessibleDescription(OTHER_PANEL);
+      expect(screen.getByText(`why: ${OTHER_PANEL}`)).toBeInTheDocument();
+    });
+
+    it('locks the false-start strip’s void the same way', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            selectedMatchId: 'm1',
+            laneAthletes: { 1: 'a1', 2: 'a2' },
+            fsOutcome: { kind: 'rerun-start', offender: 1 },
+            peerSaves: { 1: peerSaved(5720), 2: null },
+          })}
+          athletes={ATHLETES}
+        />,
+      );
+      expect(screen.getByRole('button', { name: /void run & rerun/i })).toBeDisabled();
+      expect(screen.getByText(`why: ${OTHER_PANEL}`)).toBeInTheDocument();
+    });
+
+    it('defers to the run lock while a lane still runs', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({ peerSaves: { 1: peerSaved(5720), 2: null } })}
+          athletes={ATHLETES}
+          voidLock="locked while a lane runs"
+        />,
+      );
+      expect(screen.getByText('why: locked while a lane runs')).toBeInTheDocument();
+    });
+
+    it('stays live for the time this panel saved itself', () => {
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            laneFeedback: { 1: null, 2: savedFeedback('t2', 6000, 'a2') },
+            peerSaves: { 1: peerSaved(5720), 2: null },
+          })}
+          athletes={ATHLETES}
+        />,
+      );
+      expect(screen.getByRole('button', { name: /^void run$/i })).toBeEnabled();
+      expect(screen.queryByTestId('why-line')).toBeNull();
+    });
+
+    // ADR 0038 §2: a panel retracts only the rows it wrote.
+    it('names the other panel’s row as staying on a mixed run', () => {
+      const voidRun = vi.fn();
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            laneAthletes: { 1: 'a1', 2: 'a2' },
+            laneFeedback: { 1: savedFeedback('t1', 2000), 2: null },
+            peerSaves: { 1: null, 2: peerSaved(5720, 'a2') },
+            voidRun,
+          })}
+          athletes={ATHLETES}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /^void run$/i }));
+
+      const question = screen.getByRole('dialog');
+      expect(question).toHaveTextContent(
+        'Deletes Saved 0:02.00 (Jane Doe). Saved 0:05.72 · other panel stays — void it there. This cannot be undone.',
+      );
+      fireEvent.click(within(question).getByRole('button', { name: 'Void run' }));
+      expect(voidRun).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -10,7 +10,8 @@ import {
 } from 'app/api/times';
 import { useMatchSelection } from 'app/hooks/useMatchSelection';
 import type { LiveSelection } from 'app/hooks/useWebSocket';
-import { isTimeRound, type TimeRound } from 'app/types';
+import { isTimeRound, type Time, type TimeRound } from 'app/types';
+import { apiErrorMessage } from 'app/util/apiError';
 import {
   clearFalseStart,
   deriveFsOutcome,
@@ -32,6 +33,7 @@ import {
   moveTimeInput,
   NO_SERIES_WINS,
   attemptCount,
+  peerSavedTime,
   qualiAttemptCapReached,
   QUALI_ATTEMPT_CAP,
   removeRunWin,
@@ -40,6 +42,7 @@ import {
   tallyFromTimes,
   winsFor,
   type LaneResult,
+  type PeerRunKey,
   type SeriesWins,
 } from 'app/util/raceTime';
 import { DNF_SENTINEL } from 'app/util/time';
@@ -60,11 +63,26 @@ export interface LaneFeedback {
    * failed correction keeps it.
    */
   saved?: { timeId: string; input: TimeInput };
-  /** The body a rejected POST sent — what `retrySave` re-sends. */
-  failed?: { input: TimeInput };
+  /** The body a rejected POST sent — what `retrySave` re-sends — and why it
+   * was rejected, which the rail's per-lane strip states. */
+  failed?: { input: TimeInput; reason: string };
 }
 
 const NO_FEEDBACK: Record<LaneId, LaneFeedback | null> = { 1: null, 2: null };
+
+/** A lane another panel stopped this run: the row its POST writes, latched to
+ * the row's id once seen — so a correction or re-attribution there keeps the
+ * chip, and a void there (the row gone) drops it rather than re-awaiting. */
+interface PeerRun {
+  key: PeerRunKey;
+  timeId?: string;
+}
+
+const NO_PEER_RUNS: Record<LaneId, PeerRun | null> = { 1: null, 2: null };
+
+/** What this panel can say about a lane another panel recorded: the save is
+ * still on its way, or the row the server holds. */
+export type PeerSave = { status: 'awaiting' } | { status: 'saved'; time: Time };
 
 /** A transient confirmation shown in a snackbar; cleared by the consumer on dismiss. */
 export interface Toast {
@@ -101,6 +119,8 @@ export const useRaceRecorder = (compId: string) => {
     ...NO_FEEDBACK,
   });
   const [toast, setToast] = useState<Toast | null>(null);
+  // State, not a ref like `laneResults`: the lane strip renders off it.
+  const [peerRuns, setPeerRuns] = useState<Record<LaneId, PeerRun | null>>(NO_PEER_RUNS);
   // The winner resolved for the selected Match this run: the athlete id, or ''
   // (an explicit no-winner — tie / both-DNF), or null (not yet resolved).
   const [derivedWinner, setDerivedWinner] = useState<string | null>(null);
@@ -231,6 +251,40 @@ export const useRaceRecorder = (compId: string) => {
     },
   };
 
+  // A peer's row lands through the `db_update` refetch; latch its id so the
+  // chip follows that row rather than re-matching the key.
+  useEffect(() => {
+    const data = times.data;
+    if (!data) return;
+    const latch = (run: PeerRun | null): PeerRun | null => {
+      if (!run || run.timeId) return run;
+      const time = peerSavedTime(data, run.key);
+      return time ? { ...run, timeId: time.timeId } : run;
+    };
+    setPeerRuns((prev) => {
+      const next = { 1: latch(prev[1]), 2: latch(prev[2]) };
+      return next[1] === prev[1] && next[2] === prev[2] ? prev : next;
+    });
+  }, [times.data, peerRuns]);
+
+  // The lane's own feedback outranks a peer's: once this panel records the
+  // lane, its chip and its corrections are the ones that apply.
+  const peerSave = (lane: LaneId): PeerSave | null => {
+    const run = peerRuns[lane];
+    if (!run || laneFeedback[lane]) return null;
+    const time = run.timeId
+      ? allTimes.find((t) => t.timeId === run.timeId)
+      : peerSavedTime(allTimes, run.key);
+    if (time) return { status: 'saved', time };
+    return run.timeId ? null : { status: 'awaiting' };
+  };
+  const peerSaves: Record<LaneId, PeerSave | null> = { 1: peerSave(1), 2: peerSave(2) };
+
+  // The lane's row is the other panel's (ADR 0038 §2), so a DNF here would
+  // POST a second one for the attempt; an awaiting save is a POST in flight.
+  const dnfLock = (lane: LaneId): string | null =>
+    peerSaves[lane] ? 'recorded on the other panel — DNF it there' : null;
+
   // Seed the best-of-3 tally from the match's already-persisted Times when a
   // match is (re)selected, so re-opening a mid-series match shows the runs it
   // has already resolved. Runs once per selection (see `seededMatchId`); live
@@ -280,6 +334,7 @@ export const useRaceRecorder = (compId: string) => {
     setLaneAthletes((prev) => ({ 1: prev[2], 2: prev[1] }));
     setFsCounts((prev) => ({ 1: prev[2], 2: prev[1] }));
     setLaneFeedback((prev) => ({ 1: prev[2], 2: prev[1] }));
+    setPeerRuns((prev) => ({ 1: prev[2], 2: prev[1] }));
     laneResults.current = { 1: laneResults.current[2], 2: laneResults.current[1] };
     attemptClosed.current = { 1: attemptClosed.current[2], 2: attemptClosed.current[1] };
   };
@@ -350,6 +405,7 @@ export const useRaceRecorder = (compId: string) => {
     laneResults.current = { ...NO_RESULTS };
     runTallied.current = false;
     setLaneFeedback({ ...NO_FEEDBACK });
+    setPeerRuns(NO_PEER_RUNS);
     setDerivedWinner(null);
     // This run's winner is not yet known — drop the previous run's so a discard
     // (void / forfeit award) of a run that hasn't tallied can't undo an earlier
@@ -376,6 +432,7 @@ export const useRaceRecorder = (compId: string) => {
     laneResults.current = { ...NO_RESULTS };
     runTallied.current = false;
     setLaneFeedback({ ...NO_FEEDBACK });
+    setPeerRuns(NO_PEER_RUNS);
     setDerivedWinner(null);
   };
 
@@ -427,9 +484,29 @@ export const useRaceRecorder = (compId: string) => {
    * incrementing: the tally has a single site (the panel whose local stop
    * completed the run) and converges here via the mirrored `updateSelection`
    * runWins; a later local hand-timer correction must not re-increment either.
+   *
+   * Expects the peer's row (`peerSaves`) only where its `recordFinish` POSTs
+   * one — the gates read here are the ones that panel reads, mirrored.
    */
   const notePeerFinish = (lane: LaneId, result: LaneResult): void => {
     laneResults.current = { ...laneResults.current, [lane]: result };
+    const athleteId = laneAthletes[lane];
+    if (
+      result !== null &&
+      raceStartTime !== null &&
+      athleteId &&
+      shouldRecordTime(fsCounts[lane]) &&
+      !laneAttempts[lane].capped
+    ) {
+      const key = {
+        athleteId,
+        round,
+        timeMs: result,
+        startTime: raceStartTime,
+        matchId: selectedMatchId || undefined,
+      };
+      setPeerRuns((prev) => ({ ...prev, [lane]: { key } }));
+    }
     closeAttempt(lane);
     if (laneResults.current[1] !== null && laneResults.current[2] !== null) {
       runTallied.current = true;
@@ -450,18 +527,18 @@ export const useRaceRecorder = (compId: string) => {
   const saveTime = (
     lane: LaneId,
     input: ReturnType<typeof finishTimeInput>,
-    { retry = false } = {},
+    retrying?: LaneFeedback['failed'],
   ): void => {
     if (!input) return;
     // An accepted result closes the lane's attempt: the next start zeroes its FS
     // counter (a fresh attempt), unless a void reopens it for a rerun.
     closeAttempt(lane);
     // A retry in flight keeps `failed`, so the board holds its Retry (disabled)
-    // in place instead of collapsing the row until the reply.
+    // and the reason in place instead of collapsing them until the reply.
     setLaneStatus(lane, {
       status: 'pending',
       valueMs: input.timeMs,
-      ...(retry && { failed: { input } }),
+      ...(retrying && { failed: retrying }),
     });
     const generation = saveGeneration.current[lane];
     const withdrawn = (): boolean => saveGeneration.current[lane] !== generation;
@@ -480,9 +557,13 @@ export const useRaceRecorder = (compId: string) => {
         });
         setToast({ text: `Lane ${lane} time saved`, severity: 'success' });
       },
-      () => {
+      (error: unknown) => {
         if (withdrawn()) return;
-        setLaneStatus(lane, { status: 'error', valueMs: input.timeMs, failed: { input } });
+        setLaneStatus(lane, {
+          status: 'error',
+          valueMs: input.timeMs,
+          failed: { input, reason: apiErrorMessage(error) },
+        });
         setToast({ text: `Lane ${lane} time not saved`, severity: 'error' });
       },
     );
@@ -502,7 +583,7 @@ export const useRaceRecorder = (compId: string) => {
       ...saveGeneration.current,
       [lane]: saveGeneration.current[lane] + 1,
     };
-    saveTime(lane, fb.failed.input, { retry: true });
+    saveTime(lane, fb.failed.input, fb.failed);
   };
 
   /**
@@ -602,6 +683,7 @@ export const useRaceRecorder = (compId: string) => {
     laneResults.current = { ...NO_RESULTS };
     runTallied.current = false;
     setLaneFeedback({ ...NO_FEEDBACK });
+    setPeerRuns(NO_PEER_RUNS);
   };
 
   const voidRun = (): void => {
@@ -641,6 +723,7 @@ export const useRaceRecorder = (compId: string) => {
     laneResults.current = { ...laneResults.current, [lane]: null };
     attemptClosed.current = { ...attemptClosed.current, [lane]: false };
     setLaneFeedback((prev) => ({ ...prev, [lane]: null }));
+    setPeerRuns((prev) => ({ ...prev, [lane]: null }));
     if (!runTallied.current) return seriesWins;
     runTallied.current = false;
     const undoneId = lastRunWinnerId;
@@ -789,6 +872,8 @@ export const useRaceRecorder = (compId: string) => {
    */
   const recordDnf = (lane: LaneId): void => {
     if (laneResults.current[lane] === DNF_SENTINEL) return;
+    // The hard guard; the lane's disabled DNF only explains it.
+    if (dnfLock(lane) !== null) return;
     if (laneFeedback[lane]?.saved) {
       recordLaneResult(lane, DNF_SENTINEL);
       // Ahead of the attempt cap: the cap guards a NEW record, and the row this
@@ -848,11 +933,13 @@ export const useRaceRecorder = (compId: string) => {
     clearFs,
     fsOutcome,
     awardRunTo,
-    createTime,
     updateTime,
     deleteTime,
     // Per-lane / snackbar save feedback.
     laneFeedback,
+    // What another panel saved on a lane this panel did not record.
+    peerSaves,
+    dnfLock,
     toast,
     clearToast,
     // Match-driven recording surface. Gender changes go through `requestGender`

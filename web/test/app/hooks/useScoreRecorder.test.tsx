@@ -556,6 +556,25 @@ describe('useScoreRecorder', () => {
       expect(bodies('PUT', '/matches/')).toHaveLength(0);
     });
 
+    // Split save: this panel saves Athlete 1 while the other panel saves
+    // Athlete 2, neither having seen the other's row yet. The own save finds
+    // one persisted result; the refetch that brings the peer's row completes
+    // the pair, and the winner write still binds to this panel's own save.
+    it('PUTs the winner once when a peer’s save completes a pair this panel saved live', async () => {
+      const { result } = await matchRecorder();
+      await saveScore(result, 1, 8);
+      expect(bodies('PUT', '/matches/')).toHaveLength(0);
+
+      seededScores = [score('a1', 8, { scoreId: 's1' }), score('a2', 5)];
+      await act(() => result.current.scores.refetch());
+
+      await waitFor(() => expect(isLocked(result, 2)).toBe(true));
+      expect(result.current.entries[2]).toMatchObject({ origin: 'restored' });
+      await waitFor(() => expect(bodies('PUT', '/matches/')).toHaveLength(1));
+      expect(bodies('PUT', '/matches/')[0]).toMatchObject({ winnerId: 'a1' });
+      expect(result.current.derivedWinner).toEqual({ winnerId: 'a1', source: 'derived' });
+    });
+
     it('leaves an unscored slot editable and does not write the match', async () => {
       // Only slot 1 has a saved score.
       seededScores = [score('a1', 8)];
@@ -683,6 +702,85 @@ describe('useScoreRecorder', () => {
       act(() => result.current.swapAthletes());
       expect(result.current.entries[2]).toMatchObject({ status: 'saved', origin: 'live' });
       expect(isLocked(result, 1)).toBe(false);
+    });
+
+    // The other panel's save reaches this board only as a refetch (the
+    // `db_update` invalidation), long after this slot was seeded empty.
+    describe('a score another panel saves', () => {
+      const peerSaves = async (
+        rendered: { result: { current: ScoreRecorder } },
+        scores: Score[],
+      ) => {
+        seededScores = scores;
+        await act(() => rendered.result.current.scores.refetch());
+      };
+
+      const seededPair = async () => {
+        const rendered = renderRecorder();
+        await waitFor(() => expect(rendered.result.current.scores.isSuccess).toBe(true));
+        act(() => rendered.result.current.setAthlete(1, 'a1'));
+        act(() => rendered.result.current.setAthlete(2, 'a2'));
+        return rendered;
+      };
+
+      it('locks an empty slot on the persisted score, without writing', async () => {
+        const rendered = await seededPair();
+        const { result } = rendered;
+        expect(result.current.entries[1].status).toBe('empty');
+
+        await peerSaves(rendered, [qualiScore('a1', 6)]);
+
+        await waitFor(() => expect(isLocked(result, 1)).toBe(true));
+        expect(result.current.entries[1]).toMatchObject({
+          origin: 'restored',
+          result: { overall: 6, dnf: false },
+        });
+        expect(result.current.records[1]).toMatchObject({ scoreId: 's-a1' });
+        expect(fieldsOf(result, 1).difficulty).toBe(6);
+        expect(bodies('POST', '/scores')).toHaveLength(0);
+      });
+
+      it('locks both slots whichever panel saved each', async () => {
+        const rendered = await seededPair();
+        const { result } = rendered;
+        seededScores = [qualiScore('a2', 3)];
+        await saveScore(result, 1, 8);
+
+        await peerSaves(rendered, [qualiScore('a1', 8), qualiScore('a2', 3)]);
+
+        await waitFor(() => expect(isLocked(result, 2)).toBe(true));
+        expect(result.current.entries[1]).toMatchObject({ status: 'saved', origin: 'live' });
+        expect(result.current.entries[2]).toMatchObject({ status: 'saved', origin: 'restored' });
+      });
+
+      it('keeps a typed draft, and locks once its fields are cleared', async () => {
+        const rendered = await seededPair();
+        const { result } = rendered;
+        act(() => result.current.setField(1, 'style', 4));
+
+        await peerSaves(rendered, [qualiScore('a1', 6)]);
+
+        expect(result.current.entries[1]).toMatchObject({ status: 'editing' });
+        expect(fieldsOf(result, 1).style).toBe(4);
+
+        act(() => result.current.setField(1, 'style', 0));
+
+        await waitFor(() => expect(isLocked(result, 1)).toBe(true));
+        expect(result.current.entries[1]).toMatchObject({ origin: 'restored' });
+        expect(fieldsOf(result, 1).difficulty).toBe(6);
+      });
+
+      it('leaves a failed save editable over the persisted score', async () => {
+        const rendered = await seededPair();
+        const { result } = rendered;
+        apiFetchMock.mockImplementationOnce(() => Promise.reject(new Error('boom')));
+        act(() => result.current.recordScore(1));
+        await waitFor(() => expect(result.current.entries[1].status).toBe('error'));
+
+        await peerSaves(rendered, [qualiScore('a1', 6)]);
+
+        expect(result.current.entries[1].status).toBe('error');
+      });
     });
   });
 

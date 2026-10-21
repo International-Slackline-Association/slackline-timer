@@ -30,7 +30,10 @@ disagrees with the console.
    automatically.
 
 If the console itself looks wrong, reloading the console is safe too — it asks
-for the current state on open, and a second operator's board (if any) answers.
+for the current state on open, and a second operator's board (if any) answers
+(two panels on one board:
+[Speed](./speedline-timing.md#two-panels-on-one-board),
+[Freestyle](./freestyle-judging.md#two-panels-on-one-board)).
 Working alone, the console falls back to its own copy of the run, kept on this
 computer: it comes back with the clocks where they were, the athletes and round
 you had chosen, and the line **recovered this panel's last run** in the header.
@@ -55,13 +58,18 @@ panel, or a warning strip saying the time was not saved.
   screen is right.
 - **Read the reason** — it is what the server said — then send it again:
   **Retry save** on the Freestyle panel that failed (your numbers are kept
-  exactly as typed, and a failed DNF retries as a DNF), or **Retry save** under
-  the Speedline lane that failed (the same time, sent again). The status stays
-  on the panel or lane until it succeeds, so there is no message to miss.
+  exactly as typed, and a failed DNF retries as a DNF), or, on the Speedline
+  console, **Retry** on that lane's warning at the top of **Result recording**
+  or **Retry save** under the lane (the same time, sent again). The status
+  stays on the panel or lane until it succeeds, so there is no message to miss.
 - If it will not go through, write the number down and enter it on the **Times**
   page (or **Scores** for freestyle) once the connection is back. On the
   Speedline console, **Times page ↗** beside the failed lane opens it in a new
   tab, already filtered to that athlete and round.
+- **Awaiting save · other panel** that never turns into **Saved** means the
+  time is waiting on a second operator's Speedline panel — the one that stopped
+  that lane. Look there: its own chip says whether the save failed, and its
+  **Retry save** sends it.
 - If it keeps happening, check the machine's network. Everything else in the app
   will be struggling too.
 
@@ -176,9 +184,10 @@ saved is deleted, so the next stop records the real one. The button sits under
 every lane's clock and comes alive once that lane stops: it stays live while the
 other lane is still running and for about ten seconds after the last stop; after
 that it says _why: run has resolved — Void or re-run instead_, and **Void run**
-(which clears both lanes) or a re-run is the way back. If a second operator's
-board pressed Resume, the board that saved the time deletes it — there is
-nothing to tidy up on the **Times** page.
+(which clears both lanes) or a re-run is the way back. If a
+[second operator's board](./speedline-timing.md#two-panels-on-one-board)
+pressed Resume, the board that saved the time deletes it — there is nothing to
+tidy up on the **Times** page.
 
 ## A bracket step overwrote something
 
@@ -190,7 +199,10 @@ page, or re-run the advance step once the source results are right.
 
 That is a supported setup, not a fault — both boards mirror each other on
 purpose, so one can take over if the other's laptop dies. Just agree who is
-driving; whoever presses the button is the one whose action is recorded.
+driving; whoever presses the button is the one whose action is recorded. What
+each board shares and keeps to itself:
+[Speed](./speedline-timing.md#two-panels-on-one-board),
+[Freestyle](./freestyle-judging.md#two-panels-on-one-board).
 
 ## Still stuck
 

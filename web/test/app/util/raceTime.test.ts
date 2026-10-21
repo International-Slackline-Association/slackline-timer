@@ -12,6 +12,7 @@ import {
   finishTimeInput,
   laneRunWins,
   matchToInput,
+  peerSavedTime,
   QUALI_ATTEMPT_CAP,
   qualiAttemptCapReached,
   removeRunWin,
@@ -345,5 +346,55 @@ describe('attemptCount / qualiAttemptCapReached', () => {
 
   it('never caps an unassigned lane', () => {
     expect(qualiAttemptCapReached(times, '', 'qualification')).toBe(false);
+  });
+});
+
+/**
+ * The row another panel POSTed for a lane of this run. That panel stores the
+ * relayed start epoch as the Time's `startTime` and the relayed stop's elapsed
+ * as its `timeMs`, so both are exact here.
+ */
+describe('peerSavedTime', () => {
+  const run = {
+    athleteId: 'a1',
+    round: 'final' as const,
+    startTime: 1000,
+    timeMs: 5720,
+    matchId: 'm1',
+  };
+  const row = (over: Partial<Time> = {}): Time => ({
+    timeId: 't1',
+    compId: 'c1',
+    athleteId: 'a1',
+    round: 'final',
+    timeMs: 5720,
+    startTime: 1000,
+    matchId: 'm1',
+    ...over,
+  });
+
+  it('finds the run’s row at the exact elapsed the relayed stop gave', () => {
+    expect(peerSavedTime([row()], run)).toEqual(row());
+  });
+
+  it('finds the run’s row as a DNF (a fall pressed before the stop)', () => {
+    expect(peerSavedTime([row({ timeMs: DNF_SENTINEL })], run)?.timeMs).toBe(DNF_SENTINEL);
+  });
+
+  it('never takes a row at another elapsed — a resumed stop’s row not yet refetched away', () => {
+    expect(peerSavedTime([row({ timeMs: 5700 })], run)).toBeNull();
+  });
+
+  it('never takes an earlier run’s row, even at the same elapsed', () => {
+    expect(peerSavedTime([row({ startTime: 400 })], run)).toBeNull();
+  });
+
+  it('keeps to the lane’s athlete, round and match', () => {
+    expect(peerSavedTime([row({ athleteId: 'a2' })], run)).toBeNull();
+    expect(peerSavedTime([row({ round: 'half' })], run)).toBeNull();
+    expect(peerSavedTime([row({ matchId: undefined })], run)).toBeNull();
+    expect(
+      peerSavedTime([row({ matchId: undefined })], { ...run, matchId: undefined })?.timeId,
+    ).toBe('t1');
   });
 });

@@ -82,6 +82,32 @@ export const moveTimeInput = (prev: TimeInput, athleteId: string): TimeInput => 
 /** A lane's result for the current run: elapsed ms, `DNF_SENTINEL` for a DNF, or null (no result yet). */
 export type LaneResult = number | null;
 
+/** What a panel knows of the Time another panel's stop POSTs for one lane of
+ * the run — everything but the reply, which only the posting panel sees.
+ * `timeMs` is the elapsed off the relayed `start` and `stop` epochs. */
+export type PeerRunKey = Pick<TimeInput, 'athleteId' | 'round' | 'matchId' | 'timeMs'> & {
+  startTime: number;
+};
+
+/**
+ * The persisted Time another panel recorded for a lane of this run, or null
+ * until it is in this panel's cache. Exact on both epochs: the posting panel
+ * stores the relayed start as `startTime` and the relayed stop's elapsed as
+ * `timeMs` (or the DNF sentinel, a fall pressed before the stop) — so neither
+ * an earlier run's row nor a resumed stop's row still cached here matches.
+ * Once found, the caller follows the row by id: a correction there moves
+ * `timeMs` off this key.
+ */
+export const peerSavedTime = (times: Time[], run: PeerRunKey): Time | null =>
+  times.find(
+    (t) =>
+      t.startTime === run.startTime &&
+      (t.timeMs === run.timeMs || t.timeMs === DNF_SENTINEL) &&
+      t.athleteId === run.athleteId &&
+      t.round === run.round &&
+      t.matchId === run.matchId,
+  ) ?? null;
+
 /**
  * Which lanes a race start ignites. A solo run — exactly one lane with an
  * athlete assigned, the qualification pattern — starts only that lane, so the

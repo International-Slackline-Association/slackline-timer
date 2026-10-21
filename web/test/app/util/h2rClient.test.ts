@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildCsp } from '../../../internals/csp.mjs';
 
-import { createH2rPusher, pushToH2r, resolveH2rTarget } from 'app/util/h2rClient';
+import {
+  createH2rPusher,
+  H2R_BACKOFF_MAX_MS,
+  pushToH2r,
+  resolveH2rTarget,
+} from 'app/util/h2rClient';
 import type { H2rPost } from 'app/util/h2rBridge';
 
 const posts: H2rPost[] = [
@@ -111,8 +116,18 @@ describe('pushToH2r', () => {
       .mockResolvedValueOnce({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(pushToH2r('http://127.0.0.1:4001', posts)).resolves.toBeUndefined();
+    await expect(pushToH2r('http://127.0.0.1:4001', posts)).resolves.toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('counts only ok responses as delivered', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockRejectedValueOnce(new DOMException('', 'AbortError'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(pushToH2r('http://127.0.0.1:4001', posts)).resolves.toBe(0);
   });
 });
 
@@ -156,7 +171,10 @@ describe('createH2rPusher', () => {
     pusher.push(textPost('A'));
     pusher.push(textPost('B'));
     await vi.advanceTimersByTimeAsync(3_000);
+    expect(calls.map((c) => c.text)).toEqual(['A']);
 
+    // The aborted push landed nothing, so the first backoff step precedes B.
+    await vi.advanceTimersByTimeAsync(1_000);
     expect(calls.map((c) => c.text)).toEqual(['A', 'B']);
   });
 
@@ -174,5 +192,134 @@ describe('createH2rPusher', () => {
     await Promise.resolve();
 
     expect(calls.map((c) => c.text)).toEqual(['A']);
+  });
+});
+
+/** A fetch that refuses (H2R not running) unless the test flips `up`. */
+const refusingFetch = () => {
+  const state = { up: false };
+  const texts: string[] = [];
+  const fetchMock = vi.fn((_url: string, init: RequestInit) => {
+    texts.push((JSON.parse(init.body as string) as { text: string }).text);
+    return state.up
+      ? Promise.resolve({ ok: true } as Response)
+      : Promise.reject(new TypeError('Failed to fetch'));
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return { state, texts, fetchMock };
+};
+
+describe('createH2rPusher backoff (H2R down)', () => {
+  const origin = 'http://127.0.0.1:4001';
+
+  it('spaces all-failed pushes at 1 s, 2 s, 4 s, sending the latest set each time', async () => {
+    vi.useFakeTimers();
+    const { texts } = refusingFetch();
+    const pusher = createH2rPusher(origin);
+
+    pusher.push(textPost('A'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(texts).toEqual(['A']);
+
+    pusher.push(textPost('B'));
+    pusher.push(textPost('C'));
+    await vi.advanceTimersByTimeAsync(999);
+    expect(texts).toEqual(['A']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(texts).toEqual(['A', 'C']);
+
+    pusher.push(textPost('D'));
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(texts).toEqual(['A', 'C']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(texts).toEqual(['A', 'C', 'D']);
+
+    pusher.push(textPost('E'));
+    await vi.advanceTimersByTimeAsync(3_999);
+    expect(texts).toEqual(['A', 'C', 'D']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(texts).toEqual(['A', 'C', 'D', 'E']);
+  });
+
+  it('caps the delay at H2R_BACKOFF_MAX_MS', async () => {
+    vi.useFakeTimers();
+    const { fetchMock } = refusingFetch();
+    const pusher = createH2rPusher(origin);
+
+    pusher.push(textPost('A'));
+    // 1 + 2 + 4 + 8 + 16 s of failures; the sixth wait would be 32 s uncapped.
+    for (const delay of [1_000, 2_000, 4_000, 8_000, 16_000]) {
+      pusher.push(textPost('next'));
+      await vi.advanceTimersByTimeAsync(delay);
+    }
+    const sent = fetchMock.mock.calls.length;
+    pusher.push(textPost('capped'));
+    await vi.advanceTimersByTimeAsync(H2R_BACKOFF_MAX_MS - 1);
+    expect(fetchMock).toHaveBeenCalledTimes(sent);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(sent + 1);
+  });
+
+  it('holds a push made during backoff without firing it', async () => {
+    vi.useFakeTimers();
+    const { texts } = refusingFetch();
+    const pusher = createH2rPusher(origin);
+
+    pusher.push(textPost('A'));
+    await vi.advanceTimersByTimeAsync(0);
+    pusher.push(textPost('B'));
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(texts).toEqual(['A']);
+  });
+
+  it('resets after a successful POST so the next push fires at once', async () => {
+    vi.useFakeTimers();
+    const { state, texts } = refusingFetch();
+    const pusher = createH2rPusher(origin);
+
+    pusher.push(textPost('A'));
+    pusher.push(textPost('B'));
+    state.up = true;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(texts).toEqual(['A', 'B']);
+
+    state.up = false;
+    pusher.push(textPost('C'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(texts).toEqual(['A', 'B', 'C']);
+  });
+
+  it('does not back off while any POST of the push lands', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((url: string) =>
+      url.endsWith('/data/photo_1')
+        ? Promise.resolve({ ok: true } as Response)
+        : Promise.reject(new TypeError('Failed to fetch')),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const pusher = createH2rPusher(origin);
+
+    pusher.push(posts);
+    await vi.advanceTimersByTimeAsync(0);
+    pusher.push(posts);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('cancels the backoff timer on dispose', async () => {
+    vi.useFakeTimers();
+    const { fetchMock } = refusingFetch();
+    const pusher = createH2rPusher(origin);
+
+    pusher.push(textPost('A'));
+    await vi.advanceTimersByTimeAsync(0);
+    pusher.push(textPost('B'));
+    pusher.dispose();
+    await vi.advanceTimersByTimeAsync(H2R_BACKOFF_MAX_MS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

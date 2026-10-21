@@ -362,7 +362,8 @@ export type SlotEntry =
   | ({ status: 'pending'; result: ScoreResult } & EntryDraft)
   /** Persisted. `origin` separates a save this board made from one restored off
    * the server — only the former outranks a `Match.winnerId` the operator may
-   * have resolved by hand, and only the former ever writes the Match. */
+   * have resolved by hand, and only a pair holding the former ever writes the
+   * Match (a restore completing it included; two restored halves never do). */
   | ({ status: 'saved'; result: ScoreResult; origin: 'live' | 'restored' } & EntryDraft)
   /** The POST failed; the draft stays editable and `reason` is rendered. */
   | ({ status: 'error'; result: ScoreResult; reason: string } & EntryDraft);
@@ -390,6 +391,13 @@ export const hasDraft = (entry: SlotEntry): boolean => {
   return override !== null || Object.values(fields).some((value) => value !== 0);
 };
 
+/** Would a persisted score for this slot's athlete be taken in? Only by a panel
+ * holding nothing of its own — no save in flight, landed or failed, and nothing
+ * typed — so another panel's save never replaces a draft or downgrades this
+ * board's own `live` save to `restored`. */
+export const awaitsRestore = (entry: SlotEntry): boolean =>
+  (entry.status === 'empty' || entry.status === 'editing') && !hasDraft(entry);
+
 /** A panel taking input: neither locked by a save nor mid-POST. */
 export const isEntryOpen = (entry: SlotEntry): boolean =>
   entry.status !== 'pending' && entry.status !== 'saved';
@@ -408,8 +416,9 @@ export const matchResultsOf = (entries: Record<1 | 2, SlotEntry>): Record<1 | 2,
 });
 
 /**
- * The one effect the machine emits: a save landed, so the selected Match's
- * winner may now be resolvable. Performed at the edge (it PUTs).
+ * The one effect the machine emits: a save landed (or a restore completed a
+ * pair this board saved live), so the selected Match's winner may now be
+ * resolvable. Performed at the edge (it PUTs).
  */
 export type ScoreEntryEffect = { kind: 'resolve_match' };
 
@@ -433,7 +442,7 @@ type SlotAction =
   | { type: 'CLEAR'; player: 1 | 2 };
 
 export type ScoreEntryAction =
-  SlotAction | { type: 'CLEAR_BOTH' } | { type: 'SWAP' } | { type: 'DRAIN' };
+  SlotAction | { type: 'CLEAR_BOTH' } | { type: 'SWAP' } | { type: 'DRAIN'; count: number };
 
 /** One slot's whole state: the panel, and the row it has on the server. */
 interface SlotState {
@@ -457,7 +466,11 @@ const draftOfInput = (input: ScoreInput): EntryDraft => ({
   override: input.overall === undefined ? null : String(input.overall),
 });
 
-const reduceSlot = ({ entry, record }: SlotState, action: SlotAction): SlotTransition => {
+const reduceSlot = (
+  { entry, record }: SlotState,
+  action: SlotAction,
+  sibling: SlotEntry,
+): SlotTransition => {
   const idle: SlotTransition = { entry, record, effects: [] };
   switch (action.type) {
     case 'EDIT_FIELD': {
@@ -518,6 +531,10 @@ const reduceSlot = ({ entry, record }: SlotState, action: SlotAction): SlotTrans
       };
 
     case 'RESTORE':
+      // A restore that completes a pair this board saved live is the first
+      // moment it holds both results (a split save: the other panel saved this
+      // athlete before either saw the other's row), and the write still binds
+      // to the local save (ADR 0038). Two restored halves never write.
       return {
         entry: {
           status: 'saved',
@@ -526,7 +543,10 @@ const reduceSlot = ({ entry, record }: SlotState, action: SlotAction): SlotTrans
           origin: 'restored',
         },
         record: action.record,
-        effects: [],
+        effects:
+          sibling.status === 'saved' && sibling.origin === 'live'
+            ? [{ kind: 'resolve_match' }]
+            : [],
       };
 
     case 'MOVED':
@@ -576,7 +596,11 @@ export const scoreEntryReducer = (
 ): ScoreEntryStore => {
   switch (action.type) {
     case 'DRAIN':
-      return drainEffects(store);
+      // Drop only what the edge performed: a RESTORE committed alongside the
+      // drained SAVED queues its resolve_match after the edge read `entries`.
+      return action.count >= store.effects.length
+        ? drainEffects(store)
+        : { ...store, effects: store.effects.slice(action.count) };
 
     case 'CLEAR_BOTH':
       // A selection cascade is a new pair: the rows go with the panels, since
@@ -599,7 +623,8 @@ export const scoreEntryReducer = (
         entry: store.entries[action.player],
         record: store.records[action.player],
       };
-      const { entry, record, effects } = reduceSlot(current, action);
+      const sibling = store.entries[action.player === 1 ? 2 : 1];
+      const { entry, record, effects } = reduceSlot(current, action, sibling);
       if (entry === current.entry && record === current.record && effects.length === 0)
         return store;
       return {

@@ -188,24 +188,25 @@ footage, so it takes the filled-plate tier too: `nameInk`, footage shadow off
 caps there wash out to ≤1.9:1. The bandless `TOTAL` row keeps the white caps +
 footage shadow.
 
-| Token                        | Value                    | Use                                                                                                           |
-| ---------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `overlay.plate`              | `rgba(255,255,255,0.3)`  | **Empty** profile-box fill — VS photo frame, portrait card, profile bracket box (the profile art's 30% white) |
-| `overlay.plateName`          | `rgba(255,255,255,0.35)` | **Empty** name-bar fill — the name bracket's TBD plate (the names art's 35% white)                            |
-| `overlay.plateStrip`         | `rgba(255,255,255,0.48)` | Row backing band behind a VS stat label (the art's 48% white); the label on it inks `nameInk`, no shadow      |
-| `overlay.plateFilled`        | `#FFFFFF`                | **Filled** named-plate fill — solid white bar behind a dark athlete name                                      |
-| `overlay.stroke`             | `#FFFFFF`                | Plate border + thin bracket connector lines (width = `overlayArt.strokeWidth`)                                |
-| `overlay.nameInk`            | `#231f20`                | Name/value ink on a filled plate, incl. the `/stream/timer` plate's idle/stopped digits; **not** `ink.hi`     |
-| `overlay.nameInkSubordinate` | `#737172`                | Subordinate words on a filled plate (source tag, `PTS`/`AVG`), 4.85:1 — a colour step, not `nameInk` + alpha  |
-| `overlay.label`              | `#FFFFFF`                | Structural / section labels (reuses `ink.onBrand`)                                                            |
-| `overlay.scrim`              | `rgba(51,60,78,0.9)`     | Slate legibility backing for white overlay text — caption gradient + per-text shadow                          |
-| `overlay.backdrop`           | `rgba(35,31,32,0.6)`     | Full-bleed frame dim behind an overlay composition — the LAAX "60% Black" layer (distinct from `scrim`)       |
-| `chromaKey`                  | `#FF00FF`                | Chroma-key body fill for ALL overlay surfaces, painted when `?bg=key`                                         |
-| `chromaKeyGreen` / `Blue`    | `#00B140` / `#0047BB`    | The `?bg=green` / `?bg=blue` grounds (keyer presets) — they erase our own greens/blues                        |
-| `overlayArt.strokeWidth`     | `6px`                    | Plate/VS-box border + connector weight, at the art's 1920×1080 reference frame                                |
-| `overlayArt.headingTracking` | `-0.02em`                | Tight display-caps letter-spacing on overlay headings (the art runs −.01…−.03em)                              |
-| `overlayArt.bannerTracking`  | `0.08em`                 | Open banner caps — the `WINNER` banner/tag, the best-of-3 caption and tally names                             |
-| `overlayArt.nameTracking`    | `0.01em`                 | Athlete names and initials on every plate and card                                                            |
+| Token                        | Value                     | Use                                                                                                           |
+| ---------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `overlay.plate`              | `rgba(255,255,255,0.3)`   | **Empty** profile-box fill — VS photo frame, portrait card, profile bracket box (the profile art's 30% white) |
+| `overlay.plateName`          | `rgba(255,255,255,0.35)`  | **Empty** name-bar fill — the name bracket's TBD plate (the names art's 35% white)                            |
+| `overlay.plateStrip`         | `rgba(255,255,255,0.48)`  | Row backing band behind a VS stat label (the art's 48% white); the label on it inks `nameInk`, no shadow      |
+| `overlay.plateFilled`        | `#FFFFFF`                 | **Filled** named-plate fill — solid white bar behind a dark athlete name                                      |
+| `overlay.stroke`             | `#FFFFFF`                 | Plate border + thin bracket connector lines (width = `overlayArt.strokeWidth`)                                |
+| `overlay.nameInk`            | `#231f20`                 | Name/value ink on a filled plate, incl. the `/stream/timer` plate's idle/stopped digits; **not** `ink.hi`     |
+| `overlay.nameInkSubordinate` | `#737172`                 | Subordinate words on a filled plate (source tag, `PTS`/`AVG`), 4.85:1 — a colour step, not `nameInk` + alpha  |
+| `overlay.label`              | `#FFFFFF`                 | Structural / section labels (reuses `ink.onBrand`)                                                            |
+| `overlay.scrim`              | `rgba(51,60,78,0.9)`      | Slate legibility backing for white overlay text — caption gradient + per-text shadow                          |
+| `overlay.backdrop`           | `rgba(35,31,32,0.6)`      | Full-bleed frame dim behind an overlay composition — the LAAX "60% Black" layer (distinct from `scrim`)       |
+| `chromaKey`                  | `#FF00FF`                 | Chroma-key body fill for ALL overlay surfaces, painted when `?bg=key`                                         |
+| `chromaKeyGreen` / `Blue`    | `#00B140` / `#0047BB`     | The `?bg=green` / `?bg=blue` grounds (keyer presets) — they erase our own greens/blues                        |
+| `overlayArt.strokeWidth`     | `6px`                     | Plate/VS-box border + connector weight, at the art's 1920×1080 reference frame                                |
+| `overlayArt.headingTracking` | `-0.02em`                 | Tight display-caps letter-spacing on overlay headings (the art runs −.01…−.03em)                              |
+| `overlayArt.bannerTracking`  | `0.08em`                  | Open banner caps — the `WINNER` banner/tag, the best-of-3 caption and tally names                             |
+| `overlayArt.nameTracking`    | `0.01em`                  | Athlete names and initials on every plate and card                                                            |
+| `overlayArt.flagKeyline`     | `inset 0 0 0 1px #231f20` | Hairline over every plate flag, so a white-field flag reads as a bounded block on a white plate               |
 
 All three translucent-white alphas are measured in the art (the plate-opacity
 audit): every profile-language file (`Profile top 4`, `Profile Brackets`, `vs`)
@@ -225,7 +226,7 @@ CSS vars: `--tl-overlay-plate`, `--tl-overlay-plate-name`, `--tl-overlay-plate-s
 `--tl-overlay-scrim`, `--tl-overlay-backdrop`, `--tl-chroma-key`,
 `--tl-chroma-key-green`, `--tl-chroma-key-blue`, `--tl-overlay-stroke-width`,
 `--tl-overlay-heading-tracking`, `--tl-overlay-banner-tracking`,
-`--tl-overlay-name-tracking`.
+`--tl-overlay-name-tracking`, `--tl-overlay-flag-keyline`.
 
 **Name face & weights.** Names use `fonts.display` (`Oswald`, see §4) and pair a
 **bold** given name with a **lighter** family name — over the loaded `300–700`
@@ -401,9 +402,19 @@ type scales off, its width following the card's 298.81 × 498.02 aspect.
 
 A board's measured floors, caps and reserved rows (`boardGeometry` in `tokens.ts`). They are not a scale: each value
 is a fold-budget measurement its brief signed off, so a change re-measures the board. The Freestyle set is
-tabulated in [`freestyle-board-ux.md`](./freestyle-board-ux.md) §6. Speedline holds two: the 880 px live-deck ceiling
-(`deckMax.speedline`, the Freestyle rule with the start strip between the lanes) and the start strip's 184 px floor
-(`speedline.startStrip`), the slot the race pair's why-line wraps in.
+tabulated in [`freestyle-board-ux.md`](./freestyle-board-ux.md) §6. Speedline holds four: the 880 px live-deck ceiling
+(`deckMax.speedline`, the Freestyle rule with the start strip between the lanes), the start strip's 184 px floor
+(`speedline.startStrip`), the slot the race pair's why-line wraps in, and the two lane-column widths from which the
+status strip's chips spell their words beside the quali attempts badge — 270 px for the own save chip and the badge
+(`speedline.stripWords`), 300 px for the peer chip's "other panel" (`speedline.peerWords`). Container queries: the
+column is 200 px at 1280 and 280 at 1440, narrower each chip keeps its figure, and a second chip row would push the
+race pair under the fold.
+
+`boardMax` is the one derived entry: each board's frame cap, `deskRails.setup + deckMax[board] + deskRails.record` plus
+the desk grid's two 16 px gaps, so Speedline 1520 px and Freestyle 1440 px (the battle deck; quali's narrower deck
+centres in the same track). `ControlBoardFrame` caps the header, desk and tab layouts at it and centres them; past it
+the surplus is side margin, never empty live track, so the rails stay one desk gap from the deck. Per board, not one
+shared cap: a single 1520 would put 80 px back into Freestyle's live track.
 
 ### Marks
 
@@ -976,14 +987,15 @@ Guidelines:
 
 ### Responsive contract (operator surfaces)
 
-Every operator surface (the Speedline and Freestyle control boards and `/admin/*`) holds at four viewports. Overlays are outside it: they are authored on the 1920×1080 frame (§7).
+Every operator surface (the Speedline and Freestyle control boards and `/admin/*`) holds at four viewports; the control boards add a fifth, the ultra-wide 2560×1440. Overlays are outside it: they are authored on the 1920×1080 frame (§7).
 
-| Viewport  | Role                                           | MUI band | Control boards                                                           |
-| --------- | ---------------------------------------------- | -------- | ------------------------------------------------------------------------ |
-| 1440×900  | Laptop, the primary operator screen            | `lg`     | Both desks, every live control and both Saves above the fold             |
-| 1280×720  | Compact: a 720p laptop or a mirrored projector | `lg`     | Freestyle tabs (fails its desk gate on height); Speedline keeps its desk |
-| 1920×1080 | Wide, the venue monitor                        | `xl`     | Both desks; the live column caps its width instead of spreading          |
-| 1024×768  | Tablet, or a second operator's peer panel      | `md`     | Freestyle tabs; Speedline stacks with setup folded to one row            |
+| Viewport  | Role                                           | MUI band | Control boards                                                                  |
+| --------- | ---------------------------------------------- | -------- | ------------------------------------------------------------------------------- |
+| 1440×900  | Laptop, the primary operator screen            | `lg`     | Both desks, every live control and both Saves above the fold                    |
+| 1280×720  | Compact: a 720p laptop or a mirrored projector | `lg`     | Freestyle tabs (fails its desk gate on height); Speedline keeps its desk        |
+| 1920×1080 | Wide, the venue monitor                        | `xl`     | Both desks; the board frame caps at `boardMax` and centres instead of spreading |
+| 1024×768  | Tablet, or a second operator's peer panel      | `md`     | Freestyle tabs; Speedline stacks with setup folded to one row                   |
+| 2560×1440 | Ultra-wide (control boards only)               | `xl`     | Board frame capped at `boardMax`, centred; gutters outside the frame            |
 
 Rules at all four:
 
@@ -993,7 +1005,7 @@ Rules at all four:
 - Setup and score-entry chrome collapses before the live path does. Reflow never reorders: setup → live → rail at every width.
 - Layout switches on `theme.breakpoints` or container queries. Inside a desk nothing pins a track: the 248 | fill | 360 grid is the board brief's ([`freestyle-board-ux.md` §2](./freestyle-board-ux.md#2-the-desk--wireframes)), its `minmax(0, 1fr)` live column absorbs the viewport, and a component in a track sizes by flex, `ch` or `minWidth: 0`, never a pixel width.
 
-**Breakpoints.** `telemetryTheme` sets none, so MUI's defaults apply: `sm` 600, `md` 900, `lg` 1200, `xl` 1536. 1280 and 1440 both sit in `lg`, so a side-by-side layout opening at `lg` (the `/admin/overlays` Speed | Freestyle columns, the control header's one-row health block) is still side by side at 1280×720. Admin's side-by-side layouts stack below `lg`, at the 1024 tablet; 1280 is never a stacking width.
+**Breakpoints.** `telemetryTheme` sets none, so MUI's defaults apply: `sm` 600, `md` 900, `lg` 1200, `xl` 1536. 1280 and 1440 both sit in `lg`, so a side-by-side layout opening at `lg` (the `/admin/overlays` Speed | Freestyle columns) is still side by side at 1280×720. The control header's one-row health block opens at `md`, so the 1024 tablet holds it too: both header grids give health its own width there (Speedline's setup-row header runs the setup strip under the plates and leaves the caption a track of its own; the strip's text lines truncate into their `title` rather than wrap, so a long pad id or press readout never adds a row), never a third of the tablet. Admin's side-by-side layouts stack below `lg`, at the 1024 tablet; 1280 is never a stacking width.
 
 **Desk gates.** Each board switches between its desk and the narrow layout on a viewport media query sized to what that desk was measured to hold, not on a breakpoint. One owner: `deskGate` in `tokens.ts` holds the two numbers and `deskMedia` renders each board's query from them, for both the desk grid's `@media` key and the board's `useMediaQuery`:
 

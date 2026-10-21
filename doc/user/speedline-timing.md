@@ -36,7 +36,9 @@ Setup collapses to a **single strip** inside the status header, under the
 round and gender and beside the connection and audio chips: the **Preview**
 switch and its link, whether a handset is connected, the line saying what the
 last press did, and **Open handset map** — the same controls, on one line, so
-the clocks and the stop buttons stay on screen without scrolling.
+the clocks and the stop buttons stay on screen without scrolling. A long
+controller name or press line is cut short with "…" rather than wrapped; hover
+it to read the whole line.
 
 ## Before the first run
 
@@ -55,7 +57,10 @@ the clocks and the stop buttons stay on screen without scrolling.
    down, and _Not connected_ if it never arrives. The clocks keep running
    through all of it; only the audience screens stop receiving — the line under
    the chips says so on every reading but _Connecting…_, and stays there, empty,
-   the rest of the time so the row never shifts.
+   the rest of the time so the row never shifts. The **peer** chip says whether
+   a second operator's panel is on this board: **peer: awaiting** just after
+   you open it, then **peer: answered** or **peer: none** — see
+   [Two panels on one board](#two-panels-on-one-board).
 4. **Pick the round and gender** in the right-hand column.
 
 ## Timing a run
@@ -153,11 +158,21 @@ recorded** for it.
 
 - **Saved / Saving… / Not saved.** The chip under each lane is the truth. A
   _Not saved_ chip means the result did not reach the server — the timing itself
-  was unaffected. Under the lane's DNF button, **Retry save** sends the same
-  time again (a failed DNF retries as a DNF); it does not count the run a
-  second time. If it still will not go through, **Times page ↗** beside it
-  opens the **Times** page in a new tab, filtered to that athlete and round, so
-  you can enter the time there while the console keeps running.
+  was unaffected. Where the lane column is narrow (a compact laptop screen, in
+  qualification) the chips shorten to their figures so they stay on one row: the
+  time alone, in the chip's colour (green saved, red not saved, outlined while
+  saving), and **2/2** for the attempts badge; point at a chip for its full
+  words. The top of the **Result recording** panel also shows a
+  _Lane n time not saved_ warning for each lane that failed, saying why, with a
+  **Retry** button — in view without scrolling even on a compact laptop screen.
+  It stays until that lane's time goes through, even if the other lane saves
+  in the meantime. Under the lane's DNF button, **Retry save** does the same
+  thing. Either one
+  sends the same time again (a failed DNF retries as a DNF), and neither counts
+  the run a second time. If it still will not go through, **Times page ↗**
+  beside **Retry save** opens the **Times** page in a new tab, filtered to that
+  athlete and round, so you can enter the time there while the console keeps
+  running.
 - **Correct a time on the spot.** Once a lane's time is saved, a
   **Correct time** box appears next to it. Type the hand-timed value as
   `M:SS.hh` and press Enter. Useful when the hand timer and the system clock
@@ -181,11 +196,21 @@ recorded** for it.
   athlete. DNF stops that lane's clock; press it whether or not you have
   already stopped the lane — one press, one record. If the lane had already
   saved a time, that same entry is changed to DNF rather than a second one
-  being added, so the attempt still counts once.
+  being added, so the attempt still counts once. A lane the other panel
+  stopped greys its DNF out with _why: recorded on the other panel — DNF it
+  there_.
 - **Void run.** Deletes the times this run just recorded — the clean undo for a
   run that should not have counted. It asks first and names each time it would
   delete; **Keep times** leaves everything as it is. It is locked while the
   lights run or a lane is still timing.
+- **Saved … · other panel.** A lane stopped on a second operator's panel is
+  saved there, not here. Its chip carries the two-person icon of the **peer**
+  chip and reads **Awaiting save · other panel** until the server has the time,
+  then **Saved 0:05.72 · other panel**, with a **Times page ↗** link under the
+  lane. Where the lane column is narrow (a laptop screen, in qualification) it
+  shortens to the icon and **Awaiting**, then the icon and the time. It is for
+  reading only: correct, retry, move or void that time on the panel that saved
+  it — see [Two panels on one board](#two-panels-on-one-board).
 - Corrections to a **DNF**, or to anything from an earlier run, are made on the
   **Times** page. A lane holding a DNF links straight to its row — **Times
   page ↗** under the **Correct time** box opens it in a new tab.
@@ -210,6 +235,40 @@ The match winner is set automatically the moment a lane wins its second run —
 first to 2 of 3. Until then the line under **Void run** shows the series score
 and the run it is waiting for, for example _Winner: — series 1–0, awaiting run
 2_.
+
+## Two panels on one board
+
+A second timekeeper can open the Speedline console for the same competition on
+another device. Both panels drive the same race: whatever one presses shows up
+on the other within a moment, and neither is the master.
+
+- The status chips say who else is there — **peer: awaiting** just after you
+  open the console, then **peer: answered** (another panel replied) or
+  **peer: none** (you have this board to yourself).
+- **Shared by both panels:** the start light and its beeps (both run the lights
+  off the same start, so they go green together), both clocks, **Stop**,
+  **Resume Lane n**, **Reset**, **Abort start** and its _START ABORTED_, the
+  false-start flags, the best-of-3 score, the round, gender and match, the
+  athlete on each lane, **Swap**, and the **Preview** switch.
+- **Kept on the panel that did it:** a time is saved by the panel whose lane was
+  stopped, so its **Saved** chip, **Correct time**, **Retry save**, **Move
+  time**, **Void run** and a DNF over a stopped lane are all on that panel. The
+  other panel reads the lane as **Awaiting save · other panel**, then
+  **Saved 0:05.72 · other panel** once the server has it. Its **Lane n DNF**
+  for that lane is greyed out with _why: recorded on the other panel — DNF it
+  there_ — press the DNF on the panel that saved the time — and with no time
+  of its own its **Void run** stays locked with _why: recorded on the other
+  panel — void it there_.
+- **Each panel voids only the times it saved.** When each panel saved one lane,
+  **Void run** deletes this panel's time, and its question names the other
+  panel's as staying — _Saved 0:05.72 · other panel stays — void it there_. To
+  drop the whole run, void it on the other panel too.
+- **Resume Lane n** works from either panel: the panel that saved the time
+  deletes it, so there is nothing to tidy up on the **Times** page.
+- A lane judge's buzzer plugs into either computer. The press works on the
+  panel it is connected to, and the other panel follows it.
+- A panel that joins mid-race picks up the clocks that are running, and a
+  **Stop** pressed on it then saves that lane's time as usual.
 
 ## Buzzer buttons
 

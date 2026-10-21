@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Match, Score } from 'app/types';
 import {
+  awaitsRestore,
   deriveFreestyleMatchWinner,
   dnfScoreInput,
   entryDraft,
@@ -446,7 +447,7 @@ describe('the per-athlete-slot entry machine', () => {
 
     expect(store.entries[1]).toMatchObject({ status: 'saved', result: RESULT, origin: 'live' });
     expect(store.effects).toEqual([{ kind: 'resolve_match' }]);
-    expect(scoreEntryReducer(store, { type: 'DRAIN' }).effects).toEqual([]);
+    expect(scoreEntryReducer(store, { type: 'DRAIN', count: 1 }).effects).toEqual([]);
   });
 
   it('refuses edits and a second save while one is in flight or landed', () => {
@@ -505,6 +506,58 @@ describe('the per-athlete-slot entry machine', () => {
     expect(store.effects).toEqual([]);
   });
 
+  it('queues the match resolution when a restore completes a pair this panel saved live', () => {
+    // Split save: this panel saved Athlete 1, the other panel saved Athlete 2
+    // before either saw the other's row. The restore is the first moment this
+    // panel holds both results, and the write still binds to its own save.
+    const store = run(
+      edit(26),
+      SUBMIT,
+      SAVED,
+      { type: 'DRAIN', count: 1 },
+      {
+        type: 'RESTORE',
+        player: 2,
+        draft: { fields: { ...EMPTY, difficulty: 8 }, override: null },
+        record: record('a2', 8),
+      },
+    );
+
+    expect(store.entries[2]).toMatchObject({ status: 'saved', origin: 'restored' });
+    expect(store.effects).toEqual([{ kind: 'resolve_match' }]);
+  });
+
+  it('keeps a resolution queued after the one the edge drained', () => {
+    // Concurrent split save: the save's refetch already carries the other
+    // panel's row, so SAVED and RESTORE commit together and the edge drains
+    // with the pre-restore entries. Its DRAIN must not take the restore's write.
+    const store = run(
+      edit(26),
+      SUBMIT,
+      SAVED,
+      {
+        type: 'RESTORE',
+        player: 2,
+        draft: { fields: { ...EMPTY, difficulty: 8 }, override: null },
+        record: record('a2', 8),
+      },
+      { type: 'DRAIN', count: 1 },
+    );
+
+    expect(store.effects).toEqual([{ kind: 'resolve_match' }]);
+  });
+
+  it('queues no write when both halves of the pair are restored', () => {
+    const restore = (player: 1 | 2, athleteId: string): ScoreEntryAction => ({
+      type: 'RESTORE',
+      player,
+      draft: { fields: { ...EMPTY, difficulty: 8 }, override: null },
+      record: record(athleteId, 8),
+    });
+
+    expect(run(restore(1, 'a1'), restore(2, 'a2')).effects).toEqual([]);
+  });
+
   it('keeps the persisted row on the slot when the panel clears for the next athlete', () => {
     // The whole re-attribution feature: the panel reopens for whoever is picked
     // next, but the row it wrote stays addressable — cleared with the entry, a
@@ -522,7 +575,7 @@ describe('the per-athlete-slot entry machine', () => {
       SAVED,
       // The save's own resolution has been drained by the edge; this is the
       // second one, queued by the move.
-      { type: 'DRAIN' },
+      { type: 'DRAIN', count: 1 },
       { type: 'CLEAR', player: P },
       { type: 'MOVED', player: P, record: record('a2') },
     );
@@ -698,5 +751,27 @@ describe('hasDraft', () => {
     ['a half-typed negative override', true, editing({}, '-')],
   ])('%s → %s', (_label, expected, entry) => {
     expect(hasDraft(entry)).toBe(expected);
+  });
+});
+
+describe('awaitsRestore', () => {
+  const result = { overall: 6, dnf: false };
+  const blank = { fields: ZERO_FIELDS, override: null };
+
+  // Another panel's save may lock only a panel holding nothing of its own.
+  it.each<[string, boolean, SlotEntry]>([
+    ['an empty panel', true, { status: 'empty' }],
+    ['a panel edited back to blank', true, { status: 'editing', ...blank }],
+    [
+      'a typed draft',
+      false,
+      { status: 'editing', fields: { ...ZERO_FIELDS, style: 4 }, override: null },
+    ],
+    ['a save in flight', false, { status: 'pending', ...blank, result }],
+    ['a failed save', false, { status: 'error', ...blank, result, reason: 'boom' }],
+    ['the board’s own save', false, { status: 'saved', ...blank, result, origin: 'live' }],
+    ['a restored save', false, { status: 'saved', ...blank, result, origin: 'restored' }],
+  ])('%s → %s', (_label, expected, entry) => {
+    expect(awaitsRestore(entry)).toBe(expected);
   });
 });

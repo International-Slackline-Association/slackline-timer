@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { Stack, Typography } from '@mui/material';
 import { ElapsedTime } from 'app/components/ElapsedTime';
-import { StopwatchWSMessage } from 'app/hooks/useWebSocket';
 import { Plate } from 'app/pages/Stream/Plate';
 import {
   CLOCK_PLATE_PX,
@@ -60,26 +59,15 @@ const SIZES = {
 } as const;
 
 interface Props {
-  /** The display's last lane-scoped relay frame (`start`/`stop`/`resume`/
-   * `reset`) — a new object per frame, applied once per change. */
-  laneFrame?: StopwatchWSMessage;
   /** Shows the block. The preview gates it on its socket being OPEN; the control
    * board's clocks are its own state and always show (`StopwatchControl`). */
   isReady: boolean;
-  timerId: number;
   /**
-   * A recovered lane state (peer-to-peer state recovery). Applied once on
-   * change to reconstruct idle/running/finished without going through the
-   * start/stop message replay (whose `time === 0` guard cannot reconstruct a
-   * finished lane in a single tick).
+   * The lane to render, owned by the page: the control board's lane timers
+   * (ADR 0027) or the display's relay-frame reducer (`app/util/previewLanes`).
+   * A lane that mounts mid-race paints from it on its first render.
    */
-  recovery?: SpeedlineLaneState;
-  /**
-   * Controlled lane state (ControlPage owns timer state, ADR 0027): when set,
-   * the component is presentational and `laneFrame` is ignored. The preview
-   * leaves it unset and consumes relay frames.
-   */
-  laneState?: SpeedlineLaneState;
+  laneState: SpeedlineLaneState;
   /**
    * Render scale. `projector` (default) is the full-screen clamp/vw hero for the
    * preview/broadcast display; `control` is the ControlPage lane column, sized
@@ -94,10 +82,7 @@ interface Props {
 }
 
 export const Stopwatch: React.FC<Props> = ({
-  laneFrame,
   isReady,
-  timerId,
-  recovery,
   laneState,
   size = 'projector',
   plateAlign = 'right',
@@ -107,204 +92,32 @@ export const Stopwatch: React.FC<Props> = ({
   // On the white plate the halo (a dark outline meant to protect white text
   // over footage) reads as grime — the plate itself is the protection.
   const shadow = onPlate ? 'none' : overlayTextShadow;
-  const [time, setTime] = useState<number>(0);
-  const [isRunning, setIsRunning] = useState<boolean>(false);
-  const startTimeRef = useRef<number | null>(null);
-  // The control-minted epoch this lane froze on — the watermark a snapshot has to
-  // beat to un-freeze it (`mergeRecovery`). Null whenever the lane is not frozen.
-  const stopTimeRef = useRef<number | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [showTimerText, setShowTimerText] = useState<boolean>(false);
+  const isRunning = laneState.kind === 'running';
+  const showTimerText = laneState.kind === 'finished';
 
-  // Stop the live tick synchronously the instant a lane freezes (stop / reset /
-  // finished recovery), not one commit later in the [isRunning] effect: a 50ms
-  // tick queued before the freeze must not overwrite the authoritative
-  // stopTime−startTime with Date.now()−startTime (a frozen lane is skew-free by
-  // construction, ADR 0021). The null handle also gates the tick callback, so a
-  // tick whose task already dequeued bails instead of writing.
-  const clearTick = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  };
+  // Only a running lane ticks, off its start epoch (anchor + wall clock). Keyed
+  // on the epoch, so a new lane object for the same run keeps the interval.
+  const runStart = laneState.kind === 'running' ? laneState.startTime : null;
+  const [runningMs, setRunningMs] = useState<number>(() =>
+    runStart === null ? 0 : Date.now() - runStart,
+  );
+  // Layout, not passive: a lane that starts or resumes paints its true elapsed
+  // in the same frame instead of the previous run's last tick.
+  useLayoutEffect(() => {
+    if (runStart === null) return;
+    setRunningMs(Date.now() - runStart);
+    const id = setInterval(() => setRunningMs(Date.now() - runStart), 50);
+    return () => clearInterval(id);
+  }, [runStart]);
 
-  const start = (startTime: number) => {
-    setTime(0);
-    startTimeRef.current = startTime;
-    stopTimeRef.current = null;
-    setIsRunning(true);
-    setShowTimerText(false);
-  };
-
-  const stop = (stopTime: number) => {
-    // Gate on running state, not `time === 0`: a sub-50ms stop lands before the
-    // first tick, while `time` is still 0.
-    if (!isRunning || startTimeRef.current === null) return;
-    clearTick();
-    stopTimeRef.current = stopTime;
-    setIsRunning(false);
-    setTime(stopTime - startTimeRef.current);
-    setShowTimerText(true);
-  };
-
-  // Undo of a withdrawn stop: the start epoch is kept, so the clock picks up
-  // exactly where it would have been — no epoch travels on the wire.
-  const resume = () => {
-    if (isRunning || startTimeRef.current === null) return;
-    stopTimeRef.current = null;
-    setIsRunning(true);
-    setShowTimerText(false);
-    setTime(Date.now() - startTimeRef.current);
-  };
-
-  const reset = () => {
-    clearTick();
-    stopTimeRef.current = null;
-    setIsRunning(false);
-    setTime(0);
-    setShowTimerText(false);
-  };
-
-  // Reconstruct a lane state directly, not by replaying start/stop: shared by
-  // `recovery` (preview snapshot merge) and the controlled `laneState`.
-  const applyLaneState = (state: SpeedlineLaneState) => {
-    switch (state.kind) {
-      case 'idle':
-        reset();
-        break;
-      case 'running':
-        startTimeRef.current = state.startTime;
-        stopTimeRef.current = null;
-        setTime(Date.now() - startTimeRef.current);
-        setIsRunning(true);
-        setShowTimerText(false);
-        break;
-      case 'finished':
-        clearTick();
-        startTimeRef.current = state.startTime;
-        stopTimeRef.current = state.stopTime;
-        setIsRunning(false);
-        setTime(state.elapsedMs);
-        setShowTimerText(true);
-        break;
-    }
-  };
-
-  const controlled = laneState !== undefined;
-
-  useEffect(() => {
-    if (controlled || !laneFrame) {
-      return;
-    }
-    const { data, type } = laneFrame;
-    switch (type) {
-      case 'start':
-        // A start ignites only its listed lanes (a solo quali run — the other
-        // lane stays dormant, cleared of any prior run's frozen time).
-        if (!data.lanes.includes(timerId)) {
-          reset();
-          break;
-        }
-        // Idempotent confirmation: the seed-driven GO ignition (recovery path)
-        // may already run this lane on the SAME schedule epoch — restarting
-        // would blip the numeral to 0 for a frame. Same epoch = same race.
-        if (isRunning && startTimeRef.current === data.startTime) {
-          break;
-        }
-        start(data.startTime);
-        break;
-      case 'stop':
-        if (data.timerId == timerId || data.timerId === -1) {
-          stop(data.stopTime);
-        }
-        break;
-      case 'resume':
-        if (data.timerId === timerId) {
-          resume();
-        }
-        break;
-      case 'reset':
-        reset();
-        break;
-    }
-  }, [laneFrame]);
-
-  // Snapshot recovery (preview): merge newer-wins per lane, since a snapshot can
-  // arrive AFTER live messages (the display forwards every snapshot; ADR 0047
-  // for the `assertedAt` stamp). All startTimes are control-minted epochs, so
-  // comparing them never crosses machine clocks:
-  //  - a blank lane takes whatever the snapshot has (the fresh-open case);
-  //  - a NEWER startTime is a later run — take it;
-  //  - the SAME startTime + snapshot `finished` while we still run is a stop
-  //    this display missed — freeze the lane (the running-forever fix);
-  //  - the SAME startTime + snapshot `running` while we are frozen is a `resume`
-  //    this display missed — but only if the snapshot was ASSERTED after the
-  //    stop we applied (`assertedAt`, the control's own clock on both sides of
-  //    the comparison). A snapshot built before that stop is simply describing
-  //    the lane as it was, and un-freezing on it would revive a finished race;
-  //  - anything else (older/equal info, or `idle` over a lane with state) is
-  //    stale or ambiguous — keep what live messages built.
-  const mergeRecovery = (state: SpeedlineLaneState) => {
-    const currentStart = startTimeRef.current;
-    if (state.kind === 'idle') {
-      if (currentStart === null) applyLaneState(state);
-      return;
-    }
-    if (currentStart === null || state.startTime > currentStart) {
-      applyLaneState(state);
-      return;
-    }
-    if (state.startTime !== currentStart) {
-      return;
-    }
-    if (state.kind === 'finished' && isRunning) {
-      applyLaneState(state);
-      return;
-    }
-    const frozenAt = stopTimeRef.current;
-    if (
-      state.kind === 'running' &&
-      !isRunning &&
-      frozenAt !== null &&
-      state.assertedAt != null &&
-      state.assertedAt > frozenAt
-    ) {
-      applyLaneState(state);
-    }
-  };
-
-  useEffect(() => {
-    if (controlled || !recovery) {
-      return;
-    }
-    mergeRecovery(recovery);
-  }, [recovery]);
-
-  useEffect(() => {
-    if (laneState === undefined) {
-      return;
-    }
-    applyLaneState(laneState);
-  }, [laneState]);
-
-  useEffect(() => {
-    if (isRunning && startTimeRef.current) {
-      // The handle IS cleared — by `clearTick`, both as this effect's cleanup
-      // (returned below) and in the else branch. The rule only recognises a
-      // literal `clearInterval` in the cleanup, not the shared helper.
-      // eslint-disable-next-line @eslint-react/web-api-no-leaked-interval
-      intervalRef.current = setInterval(() => {
-        // Nulled by a synchronous freeze (`clearTick`).
-        if (intervalRef.current === null) return;
-        setTime(Date.now() - startTimeRef.current!);
-      }, 50);
-    } else {
-      clearTick();
-    }
-
-    return clearTick;
-  }, [isRunning]);
+  // A frozen lane renders its control-minted elapsed, never the tick: a tick
+  // that fires after the freeze cannot move it (skew-free, ADR 0021).
+  const time =
+    laneState.kind === 'running'
+      ? runningMs
+      : laneState.kind === 'finished'
+        ? laneState.elapsedMs
+        : 0;
 
   return (
     <Stack

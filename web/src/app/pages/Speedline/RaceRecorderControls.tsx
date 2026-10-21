@@ -18,6 +18,11 @@ import { matchLabel } from 'app/util/matchLabel';
 import { isHeadToHeadRound, roundLabel } from 'app/util/rounds';
 import { formatMs } from 'app/util/time';
 
+interface VoidCost {
+  deletes: string[];
+  stays: string[];
+}
+
 /**
  * The desk's recording rail: everything about a run that is not lane-scoped —
  * which round, gender and match is being recorded, which side each athlete is
@@ -58,10 +63,11 @@ export const RaceRecorderControls = ({
     voidRun,
     fsOutcome,
     awardRunTo,
-    createTime,
+    retrySave,
     updateTime,
     deleteTime,
     laneFeedback,
+    peerSaves,
     selectedGender,
     selectedMatchId,
     selectMatch,
@@ -76,6 +82,14 @@ export const RaceRecorderControls = ({
 
   // A run can be voided once at least one lane has a persisted Time to delete.
   const canVoid = Boolean(laneFeedback[1]?.saved || laneFeedback[2]?.saved);
+  // A run whose times only another panel recorded is voided there: only it
+  // holds the rows' ids, so a void here would delete nothing yet clear this
+  // board's run.
+  const voidWhy =
+    voidLock ??
+    (!canVoid && (peerSaves[1] || peerSaves[2])
+      ? 'recorded on the other panel — void it there'
+      : null);
 
   /**
    * The two rail presses that spend something the operator cannot get back —
@@ -91,18 +105,29 @@ export const RaceRecorderControls = ({
    * MUI keeps the dialog mounted through its exit transition — a live read
    * would flicker to "Deletes ." / "Reset the 0–0 series?" on the way out.
    */
-  const [voidAsked, setVoidAsked] = useState<string[] | null>(null);
+  const [voidAsked, setVoidAsked] = useState<VoidCost | null>(null);
   const [resetSeriesAsked, setResetSeriesAsked] = useState<string | null>(null);
 
-  // The saved Times a void would delete, in the words the lane chips use.
-  const voidCost = ([1, 2] as const).flatMap((lane) => {
-    const feedback = laneFeedback[lane];
-    return feedback?.saved
-      ? [`Saved ${formatMs(feedback.valueMs)} (${athleteName(feedback.saved.input.athleteId)})`]
-      : [];
-  });
+  // What a void deletes and what it leaves, in the words the lane chips use.
+  // A void deletes this panel's rows only (ADR 0038 §2); a run with one own row
+  // stays voidable, and the question names the other panel's row as staying.
+  const voidCost: VoidCost = {
+    deletes: ([1, 2] as const).flatMap((lane) => {
+      const feedback = laneFeedback[lane];
+      return feedback?.saved
+        ? [`Saved ${formatMs(feedback.valueMs)} (${athleteName(feedback.saved.input.athleteId)})`]
+        : [];
+    }),
+    stays: ([1, 2] as const).flatMap((lane) => {
+      const peerSave = peerSaves[lane];
+      return peerSave?.status === 'saved'
+        ? [`Saved ${formatMs(peerSave.time.timeMs)} · other panel stays — void it there`]
+        : [];
+    }),
+  };
 
-  const requestVoid = (): void => (voidCost.length === 0 ? voidRun() : setVoidAsked(voidCost));
+  const requestVoid = (): void =>
+    voidCost.deletes.length === 0 ? voidRun() : setVoidAsked(voidCost);
   const confirmVoid = (): void => {
     setVoidAsked(null);
     voidRun();
@@ -163,6 +188,33 @@ export const RaceRecorderControls = ({
         Result recording
       </Typography>
       <Stack spacing={2}>
+        {/* Per lane, off the lane's own feedback: both lanes share one create
+            mutation, whose last result a later lane's save would clear while
+            this lane is still unsaved. The lane column's Retry is the same
+            press, but under the 1280×720 fold; this one heads the rail. */}
+        {([1, 2] as const).map((lane) => {
+          const feedback = laneFeedback[lane];
+          if (!feedback?.failed) return null;
+          return (
+            <Alert
+              key={lane}
+              severity="warning"
+              action={
+                <RaceButton
+                  tone="save"
+                  disabled={feedback.status === 'pending'}
+                  onClick={() => retrySave(lane)}
+                  aria-label={`Retry lane ${lane}`}
+                >
+                  Retry
+                </RaceButton>
+              }
+            >
+              Lane {lane} time not saved: {feedback.failed.reason} (timing is unaffected)
+            </Alert>
+          );
+        })}
+
         <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <TextField
             label="Round"
@@ -303,12 +355,12 @@ export const RaceRecorderControls = ({
             </Typography>
             {(fsAdvised.kind === 'rerun-round' || fsAdvised.kind === 'rerun-start') && (
               <Stack sx={{ ml: 'auto', alignItems: 'flex-end' }}>
-                <LockedControl reason={voidLock}>
-                  <RaceButton tone="stop" disabled={voidLock !== null} onClick={requestVoid}>
+                <LockedControl reason={voidWhy}>
+                  <RaceButton tone="stop" disabled={voidWhy !== null} onClick={requestVoid}>
                     Void run &amp; rerun
                   </RaceButton>
                 </LockedControl>
-                <WhyLine reason={voidLock} reserve={false} />
+                <WhyLine reason={voidWhy} reserve={false} />
               </Stack>
             )}
             {fsAdvised.kind === 'round-to-opponent' && (
@@ -331,10 +383,10 @@ export const RaceRecorderControls = ({
               useFlexGap
               sx={{ alignItems: 'center', flexWrap: 'wrap' }}
             >
-              <LockedControl reason={voidLock}>
+              <LockedControl reason={voidWhy}>
                 <RaceButton
                   tone="stop"
-                  disabled={!canVoid || voidLock !== null}
+                  disabled={!canVoid || voidWhy !== null}
                   onClick={requestVoid}
                 >
                   Void run
@@ -344,7 +396,7 @@ export const RaceRecorderControls = ({
                 Deletes this run&apos;s recorded times
               </Typography>
             </Stack>
-            <WhyLine reason={voidLock} reserve={false} />
+            <WhyLine reason={voidWhy} reserve={false} />
           </Stack>
         )}
 
@@ -354,12 +406,6 @@ export const RaceRecorderControls = ({
             athleteName={athleteName}
             awaiting={seriesAwaiting}
           />
-        )}
-
-        {createTime.isError && (
-          <Alert severity="warning">
-            Time not saved: {apiErrorMessage(createTime.error)} (timing is unaffected)
-          </Alert>
         )}
 
         {updateTime.isError && (
@@ -386,7 +432,13 @@ export const RaceRecorderControls = ({
         titleId="void-run-confirm-title"
         title="Void this run?"
         body={
-          voidAsked === null ? null : `Deletes ${voidAsked.join(' and ')}. This cannot be undone.`
+          voidAsked === null
+            ? null
+            : [
+                `Deletes ${voidAsked.deletes.join(' and ')}.`,
+                ...voidAsked.stays.map((line) => `${line}.`),
+                'This cannot be undone.',
+              ].join(' ')
         }
         confirmLabel="Void run"
         safeAnswer="Keep times"

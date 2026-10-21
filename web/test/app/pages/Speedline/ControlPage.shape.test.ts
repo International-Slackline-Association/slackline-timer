@@ -24,4 +24,10 @@ describe('the Speedline control board file', () => {
     expect(source).not.toMatch(/\bReadyState\b/);
     expect(source).toContain("link === 'open'");
   });
+
+  // A page-level outer Stack stretches with the viewport: past the cap the
+  // fixed rails drift away from the capped deck (design-system §9).
+  it('lays the board out inside the shared frame, capped for its own board', () => {
+    expect(source).toMatch(/<ControlBoardFrame\s[^>]*\bboard="speedline"/);
+  });
 });

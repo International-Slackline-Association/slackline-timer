@@ -9,6 +9,8 @@ vi.mock('app/api/client', async (importOriginal) => {
   return { ...actual, apiFetch: apiFetchMock };
 });
 
+import { ApiError } from 'app/api/client';
+import { timeKeys } from 'app/api/times';
 import { useRaceRecorder, type RaceRecorder } from 'app/hooks/useRaceRecorder';
 import type { Match, Time } from 'app/types';
 import { DNF_SENTINEL } from 'app/util/time';
@@ -162,7 +164,33 @@ describe('useRaceRecorder', () => {
 
       await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
       expect(result.current.laneFeedback[1]?.saved).toBeUndefined();
+      expect(result.current.laneFeedback[1]?.failed?.reason).toBe('boom');
       expect(result.current.toast).toMatchObject({ severity: 'error' });
+    });
+
+    // Both lanes share one create mutation, whose last result says nothing
+    // about lane 1 once lane 2 has saved: the lane's own feedback is the truth.
+    it("keeps lane 1's failure and its reason when lane 2 then saves", async () => {
+      let rejectNext = true;
+      apiFetchMock.mockImplementation((path: string, opts?: FetchOpts) => {
+        if ((opts?.method ?? 'GET') === 'POST' && rejectNext) {
+          rejectNext = false;
+          return Promise.reject(new ApiError(503, 'service unavailable'));
+        }
+        return Promise.resolve(routeApi(path, opts));
+      });
+      const { result } = startedRecorder();
+      act(() => result.current.setLaneAthlete(2, 'a2'));
+      act(() => result.current.recordFinish(1, 5000));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
+
+      act(() => result.current.recordFinish(2, 6000));
+      await waitFor(() => expect(result.current.laneFeedback[2]?.status).toBe('saved'));
+
+      expect(result.current.laneFeedback[1]).toMatchObject({
+        status: 'error',
+        failed: { reason: 'service unavailable' },
+      });
     });
 
     it('no-ops a repeat finish for a lane that already recorded this run', async () => {
@@ -792,11 +820,188 @@ describe('useRaceRecorder', () => {
       expect(bodies('POST', '/times')).toHaveLength(0);
       expect(bodies('PUT', '/matches/')).toHaveLength(0);
 
-      // The run is marked tallied: a later local correction path re-firing the
-      // derivation must not increment either (DNF-after-finish is such a path).
+      // The other panel's to record (ADR 0038 §2): no second row, no tally.
       act(() => result.current.recordDnf(2));
-      await waitFor(() => expect(result.current.laneFeedback[2]?.status).toBe('saved'));
+      expect(bodies('POST', '/times')).toHaveLength(0);
       expect(result.current.runWins).toEqual({ 1: 0, 2: 0 });
+    });
+  });
+
+  // The other panel POSTs the lane's Time (ADR 0038); this one sees the row only
+  // through the `db_update` refetch.
+  describe('a lane another panel recorded (peerSaves)', () => {
+    const peerRow = (over: Partial<Time> = {}): Time => ({
+      timeId: 'p1',
+      compId: COMP,
+      athleteId: 'a1',
+      round: 'qualification',
+      timeMs: 4720,
+      startTime: 1000,
+      ...over,
+    });
+
+    /** A recorder whose cache the test refetches, as a `db_update` would. */
+    const peerRecorder = () => {
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const rendered = renderHook(() => useRaceRecorder(COMP), {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      });
+      const refetch = (times: Time[]) => {
+        seededTimes = times;
+        return act(() => queryClient.invalidateQueries({ queryKey: timeKeys.all(COMP) }));
+      };
+      act(() => rendered.result.current.setLaneAthlete(1, 'a1'));
+      act(() => rendered.result.current.onRaceStart(1000));
+      return { ...rendered, refetch };
+    };
+
+    it('awaits the other panel’s save, then shows the row it persisted', async () => {
+      const { result, refetch } = peerRecorder();
+      await waitFor(() => expect(result.current.times.isSuccess).toBe(true));
+
+      act(() => result.current.notePeerFinish(1, 4720));
+      expect(result.current.peerSaves).toEqual({ 1: { status: 'awaiting' }, 2: null });
+
+      await refetch([peerRow()]);
+      await waitFor(() =>
+        expect(result.current.peerSaves[1]).toEqual({ status: 'saved', time: peerRow() }),
+      );
+      // The attempt badge counts the other panel's row too.
+      expect(result.current.laneAttempts[1].used).toBe(1);
+      expect(bodies('POST', '/times')).toHaveLength(0);
+    });
+
+    it('clears on the other panel’s resume, a reset and a new start', () => {
+      const { result } = peerRecorder();
+      const stopped = () => act(() => result.current.notePeerFinish(1, 4720));
+
+      stopped();
+      act(() => result.current.notePeerResume(1));
+      expect(result.current.peerSaves[1]).toBeNull();
+
+      stopped();
+      act(() => result.current.onReset());
+      expect(result.current.peerSaves[1]).toBeNull();
+
+      act(() => result.current.onRaceStart(2000));
+      stopped();
+      act(() => result.current.onRaceStart(3000));
+      expect(result.current.peerSaves[1]).toBeNull();
+    });
+
+    it('expects nothing where the other panel records nothing', () => {
+      const { result } = peerRecorder();
+      // An unassigned lane, and a lane on its 2nd false start (rule S2/S3).
+      act(() => result.current.notePeerFinish(2, 5000));
+      act(() => result.current.flagFs(1));
+      act(() => result.current.flagFs(1));
+      act(() => result.current.notePeerFinish(1, 4720));
+
+      expect(result.current.peerSaves).toEqual({ 1: null, 2: null });
+    });
+
+    it('drops the chip once the row it showed is gone (a void on the other panel)', async () => {
+      const { result, refetch } = peerRecorder();
+      await waitFor(() => expect(result.current.times.isSuccess).toBe(true));
+      act(() => result.current.notePeerFinish(1, 4720));
+      await refetch([peerRow()]);
+      await waitFor(() => expect(result.current.peerSaves[1]?.status).toBe('saved'));
+
+      // Corrected, then re-filed under another athlete there: the same row,
+      // still this run's.
+      await refetch([peerRow({ timeMs: 4700, athleteId: 'a2' })]);
+      await waitFor(() =>
+        expect(result.current.peerSaves[1]).toMatchObject({
+          time: { timeMs: 4700, athleteId: 'a2' },
+        }),
+      );
+
+      await refetch([]);
+      await waitFor(() => expect(result.current.peerSaves[1]).toBeNull());
+    });
+
+    it('awaits the re-stop’s row past a resumed stop’s row not yet refetched away', async () => {
+      const { result, refetch } = peerRecorder();
+      await waitFor(() => expect(result.current.times.isSuccess).toBe(true));
+      act(() => result.current.notePeerFinish(1, 4720));
+      await refetch([peerRow()]);
+      await waitFor(() => expect(result.current.peerSaves[1]?.status).toBe('saved'));
+      act(() => result.current.notePeerResume(1));
+
+      act(() => result.current.notePeerFinish(1, 9100));
+      expect(result.current.peerSaves[1]).toEqual({ status: 'awaiting' });
+
+      await refetch([peerRow({ timeId: 'p2', timeMs: 9100 })]);
+      await waitFor(() =>
+        expect(result.current.peerSaves[1]).toMatchObject({ time: { timeId: 'p2' } }),
+      );
+    });
+
+    it('moves with its lane on a swap, like the lane’s own feedback', () => {
+      const { result } = peerRecorder();
+      act(() => result.current.notePeerFinish(1, 4720));
+
+      act(() => result.current.swapLanes());
+
+      expect(result.current.peerSaves).toEqual({ 1: null, 2: { status: 'awaiting' } });
+    });
+
+    // ADR 0038 §2. An awaiting save is a POST in flight, so it locks too, and
+    // the hook refuses, not just the button.
+    it('refuses a DNF on the lane the other panel is saving or saved', async () => {
+      const OTHER_PANEL = 'recorded on the other panel — DNF it there';
+      const { result, refetch } = peerRecorder();
+      await waitFor(() => expect(result.current.times.isSuccess).toBe(true));
+      act(() => result.current.notePeerFinish(1, 4720));
+
+      expect(result.current.dnfLock(1)).toBe(OTHER_PANEL);
+      act(() => result.current.recordDnf(1));
+      expect(result.current.peerSaves[1]).toEqual({ status: 'awaiting' });
+
+      await refetch([peerRow()]);
+      await waitFor(() => expect(result.current.peerSaves[1]?.status).toBe('saved'));
+      expect(result.current.dnfLock(1)).toBe(OTHER_PANEL);
+      act(() => result.current.recordDnf(1));
+
+      expect(bodies('POST', '/times')).toHaveLength(0);
+      expect(paths('PUT', '/times/')).toHaveLength(0);
+      expect(result.current.laneFeedback[1]).toBeNull();
+      expect(result.current.peerSaves[1]).toEqual({ status: 'saved', time: peerRow() });
+      expect(result.current.dnfLock(2)).toBeNull();
+    });
+
+    it('yields to the lane’s own save: a DNF there edits the row this panel wrote', async () => {
+      const { result } = peerRecorder();
+      act(() => result.current.recordFinish(1, 5720));
+      await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('saved'));
+      // Both panels stopped the lane in one breath; the peer's frame lands after.
+      act(() => result.current.notePeerFinish(1, 4720));
+
+      expect(result.current.peerSaves[1]).toBeNull();
+      expect(result.current.dnfLock(1)).toBeNull();
+      act(() => result.current.recordDnf(1));
+
+      await waitFor(() => expect(result.current.laneFeedback[1]?.valueMs).toBe(DNF_SENTINEL));
+      expect(paths('PUT', '/times/')).toEqual([`/competitions/${COMP}/times/t1`]);
+    });
+
+    it('voids only the row this panel wrote on a mixed run', async () => {
+      const { result, refetch } = peerRecorder();
+      await waitFor(() => expect(result.current.times.isSuccess).toBe(true));
+      act(() => result.current.setLaneAthlete(2, 'a2'));
+      act(() => result.current.notePeerFinish(1, 4720));
+      act(() => result.current.recordFinish(2, 7000));
+      await waitFor(() => expect(result.current.laneFeedback[2]?.status).toBe('saved'));
+      await refetch([peerRow()]);
+      await waitFor(() => expect(result.current.peerSaves[1]?.status).toBe('saved'));
+
+      act(() => result.current.voidRun());
+
+      await waitFor(() =>
+        expect(paths('DELETE', '/times/')).toEqual([`/competitions/${COMP}/times/t1`]),
+      );
     });
   });
 
@@ -824,15 +1029,16 @@ describe('useRaceRecorder', () => {
       act(() => result.current.recordFinish(1, 5000));
       await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('error'));
       const sent = { athleteId: 'a1', round: 'qualification', timeMs: 4000, startTime: 1000 };
-      expect(result.current.laneFeedback[1]?.failed?.input).toEqual(sent);
+      expect(result.current.laneFeedback[1]?.failed).toEqual({ input: sent, reason: 'boom' });
 
       act(() => result.current.retrySave(1));
 
-      // In flight it keeps the body, so the board holds the offer (disabled).
+      // In flight it keeps the body and the reason, so the board holds the
+      // offer (disabled) and still says why it is there.
       expect(result.current.laneFeedback[1]).toMatchObject({
         status: 'pending',
         valueMs: 4000,
-        failed: { input: sent },
+        failed: { input: sent, reason: 'boom' },
       });
       act(() => result.current.retrySave(1));
       await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('saved'));

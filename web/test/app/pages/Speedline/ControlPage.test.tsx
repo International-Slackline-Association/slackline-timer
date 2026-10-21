@@ -196,6 +196,70 @@ describe('SpeedlineControlPage peer mirroring (ADR 0038)', () => {
     expect(writeCalls()).toHaveLength(0);
   });
 
+  it('reads the other panel’s save off the db_update refetch, writing nothing', async () => {
+    let persisted: unknown[] = [];
+    apiFetchMock.mockImplementation((path: string) =>
+      Promise.resolve(
+        path.includes('/athletes') ? ATHLETES : path.includes('/times') ? persisted : [],
+      ),
+    );
+    const { deliver } = renderPage();
+    // The board's own reads have landed before the race, as they do at a venue.
+    await act(async () => {});
+    deliver({
+      type: 'updateSelection',
+      sessionId: 'c1',
+      senderId: 'peer-panel',
+      data: {
+        discipline: 'speed',
+        round: 'qualification',
+        gender: 'male',
+        matchId: null,
+        athlete1Id: 'a1',
+        athlete2Id: null,
+      },
+    });
+    const startTime = Date.now() - 6000;
+    deliver({
+      type: 'start',
+      sessionId: 'c1',
+      senderId: 'peer-panel',
+      data: { startTime, lanes: [1] },
+    });
+    deliver({
+      type: 'stop',
+      sessionId: 'c1',
+      senderId: 'peer-panel',
+      data: { timerId: 1, stopTime: startTime + 5720 },
+    });
+    const strip = screen.getByTestId('lane-1-status');
+    expect(strip).toHaveTextContent('Awaiting save · other panel');
+
+    persisted = [
+      {
+        timeId: 'p1',
+        compId: 'c1',
+        athleteId: 'a1',
+        round: 'qualification',
+        timeMs: 5720,
+        startTime,
+      },
+    ];
+    deliverFrames({
+      type: 'db_update',
+      sessionId: 'c1',
+      data: { entity: 'time', action: 'created', id: 'p1' },
+    });
+
+    await waitFor(() => expect(strip).toHaveTextContent('Saved 0:05.72 · other panel'));
+    expect(strip).toHaveTextContent('1/2 attempts');
+    expect(screen.queryByLabelText(/correct time/i)).toBeNull();
+
+    deliver({ type: 'resume', sessionId: 'c1', senderId: 'peer-panel', data: { timerId: 1 } });
+    expect(strip).not.toHaveTextContent('other panel');
+    expect(writeCalls()).toHaveLength(0);
+  });
+
   it('re-arms after a peer reset', () => {
     const { deliver } = renderPage();
     deliver({

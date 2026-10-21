@@ -101,25 +101,36 @@ const healthPlateSx = {
   bgcolor: 'action.hover',
 };
 
+/**
+ * The plain header: plates · recording · health. From `lg` the outer columns
+ * split evenly, so the recording line sits at the page's centre. Below it a
+ * third of a tablet is narrower than the one-row health block, so health takes
+ * its own width and the recording line wraps in what is left.
+ */
 const HEADER_GRID_SX = {
-  gridTemplateColumns: { xs: '1fr', md: 'minmax(0,1fr) auto minmax(0,1fr)' },
+  gridTemplateColumns: {
+    xs: '1fr',
+    md: 'auto minmax(0,1fr) auto',
+    lg: 'minmax(0,1fr) auto minmax(0,1fr)',
+  },
 } as const;
 
 /**
- * The header with a setup row (the Speedline stacked tier). Below `lg` the
- * health block is the
- * tallest cell — two plate rows plus the caption track — so the context plates
- * and the recording line leave ~60 px of empty column beside it, and the setup
- * strip takes that column rather than a row under the whole header. Row 2 is
- * the flexible one, so the health block's surplus height lands under the strip,
- * never between it and the plates.
+ * The header with a setup row (the Speedline stacked tier): the setup strip
+ * runs under the context plates and the recording line rather than in a row of
+ * its own. At 1024 the strip is wider than what the one-row health block
+ * leaves it, so the health block opens up (`display: contents` from `md`): its
+ * plates span the last two tracks, its caption takes only the last, and the
+ * strip runs on under the other. The caption track holds the audio sentence
+ * whole (the AUDIO LOCKED plate's only instruction); a longer one clips into
+ * its `title`, as at every width. `ch`, so it tracks the type scale.
  */
+const CAPTION_TRACK = `${AUDIO_DETAIL.length}ch`;
 const SETUP_GRID_SX = {
-  gridTemplateColumns: { xs: '1fr', md: 'auto minmax(0,1fr) auto' },
-  gridTemplateRows: { md: 'auto 1fr' },
+  gridTemplateColumns: { xs: '1fr', md: `auto minmax(0,1fr) auto ${CAPTION_TRACK}` },
   gridTemplateAreas: {
     xs: '"meta" "recording" "health" "setup"',
-    md: '"meta recording health" "setup setup health"',
+    md: '"meta recording health health" "setup setup setup caption"',
   },
   rowGap: 0.75,
 } as const;
@@ -254,27 +265,26 @@ export const ControlStatusHeader = ({
           sx={{
             alignItems: { xs: 'flex-start', md: 'flex-end' },
             justifySelf: { xs: 'start', md: 'end' },
-            gridArea: withSetup ? 'health' : undefined,
+            ...(withSetup ? { gridArea: 'health', display: { md: 'contents' } } : {}),
           }}
         >
-          {/* ONE row at the desk widths: three readings plus the icon-only
-              sound toggle, with the detail caption under them, cost ~47 px of
-              fold, so the lane transport fits a 900 px screen.
-
-              The single row starts at `lg`, not `md`: the header splits the
-              width three ways, so below ~1200 px four cells in a third of a
-              tablet measure taller than two rows of two. The reading tracks
-              shrink (`minmax(0, auto)`) either way, so a long phrase wraps
-              inside its plate instead of widening the column. */}
+          {/* ONE row from `md`: three readings plus the icon-only sound toggle,
+              with the detail caption under them, cost ~47 px of fold, so the
+              lane transport fits a 900 px desk and the 768 px tablet. Every
+              plate reads a short state word (the gesture rides the caption),
+              and both header grids give health its own width at the tablet,
+              so the four cells do not share a third of it. The reading tracks
+              shrink (`minmax(0, auto)`), so a long phrase wraps inside its
+              plate instead of widening the column. */}
           <Box
             data-testid="control-health-grid"
             sx={{
+              ...(withSetup ? { gridArea: { md: 'health' } } : {}),
               display: 'grid',
               gap: 0.5,
               gridTemplateColumns: {
                 xs: '1fr',
-                md: 'repeat(2, minmax(0, auto))',
-                lg: 'repeat(3, minmax(0, auto)) auto',
+                md: 'repeat(3, minmax(0, auto)) auto',
               },
               justifyContent: { xs: 'stretch', md: 'end' },
               alignItems: 'center',
@@ -353,6 +363,7 @@ export const ControlStatusHeader = ({
             title={linkDetail.trim() ? linkDetail : undefined}
             sx={{
               ...liveCaption,
+              ...(withSetup ? { gridArea: { md: 'caption' } } : {}),
               minHeight: '1.2em',
               width: 0,
               minWidth: '100%',

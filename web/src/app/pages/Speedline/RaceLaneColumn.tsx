@@ -1,5 +1,6 @@
-import { Chip, Link, Stack, TextField, Typography } from '@mui/material';
-import { useEffect, useState } from 'react';
+import GroupIcon from '@mui/icons-material/Group';
+import { Box, Chip, Link, Stack, TextField, Typography, type ChipProps } from '@mui/material';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import type { TimeInput } from 'app/api/times';
 import { LockedControl } from 'app/components/LockedControl';
@@ -7,7 +8,7 @@ import { RaceButton, blurOnClickProps } from 'app/components/RaceButton';
 import { SelectField } from 'app/components/SelectField';
 import { WhyLine } from 'app/components/WhyLine';
 import type { LaneId, RaceRecorder } from 'app/hooks/useRaceRecorder';
-import { space } from 'app/theme/tokens';
+import { boardGeometry, space } from 'app/theme/tokens';
 import { FIELD_LIMITS, type Athlete } from 'app/types';
 import { athleteOptions } from 'app/util/athleteOptions';
 import { laneName } from 'app/util/raceNames';
@@ -30,6 +31,47 @@ const TimesPageLink = ({ input }: { input: TimeInput }) => (
   >
     Times page ↗
   </Link>
+);
+
+/**
+ * Words a strip chip spells only where the lane column fits them beside the
+ * attempts badge (`boardGeometry.speedline`); narrower, the chip keeps its
+ * figure, so the strip stays one chip tall.
+ */
+const WORDS_FROM = {
+  own: {
+    display: 'none',
+    [`@container (min-width: ${boardGeometry.speedline.stripWords}px)`]: { display: 'inline' },
+  },
+  peer: {
+    display: 'none',
+    [`@container (min-width: ${boardGeometry.speedline.peerWords}px)`]: { display: 'inline' },
+  },
+} as const;
+
+const StripWords = ({ from, children }: { from: keyof typeof WORDS_FROM; children: ReactNode }) => (
+  <Box component="span" data-strip-words sx={WORDS_FROM[from]}>
+    {children}
+  </Box>
+);
+
+const OwnWords = ({ children }: { children: ReactNode }) => (
+  <StripWords from="own">{children}</StripWords>
+);
+
+const PeerWords = ({ children }: { children: ReactNode }) => (
+  <StripWords from="peer">{children}</StripWords>
+);
+
+/**
+ * One chip of the lane's status strip. Its words may collapse (`StripWords`),
+ * so the full reading rides the accessible name and tooltip at any width.
+ */
+const StripChip = ({
+  name,
+  ...chip
+}: { name: string } & Pick<ChipProps, 'label' | 'color' | 'variant' | 'icon'>) => (
+  <Chip size="small" role="status" aria-label={name} title={name} {...chip} />
 );
 
 /**
@@ -150,6 +192,8 @@ export const RaceLaneColumn = ({
     fsCounts,
     clearFs,
     laneFeedback,
+    peerSaves,
+    dnfLock,
     selectedGender,
     selectedMatchId,
     matches,
@@ -171,19 +215,71 @@ export const RaceLaneColumn = ({
     Boolean(laneAthletes[lane]) &&
     saved.input.athleteId !== laneAthletes[lane];
 
+  // Read-only: the other panel's save, and every correction of it, stays on
+  // that panel (ADR 0038 — only it holds the row's id from the POST reply).
+  const peerSave = peerSaves[lane];
+
   const statusChip = () => {
-    if (!feedback) return null;
+    if (!feedback) {
+      if (peerSave?.status === 'saved') {
+        const value = formatMs(peerSave.time.timeMs);
+        return (
+          <StripChip
+            color="success"
+            icon={<GroupIcon />}
+            name={`Saved ${value} · other panel`}
+            label={
+              <>
+                <PeerWords>Saved </PeerWords>
+                {value}
+                <PeerWords> · other panel</PeerWords>
+              </>
+            }
+          />
+        );
+      }
+      if (peerSave)
+        return (
+          <StripChip
+            variant="outlined"
+            icon={<GroupIcon />}
+            name="Awaiting save · other panel"
+            label={
+              <>
+                Awaiting
+                <PeerWords> save · other panel</PeerWords>
+              </>
+            }
+          />
+        );
+      return null;
+    }
     const value = formatMs(feedback.valueMs);
     const bound = boundElsewhere ? ` · ${athleteName(saved?.input.athleteId)}` : '';
+    // The state word and the bound athlete collapse; the value always reads,
+    // and the chip's colour carries the state.
+    const own = (word: string, suffix = '', tail = '') => ({
+      name: `${word} ${value}${tail}${suffix}`,
+      label: (
+        <>
+          <OwnWords>{word} </OwnWords>
+          {value}
+          {tail}
+          {suffix && <OwnWords>{suffix}</OwnWords>}
+        </>
+      ),
+    });
     if (feedback.status === 'pending')
-      return <Chip size="small" variant="outlined" label={`Saving ${value}…`} />;
+      return <StripChip variant="outlined" {...own('Saving', '', '…')} />;
     if (feedback.status === 'error')
-      return <Chip size="small" color="error" label={`Not saved ${value}${bound}`} />;
-    return <Chip size="small" color="success" label={`Saved ${value}${bound}`} />;
+      return <StripChip color="error" {...own('Not saved', bound)} />;
+    return <StripChip color="success" {...own('Saved', bound)} />;
   };
 
+  const dnfWhy = dnfLock(lane);
+
   return (
-    <Stack spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+    <Stack spacing={0.75} sx={{ alignItems: 'center', minWidth: 0, containerType: 'inline-size' }}>
       <StopwatchControl
         id={lane}
         laneState={laneState}
@@ -230,11 +326,16 @@ export const RaceLaneColumn = ({
         {/* Rule S5: qualification is two attempts per athlete. Badge the
             used count and lock the lane at the cap (admin CRUD corrects). */}
         {round === 'qualification' && laneAthletes[lane] && (
-          <Chip
-            size="small"
+          <StripChip
             variant="outlined"
             color={laneAttempts[lane].capped ? 'warning' : 'default'}
-            label={`${laneAttempts[lane].used}/${attemptCap} attempts`}
+            name={`${laneAttempts[lane].used}/${attemptCap} attempts`}
+            label={
+              <>
+                {laneAttempts[lane].used}/{attemptCap}
+                <OwnWords> attempts</OwnWords>
+              </>
+            }
           />
         )}
         {fsCounts[lane] > 0 && (
@@ -255,13 +356,19 @@ export const RaceLaneColumn = ({
       <RaceButton tone="dnf" onClick={onFlagFs} sx={{ whiteSpace: 'nowrap' }}>
         False start · Lane {lane}
       </RaceButton>
-      <RaceButton
-        tone="dnf"
-        disabled={!laneAthletes[lane] || laneAttempts[lane].capped}
-        onClick={onDnf}
-      >
-        Lane {lane} DNF
-      </RaceButton>
+      <LockedControl reason={dnfWhy}>
+        <RaceButton
+          tone="dnf"
+          disabled={!laneAthletes[lane] || laneAttempts[lane].capped || dnfWhy !== null}
+          onClick={onDnf}
+        >
+          Lane {lane} DNF
+        </RaceButton>
+      </LockedControl>
+      {/* Unreserved, like the rail's Void: it locks only on a two-panel board,
+          and a reserved slot under the fold contract's last row would cost
+          every idle board a line. */}
+      <WhyLine reason={dnfWhy} reserve={false} />
 
       {fsCounts[lane] >= 2 && (
         <Typography variant="caption" color="error.dark" sx={{ textAlign: 'center' }}>
@@ -290,6 +397,11 @@ export const RaceLaneColumn = ({
             <TimesPageLink input={feedback.failed.input} />
           </Typography>
         </Stack>
+      )}
+      {peerSave?.status === 'saved' && (
+        <Typography variant="body2">
+          <TimesPageLink input={peerSave.time} />
+        </Typography>
       )}
       {saved && (
         <LaneTimeEdit

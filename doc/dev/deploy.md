@@ -34,7 +34,8 @@ differ by resource accordingly.
 > **Deployment config lives in an ignored `.env.deploy` at the repo root** — copy
 > [`.env.deploy.example`](../../.env.deploy.example) and fill in `AWS_PROFILE`,
 > `AWS_ACCOUNT_ID` and `BILLING_ALERT_EMAIL` (the billing stack and the backend's
-> ops alarms both subscribe it). It is loaded automatically by
+> ops alarms both subscribe it), plus the optional `WEB_ORIGIN` once the web
+> stack exists (§2). It is loaded automatically by
 > every piece of deploy/ops tooling — the CDK entrypoint (`server/infra/app.ts`),
 > the web deploy (`web/internals/deployToS3.mjs`), and the two shared script
 > modules `server/scripts/lib/awsCli.mjs` (commission / decommission /
@@ -107,7 +108,7 @@ aws ssm put-parameter --region eu-central-2 --type String \
 ```
 
 `SecureString` uses the default `aws/ssm` KMS key. Delete the local `.pem`
-files afterward.
+files afterward; until then `.gitignore` keeps any `*.pem` out of git.
 
 The read-token secret must be **at least 32 bytes** (UTF-8): read tokens are
 public, so a short secret is brute-forceable offline. A shorter value is refused
@@ -123,6 +124,12 @@ aws ssm get-parameter --region eu-central-2 --with-decryption   --name /slacklin
 If it is short, overwrite it (`--overwrite` on the `put-parameter` above) and
 re-mint the overlay links on `/admin/overlays`: a new secret invalidates every
 outstanding read token.
+
+**Rotation propagates within 10 minutes.** Warm Lambda containers cache each
+decrypted secret for 10 minutes (`SECRET_CACHE_TTL_MS`), so an overwritten
+parameter is live on every container within that window, and overlay links
+minted before the rotation stop working then: re-mint them on
+`/admin/overlays`. A redeploy recycles the containers and makes it immediate.
 
 ### 0.3 CDK bootstrap
 
@@ -171,6 +178,14 @@ copied anywhere by hand (ADR 0048):
 
 Replacing an API changes these values; step 3 picks the new ones up on its next
 run. There is no source edit to forget.
+
+**Narrow the photo-upload CORS origin** once the web stack exists: set
+`WEB_ORIGIN` in `.env.deploy` to its `WebUrl` output (the exact origin,
+`https://<id>.cloudfront.net`, no trailing slash) and redeploy the server. Until
+then the photos bucket accepts presigned POSTs from any origin (the signed
+policy stays the real gate) and every synth warns. It is the one value copied by
+hand: the backend reading the `eu-central-1` web stack's output would be the
+cross-region reference ADR 0054 rejects. A malformed value fails the synth.
 
 For fast code-only iteration on a **dev** stack (never prod):
 `AWS_PROFILE=… npm run watch` (`cdk watch --hotswap`).
@@ -572,7 +587,9 @@ deploy's `create-invalidation --paths /*` reaches AWS **literally, un-mangled**
 2. **Deploy backend** `slackline-timer-v1` / eu-central-2 (§2) — ✅ **re-deployed 2026-07-07**
    carrying the photos-bucket presigned-POST CORS **and** the throttling guardrails (§6.2);
    the reserved-concurrency caps were deferred (account concurrency limit 10 — §6.2).
-3. **Deploy web** `slackline-timer-v1-web` / eu-central-1 (§3).
+3. **Deploy web** `slackline-timer-v1-web` / eu-central-1 (§3), then set
+   `WEB_ORIGIN` to its `WebUrl` and redeploy the backend (§2). A `cdk watch` dev stack
+   takes `-c webOrigin=http://localhost:5173` per deploy (`WEB_ORIGIN` is one origin).
 4. **Cognito harden** (§0.1 `hardenAppClient.mjs --apply`) — ✅ **done 2026-07-07**
    (`verifyAppClient.mjs` clean).
 5. **Bootstrap us-east-1 + deploy billing** (§6.1) — ✅ **done 2026-07-07** (stack live,

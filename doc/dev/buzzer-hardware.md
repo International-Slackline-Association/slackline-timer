@@ -16,9 +16,10 @@ mapping constants in the pages aren't magic numbers.
 
 ## How a press reaches the board
 
-`useGamepads(onPress)` polls the pads once per animation frame. Every button
-whose state rose false→true in that poll (and clears the 60 ms bounce guard) is
-handed to the page as `{ button, seq, at }`, **in index order, each committed
+`GamepadSelectionProvider` polls the pads once per animation frame for the
+whole board, and every `useGamepads(onPress)` on the page gets each press.
+Every button whose state rose false→true in that poll (and clears the 60 ms
+bounce guard) is handed to the page as `{ button, seq, at }`, **in index order, each committed
 before the next**. That matters because one dongle carries every handset: two
 lane judges hitting their reds in the same ~16 ms frame (H3 Red 10 + H4 Red 15)
 both reach the board, and the second stop sees the first one already applied.
