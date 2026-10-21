@@ -63,6 +63,7 @@ export const makeRecorder = (over: Partial<RaceRecorder> = {}): RaceRecorder =>
     deleteTime: { isError: false, error: null } as never,
     laneFeedback: { 1: null, 2: null },
     peerSaves: { 1: null, 2: null },
+    dnfLock: () => null,
     toast: null,
     clearToast: vi.fn(),
     selectedGender: 'male',

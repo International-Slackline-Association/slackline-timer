@@ -18,6 +18,11 @@ import { matchLabel } from 'app/util/matchLabel';
 import { isHeadToHeadRound, roundLabel } from 'app/util/rounds';
 import { formatMs } from 'app/util/time';
 
+interface VoidCost {
+  deletes: string[];
+  stays: string[];
+}
+
 /**
  * The desk's recording rail: everything about a run that is not lane-scoped —
  * which round, gender and match is being recorded, which side each athlete is
@@ -100,18 +105,31 @@ export const RaceRecorderControls = ({
    * MUI keeps the dialog mounted through its exit transition — a live read
    * would flicker to "Deletes ." / "Reset the 0–0 series?" on the way out.
    */
-  const [voidAsked, setVoidAsked] = useState<string[] | null>(null);
+  const [voidAsked, setVoidAsked] = useState<VoidCost | null>(null);
   const [resetSeriesAsked, setResetSeriesAsked] = useState<string | null>(null);
 
-  // The saved Times a void would delete, in the words the lane chips use.
-  const voidCost = ([1, 2] as const).flatMap((lane) => {
-    const feedback = laneFeedback[lane];
-    return feedback?.saved
-      ? [`Saved ${formatMs(feedback.valueMs)} (${athleteName(feedback.saved.input.athleteId)})`]
-      : [];
-  });
+  // What a void deletes and what it leaves, in the words the lane chips use.
+  // A void deletes this panel's rows only (ADR 0038 §2): the other panel's
+  // `timeId` reached this one as a read, not authorship. Gating the void on
+  // both rows living here would strand a run with one own row, so the
+  // question names the other panel's row as staying instead.
+  const voidCost: VoidCost = {
+    deletes: ([1, 2] as const).flatMap((lane) => {
+      const feedback = laneFeedback[lane];
+      return feedback?.saved
+        ? [`Saved ${formatMs(feedback.valueMs)} (${athleteName(feedback.saved.input.athleteId)})`]
+        : [];
+    }),
+    stays: ([1, 2] as const).flatMap((lane) => {
+      const peerSave = peerSaves[lane];
+      return peerSave?.status === 'saved'
+        ? [`Saved ${formatMs(peerSave.time.timeMs)} · other panel stays — void it there`]
+        : [];
+    }),
+  };
 
-  const requestVoid = (): void => (voidCost.length === 0 ? voidRun() : setVoidAsked(voidCost));
+  const requestVoid = (): void =>
+    voidCost.deletes.length === 0 ? voidRun() : setVoidAsked(voidCost);
   const confirmVoid = (): void => {
     setVoidAsked(null);
     voidRun();
@@ -417,7 +435,13 @@ export const RaceRecorderControls = ({
         titleId="void-run-confirm-title"
         title="Void this run?"
         body={
-          voidAsked === null ? null : `Deletes ${voidAsked.join(' and ')}. This cannot be undone.`
+          voidAsked === null
+            ? null
+            : [
+                `Deletes ${voidAsked.deletes.join(' and ')}.`,
+                ...voidAsked.stays.map((line) => `${line}.`),
+                'This cannot be undone.',
+              ].join(' ')
         }
         confirmLabel="Void run"
         safeAnswer="Keep times"

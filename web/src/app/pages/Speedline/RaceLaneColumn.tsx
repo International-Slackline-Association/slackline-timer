@@ -1,5 +1,5 @@
 import GroupIcon from '@mui/icons-material/Group';
-import { Box, Chip, Link, Stack, TextField, Typography } from '@mui/material';
+import { Box, Chip, Link, Stack, TextField, Typography, type ChipProps } from '@mui/material';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import type { TimeInput } from 'app/api/times';
@@ -33,41 +33,45 @@ const TimesPageLink = ({ input }: { input: TimeInput }) => (
   </Link>
 );
 
-/** Spelt out only where the column fits them beside the quali attempts badge
- * (`boardGeometry.speedline.peerWords`); narrower, the peer glyph says it. */
-const PEER_WORDS_SX = {
-  display: 'none',
-  [`@container (min-width: ${boardGeometry.speedline.peerWords}px)`]: { display: 'inline' },
+/**
+ * Words a strip chip spells only where the lane column fits them beside the
+ * attempts badge (`boardGeometry.speedline`); narrower, the chip keeps its
+ * figure, so the strip stays one chip tall.
+ */
+const WORDS_FROM = {
+  own: {
+    display: 'none',
+    [`@container (min-width: ${boardGeometry.speedline.stripWords}px)`]: { display: 'inline' },
+  },
+  peer: {
+    display: 'none',
+    [`@container (min-width: ${boardGeometry.speedline.peerWords}px)`]: { display: 'inline' },
+  },
 } as const;
 
-const PeerWords = ({ children }: { children: ReactNode }) => (
-  <Box component="span" data-peer-words sx={PEER_WORDS_SX}>
+const StripWords = ({ from, children }: { from: keyof typeof WORDS_FROM; children: ReactNode }) => (
+  <Box component="span" data-strip-words sx={WORDS_FROM[from]}>
     {children}
   </Box>
 );
 
+const OwnWords = ({ children }: { children: ReactNode }) => (
+  <StripWords from="own">{children}</StripWords>
+);
+
+const PeerWords = ({ children }: { children: ReactNode }) => (
+  <StripWords from="peer">{children}</StripWords>
+);
+
 /**
- * A lane another panel recorded, read-only. The glyph is the header's peer
- * chip's, and the full words ride the accessible name and tooltip at any width.
+ * One chip of the lane's status strip. Its words may collapse (`StripWords`),
+ * so the full reading rides the accessible name and tooltip at any width.
  */
-const PeerChip = ({
+const StripChip = ({
   name,
-  tone,
-  label,
-}: {
-  name: string;
-  tone: 'awaiting' | 'saved';
-  label: ReactNode;
-}) => (
-  <Chip
-    size="small"
-    role="status"
-    aria-label={name}
-    title={name}
-    icon={<GroupIcon />}
-    {...(tone === 'saved' ? { color: 'success' as const } : { variant: 'outlined' as const })}
-    label={label}
-  />
+  ...chip
+}: { name: string } & Pick<ChipProps, 'label' | 'color' | 'variant' | 'icon'>) => (
+  <Chip size="small" role="status" aria-label={name} title={name} {...chip} />
 );
 
 /**
@@ -189,6 +193,7 @@ export const RaceLaneColumn = ({
     clearFs,
     laneFeedback,
     peerSaves,
+    dnfLock,
     selectedGender,
     selectedMatchId,
     matches,
@@ -219,8 +224,9 @@ export const RaceLaneColumn = ({
       if (peerSave?.status === 'saved') {
         const value = formatMs(peerSave.time.timeMs);
         return (
-          <PeerChip
-            tone="saved"
+          <StripChip
+            color="success"
+            icon={<GroupIcon />}
             name={`Saved ${value} · other panel`}
             label={
               <>
@@ -234,8 +240,9 @@ export const RaceLaneColumn = ({
       }
       if (peerSave)
         return (
-          <PeerChip
-            tone="awaiting"
+          <StripChip
+            variant="outlined"
+            icon={<GroupIcon />}
             name="Awaiting save · other panel"
             label={
               <>
@@ -249,12 +256,27 @@ export const RaceLaneColumn = ({
     }
     const value = formatMs(feedback.valueMs);
     const bound = boundElsewhere ? ` · ${athleteName(saved?.input.athleteId)}` : '';
+    // The state word and the bound athlete collapse; the value always reads,
+    // and the chip's colour carries the state.
+    const own = (word: string, suffix = '', tail = '') => ({
+      name: `${word} ${value}${tail}${suffix}`,
+      label: (
+        <>
+          <OwnWords>{word} </OwnWords>
+          {value}
+          {tail}
+          {suffix && <OwnWords>{suffix}</OwnWords>}
+        </>
+      ),
+    });
     if (feedback.status === 'pending')
-      return <Chip size="small" variant="outlined" label={`Saving ${value}…`} />;
+      return <StripChip variant="outlined" {...own('Saving', '', '…')} />;
     if (feedback.status === 'error')
-      return <Chip size="small" color="error" label={`Not saved ${value}${bound}`} />;
-    return <Chip size="small" color="success" label={`Saved ${value}${bound}`} />;
+      return <StripChip color="error" {...own('Not saved', bound)} />;
+    return <StripChip color="success" {...own('Saved', bound)} />;
   };
+
+  const dnfWhy = dnfLock(lane);
 
   return (
     <Stack spacing={0.75} sx={{ alignItems: 'center', minWidth: 0, containerType: 'inline-size' }}>
@@ -304,11 +326,16 @@ export const RaceLaneColumn = ({
         {/* Rule S5: qualification is two attempts per athlete. Badge the
             used count and lock the lane at the cap (admin CRUD corrects). */}
         {round === 'qualification' && laneAthletes[lane] && (
-          <Chip
-            size="small"
+          <StripChip
             variant="outlined"
             color={laneAttempts[lane].capped ? 'warning' : 'default'}
-            label={`${laneAttempts[lane].used}/${attemptCap} attempts`}
+            name={`${laneAttempts[lane].used}/${attemptCap} attempts`}
+            label={
+              <>
+                {laneAttempts[lane].used}/{attemptCap}
+                <OwnWords> attempts</OwnWords>
+              </>
+            }
           />
         )}
         {fsCounts[lane] > 0 && (
@@ -329,13 +356,19 @@ export const RaceLaneColumn = ({
       <RaceButton tone="dnf" onClick={onFlagFs} sx={{ whiteSpace: 'nowrap' }}>
         False start · Lane {lane}
       </RaceButton>
-      <RaceButton
-        tone="dnf"
-        disabled={!laneAthletes[lane] || laneAttempts[lane].capped}
-        onClick={onDnf}
-      >
-        Lane {lane} DNF
-      </RaceButton>
+      <LockedControl reason={dnfWhy}>
+        <RaceButton
+          tone="dnf"
+          disabled={!laneAthletes[lane] || laneAttempts[lane].capped || dnfWhy !== null}
+          onClick={onDnf}
+        >
+          Lane {lane} DNF
+        </RaceButton>
+      </LockedControl>
+      {/* Unreserved, like the rail's Void: it locks only on a two-panel board,
+          and a reserved slot under the fold contract's last row would cost
+          every idle board a line. */}
+      <WhyLine reason={dnfWhy} reserve={false} />
 
       {fsCounts[lane] >= 2 && (
         <Typography variant="caption" color="error.dark" sx={{ textAlign: 'center' }}>

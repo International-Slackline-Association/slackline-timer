@@ -280,6 +280,11 @@ export const useRaceRecorder = (compId: string) => {
   };
   const peerSaves: Record<LaneId, PeerSave | null> = { 1: peerSave(1), 2: peerSave(2) };
 
+  // The lane's row is the other panel's (ADR 0038 §2), so a DNF here would
+  // POST a second one for the attempt; an awaiting save is a POST in flight.
+  const dnfLock = (lane: LaneId): string | null =>
+    peerSaves[lane] ? 'recorded on the other panel — DNF it there' : null;
+
   // Seed the best-of-3 tally from the match's already-persisted Times when a
   // match is (re)selected, so re-opening a mid-series match shows the runs it
   // has already resolved. Runs once per selection (see `seededMatchId`); live
@@ -867,6 +872,8 @@ export const useRaceRecorder = (compId: string) => {
    */
   const recordDnf = (lane: LaneId): void => {
     if (laneResults.current[lane] === DNF_SENTINEL) return;
+    // The hard guard; the lane's disabled DNF only explains it.
+    if (dnfLock(lane) !== null) return;
     if (laneFeedback[lane]?.saved) {
       recordLaneResult(lane, DNF_SENTINEL);
       // Ahead of the attempt cap: the cap guards a NEW record, and the row this
@@ -932,6 +939,7 @@ export const useRaceRecorder = (compId: string) => {
     laneFeedback,
     // What another panel saved on a lane this panel did not record.
     peerSaves,
+    dnfLock,
     toast,
     clearToast,
     // Match-driven recording surface. Gender changes go through `requestGender`

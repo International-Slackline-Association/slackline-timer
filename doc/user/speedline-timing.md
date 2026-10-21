@@ -158,7 +158,11 @@ recorded** for it.
 
 - **Saved / Saving… / Not saved.** The chip under each lane is the truth. A
   _Not saved_ chip means the result did not reach the server — the timing itself
-  was unaffected. The top of the **Result recording** panel also shows a
+  was unaffected. Where the lane column is narrow (a compact laptop screen, in
+  qualification) the chips shorten to their figures so they stay on one row: the
+  time alone, in the chip's colour (green saved, red not saved, outlined while
+  saving), and **2/2** for the attempts badge; point at a chip for its full
+  words. The top of the **Result recording** panel also shows a
   _Lane n time not saved_ warning for each lane that failed, saying why, with a
   **Retry** button — in view without scrolling even on a compact laptop screen.
   It stays until that lane's time goes through, even if the other lane saves
@@ -192,7 +196,9 @@ recorded** for it.
   athlete. DNF stops that lane's clock; press it whether or not you have
   already stopped the lane — one press, one record. If the lane had already
   saved a time, that same entry is changed to DNF rather than a second one
-  being added, so the attempt still counts once.
+  being added, so the attempt still counts once. A lane the other panel
+  stopped greys its DNF out with _why: recorded on the other panel — DNF it
+  there_.
 - **Void run.** Deletes the times this run just recorded — the clean undo for a
   run that should not have counted. It asks first and names each time it would
   delete; **Keep times** leaves everything as it is. It is locked while the
@@ -248,8 +254,15 @@ on the other within a moment, and neither is the master.
   stopped, so its **Saved** chip, **Correct time**, **Retry save**, **Move
   time**, **Void run** and a DNF over a stopped lane are all on that panel. The
   other panel reads the lane as **Awaiting save · other panel**, then
-  **Saved 0:05.72 · other panel** once the server has it, and its **Void run**
-  stays locked with _why: recorded on the other panel — void it there_.
+  **Saved 0:05.72 · other panel** once the server has it. Its **Lane n DNF**
+  for that lane is greyed out with _why: recorded on the other panel — DNF it
+  there_ — press the DNF on the panel that saved the time — and with no time
+  of its own its **Void run** stays locked with _why: recorded on the other
+  panel — void it there_.
+- **Each panel voids only the times it saved.** When each panel saved one lane,
+  **Void run** deletes this panel's time, and its question names the other
+  panel's as staying — _Saved 0:05.72 · other panel stays — void it there_. To
+  drop the whole run, void it on the other panel too.
 - **Resume Lane n** works from either panel: the panel that saved the time
   deletes it, so there is nothing to tidy up on the **Times** page.
 - A lane judge's buzzer plugs into either computer. The press works on the

@@ -597,6 +597,31 @@ describe('RaceRecorderControls', () => {
       expect(screen.getByRole('button', { name: /^void run$/i })).toBeEnabled();
       expect(screen.queryByTestId('why-line')).toBeNull();
     });
+
+    // ADR 0038 §2: a panel retracts only the rows it wrote, so the question
+    // names the other panel's row as staying rather than leaving it unsaid.
+    it('names the other panel’s row as staying on a mixed run', () => {
+      const voidRun = vi.fn();
+      render(
+        <RaceRecorderControls
+          recorder={makeRecorder({
+            laneAthletes: { 1: 'a1', 2: 'a2' },
+            laneFeedback: { 1: savedFeedback('t1', 2000), 2: null },
+            peerSaves: { 1: null, 2: peerSaved(5720, 'a2') },
+            voidRun,
+          })}
+          athletes={ATHLETES}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /^void run$/i }));
+
+      const question = screen.getByRole('dialog');
+      expect(question).toHaveTextContent(
+        'Deletes Saved 0:02.00 (Jane Doe). Saved 0:05.72 · other panel stays — void it there. This cannot be undone.',
+      );
+      fireEvent.click(within(question).getByRole('button', { name: 'Void run' }));
+      expect(voidRun).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('surfaces a void error without implying timing broke', () => {

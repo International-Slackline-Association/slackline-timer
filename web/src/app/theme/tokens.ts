@@ -359,9 +359,13 @@ export const boardGeometry = {
     // every desk width up to the deck ceiling, so the race pair's why-line
     // wraps in it.
     startStrip: 184,
-    // The lane column width from which a peer save chip spells 'other panel'
-    // beside the quali attempts badge (badge + full chip + glyph ≈ 294 px; the
-    // column is 200 px at 1280 and 280 at 1440).
+    // Lane column widths (container queries) from which the status strip's
+    // chips spell their words; narrower, each keeps its figure. The column is
+    // 200 px at 1280, 280 at 1440 and 329 at 1024/1920. `stripWords`: the
+    // own save chip and the attempts badge (badge + FS ×1 + 'Saved 0:02.00'
+    // ≈ 268 px). `peerWords`: the peer save chip (badge + glyph +
+    // 'Saved 0:05.72 · other panel' ≈ 294 px).
+    stripWords: 270,
     peerWords: 300,
   },
 } as const;

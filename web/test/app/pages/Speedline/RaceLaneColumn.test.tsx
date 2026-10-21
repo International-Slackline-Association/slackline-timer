@@ -16,6 +16,8 @@ import {
   savedFeedback,
 } from './recorderStub';
 
+const OTHER_PANEL_DNF = 'recorded on the other panel — DNF it there';
+
 const idle = (lane: LaneId) =>
   speedlineLaneState({ timerId: lane, startTime: null, stopTime: null });
 
@@ -86,8 +88,8 @@ describe('RaceLaneColumn', () => {
         }),
       ),
     );
-    expect(screen.getByText('2/2 attempts')).toBeInTheDocument();
-    expect(screen.getByText('1/2 attempts')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: '2/2 attempts' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: '1/2 attempts' })).toBeInTheDocument();
     // The capped lane's DNF is disabled; the under-cap lane's stays live.
     expect(screen.getByRole('button', { name: /lane 1 dnf/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /lane 2 dnf/i })).toBeEnabled();
@@ -104,7 +106,7 @@ describe('RaceLaneColumn', () => {
         }),
       ),
     );
-    expect(screen.queryByText(/attempts$/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: /attempts$/ })).not.toBeInTheDocument();
   });
 
   describe('cascading selection filters', () => {
@@ -161,7 +163,9 @@ describe('RaceLaneColumn', () => {
       ),
     );
     // 83450ms -> 1:23.45
-    expect(screen.getByText(/saved 1:23\.45/i)).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Saved 1:23.45' })).toHaveClass(
+      'MuiChip-colorSuccess',
+    );
   });
 
   // §6 names the pair a failed save wears — the `NOT SAVED` chip is a stop, the
@@ -175,7 +179,7 @@ describe('RaceLaneColumn', () => {
       ),
     );
 
-    const chip = screen.getByText(/not saved 1:23\.45/i).parentElement;
+    const chip = screen.getByRole('status', { name: 'Not saved 1:23.45' });
     expect(chip).toHaveClass('MuiChip-colorError');
     expect(chip).toHaveClass('MuiChip-filled');
   });
@@ -213,7 +217,7 @@ describe('RaceLaneColumn', () => {
 
     it('holds Retry disabled while the retry is in flight', () => {
       render(column(1, failed('pending')));
-      expect(screen.getByText(/saving 1:23\.45/i)).toBeInTheDocument();
+      expect(screen.getByRole('status', { name: 'Saving 1:23.45…' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Retry save' })).toBeDisabled();
     });
 
@@ -278,7 +282,7 @@ describe('RaceLaneColumn', () => {
         makeRecorder({ laneFeedback: { 1: { status: 'pending', valueMs: 5000 }, 2: null } }),
       ),
     );
-    expect(screen.getByText(/saving 0:05\.00/i)).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Saving 0:05.00…' })).toHaveClass('MuiChip-outlined');
   });
 
   it('offers a time-correction field only once a lane time is saved', () => {
@@ -356,7 +360,7 @@ describe('RaceLaneColumn', () => {
 
     it('names the athlete the saved time is bound to', () => {
       render(column(1, misattributed));
-      expect(screen.getByText('Saved 1:23.45 · Jane Doe')).toBeInTheDocument();
+      expect(screen.getByRole('status', { name: 'Saved 1:23.45 · Jane Doe' })).toBeInTheDocument();
     });
 
     it('offers a one-tap move to the athlete now on the lane', () => {
@@ -378,7 +382,7 @@ describe('RaceLaneColumn', () => {
           }),
         ),
       );
-      expect(screen.getByText('Saved 1:23.45')).toBeInTheDocument();
+      expect(screen.getByRole('status', { name: 'Saved 1:23.45' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /move time to/i })).toBeNull();
     });
   });
@@ -390,7 +394,11 @@ describe('RaceLaneColumn', () => {
    */
   describe('a lane another panel recorded', () => {
     const peerLane = (peerSave: ReturnType<typeof peerSaved> | { status: 'awaiting' }) =>
-      makeRecorder({ laneAthletes: { 1: 'a1', 2: '' }, peerSaves: { 1: peerSave, 2: null } });
+      makeRecorder({
+        laneAthletes: { 1: 'a1', 2: '' },
+        peerSaves: { 1: peerSave, 2: null },
+        dnfLock: (lane) => (lane === 1 ? OTHER_PANEL_DNF : null),
+      });
 
     it('says the save is on its way, in the outlined tone', () => {
       render(column(1, peerLane({ status: 'awaiting' })));
@@ -427,9 +435,26 @@ describe('RaceLaneColumn', () => {
       const chip = screen.getByRole('status', { name: 'Saved 0:05.72 · other panel' });
       expect(chip.querySelector('[data-testid="GroupIcon"]')).not.toBeNull();
       expect(chip).toHaveAttribute('title', 'Saved 0:05.72 · other panel');
-      const words = [...chip.querySelectorAll('[data-peer-words]')];
+      const words = [...chip.querySelectorAll('[data-strip-words]')];
       expect(words.map((w) => w.textContent)).toEqual(['Saved ', ' · other panel']);
       for (const w of words) expect(window.getComputedStyle(w).display).toBe('none');
+    });
+
+    /**
+     * A DNF here would POST a second row for the attempt (ADR 0038 §2: the row
+     * is the saving panel's). Unreserved, like Void's: the pair is the fold
+     * contract's last row, and every idle board would pay for a two-panel line.
+     */
+    it.each([
+      ['saved', peerSaved(5720)],
+      ['still on its way', { status: 'awaiting' as const }],
+    ])('locks Lane n DNF and names the other panel (%s)', (_, peerSave) => {
+      render(column(1, peerLane(peerSave)));
+
+      const dnf = screen.getByRole('button', { name: 'Lane 1 DNF' });
+      expect(dnf).toBeDisabled();
+      expect(dnf).toHaveAccessibleDescription(OTHER_PANEL_DNF);
+      expect(screen.getByText(`why: ${OTHER_PANEL_DNF}`)).toBeInTheDocument();
     });
 
     it('offers no correction, retry or re-attribution — those stay on the other panel', () => {
@@ -458,6 +483,53 @@ describe('RaceLaneColumn', () => {
       const row = screen.getByTestId('lane-1-status');
       expect(row).toHaveTextContent('Saved 0:05.72 · other panel');
       expect(px(window.getComputedStyle(row).minHeight)).toBe(24);
+    });
+  });
+
+  /**
+   * The quali column is 200 px at 1280x720: the badge, an FS chip and a
+   * spelt-out save chip need ~268, and a second strip row would push the race
+   * pair under the fold. Narrower than `stripWords`, each chip keeps its figure
+   * and the words ride its accessible name and title at every width.
+   */
+  describe('the status strip in a narrow column', () => {
+    const words = (chip: HTMLElement) => [...chip.querySelectorAll('[data-strip-words]')];
+    const expectCollapsed = (chip: HTMLElement, name: string, spelt: string[]) => {
+      expect(chip).toHaveAttribute('title', name);
+      expect(words(chip).map((w) => w.textContent)).toEqual(spelt);
+      for (const w of words(chip)) expect(window.getComputedStyle(w).display).toBe('none');
+    };
+
+    it.each([
+      ['saved', savedFeedback('t1', 2000), 'Saved 0:02.00 · Jane Doe', ['Saved ', ' · Jane Doe']],
+      ['failed', { status: 'error' as const, valueMs: 2000 }, 'Not saved 0:02.00', ['Not saved ']],
+      ['pending', { status: 'pending' as const, valueMs: 2000 }, 'Saving 0:02.00…', ['Saving ']],
+    ])('keeps the %s chip to its value', (_, feedback, name, spelt) => {
+      render(
+        column(
+          1,
+          makeRecorder({
+            laneAthletes: { 1: 'a2', 2: '' },
+            laneFeedback: { 1: feedback, 2: null },
+          }),
+        ),
+      );
+      expectCollapsed(screen.getByRole('status', { name }), name, spelt);
+    });
+
+    it('keeps the attempts badge to its count', () => {
+      render(
+        column(
+          1,
+          makeRecorder({
+            laneAthletes: { 1: 'a1', 2: '' },
+            laneAttempts: { 1: { used: 2, capped: true }, 2: { used: 0, capped: false } },
+          }),
+        ),
+      );
+      expectCollapsed(screen.getByRole('status', { name: '2/2 attempts' }), '2/2 attempts', [
+        ' attempts',
+      ]);
     });
   });
 
@@ -532,6 +604,14 @@ describe('RaceLaneColumn', () => {
       // nothing new is inserted above the race pair.
       expect(pressOrder(container)).toEqual(before);
       expect(screen.getByLabelText(/correct time/i)).toBeInTheDocument();
+    });
+
+    it('reserves no why-line under the race pair while DNF is live', () => {
+      render(column(1, makeRecorder({ laneAthletes: assigned })));
+
+      // Stop's and Resume's slots are the column's reserved why-lines.
+      expect(screen.getAllByTestId('why-line')).toHaveLength(2);
+      expect(screen.getByRole('button', { name: 'Lane 1 DNF' })).toBeEnabled();
     });
 
     it('reserves the status row so a landing chip moves nothing', () => {

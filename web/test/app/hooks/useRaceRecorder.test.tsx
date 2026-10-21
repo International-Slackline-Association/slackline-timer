@@ -820,10 +820,10 @@ describe('useRaceRecorder', () => {
       expect(bodies('POST', '/times')).toHaveLength(0);
       expect(bodies('PUT', '/matches/')).toHaveLength(0);
 
-      // The run is marked tallied: a later local correction path re-firing the
-      // derivation must not increment either (DNF-after-finish is such a path).
+      // A DNF over a peer-stopped lane is the other panel's to record (ADR 0038
+      // §2): refused, so it neither POSTs a second row nor re-fires the tally.
       act(() => result.current.recordDnf(2));
-      await waitFor(() => expect(result.current.laneFeedback[2]?.status).toBe('saved'));
+      expect(bodies('POST', '/times')).toHaveLength(0);
       expect(result.current.runWins).toEqual({ 1: 0, 2: 0 });
     });
   });
@@ -952,14 +952,63 @@ describe('useRaceRecorder', () => {
       expect(result.current.peerSaves).toEqual({ 1: null, 2: { status: 'awaiting' } });
     });
 
-    it('yields to a result this panel records on the lane itself', async () => {
-      const { result } = peerRecorder();
+    /**
+     * The row is the other panel's (ADR 0038 §2): a DNF here would POST a
+     * second row for the one attempt. An awaiting save is a POST in flight, so
+     * it locks too — and the hook refuses, not just the button.
+     */
+    it('refuses a DNF on the lane the other panel is saving or saved', async () => {
+      const OTHER_PANEL = 'recorded on the other panel — DNF it there';
+      const { result, refetch } = peerRecorder();
+      await waitFor(() => expect(result.current.times.isSuccess).toBe(true));
       act(() => result.current.notePeerFinish(1, 4720));
 
+      expect(result.current.dnfLock(1)).toBe(OTHER_PANEL);
+      act(() => result.current.recordDnf(1));
+      expect(result.current.peerSaves[1]).toEqual({ status: 'awaiting' });
+
+      await refetch([peerRow()]);
+      await waitFor(() => expect(result.current.peerSaves[1]?.status).toBe('saved'));
+      expect(result.current.dnfLock(1)).toBe(OTHER_PANEL);
       act(() => result.current.recordDnf(1));
 
+      expect(bodies('POST', '/times')).toHaveLength(0);
+      expect(paths('PUT', '/times/')).toHaveLength(0);
+      expect(result.current.laneFeedback[1]).toBeNull();
+      expect(result.current.peerSaves[1]).toEqual({ status: 'saved', time: peerRow() });
+      expect(result.current.dnfLock(2)).toBeNull();
+    });
+
+    it('yields to the lane’s own save: a DNF there edits the row this panel wrote', async () => {
+      const { result } = peerRecorder();
+      act(() => result.current.recordFinish(1, 5720));
       await waitFor(() => expect(result.current.laneFeedback[1]?.status).toBe('saved'));
+      // Both panels stopped the lane in one breath; the peer's frame lands after.
+      act(() => result.current.notePeerFinish(1, 4720));
+
       expect(result.current.peerSaves[1]).toBeNull();
+      expect(result.current.dnfLock(1)).toBeNull();
+      act(() => result.current.recordDnf(1));
+
+      await waitFor(() => expect(result.current.laneFeedback[1]?.valueMs).toBe(DNF_SENTINEL));
+      expect(paths('PUT', '/times/')).toEqual([`/competitions/${COMP}/times/t1`]);
+    });
+
+    it('voids only the row this panel wrote on a mixed run', async () => {
+      const { result, refetch } = peerRecorder();
+      await waitFor(() => expect(result.current.times.isSuccess).toBe(true));
+      act(() => result.current.setLaneAthlete(2, 'a2'));
+      act(() => result.current.notePeerFinish(1, 4720));
+      act(() => result.current.recordFinish(2, 7000));
+      await waitFor(() => expect(result.current.laneFeedback[2]?.status).toBe('saved'));
+      await refetch([peerRow()]);
+      await waitFor(() => expect(result.current.peerSaves[1]?.status).toBe('saved'));
+
+      act(() => result.current.voidRun());
+
+      await waitFor(() =>
+        expect(paths('DELETE', '/times/')).toEqual([`/competitions/${COMP}/times/t1`]),
+      );
     });
   });
 
