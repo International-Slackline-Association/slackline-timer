@@ -102,6 +102,7 @@ const CSS_VAR_BY_EXTRA_PATH: Record<string, string> = {
   'overlayArt.headingTracking': '--tl-overlay-heading-tracking',
   'overlayArt.bannerTracking': '--tl-overlay-banner-tracking',
   'overlayArt.nameTracking': '--tl-overlay-name-tracking',
+  'overlayArt.flagKeyline': '--tl-overlay-flag-keyline',
 };
 
 const extraEntries: [string, string][] = [

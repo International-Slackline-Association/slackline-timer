@@ -151,6 +151,9 @@ export const overlayArt = {
   headingTracking: '-0.02em', // tight display-caps letter-spacing (the art runs −.01…−.03em)
   bannerTracking: '0.08em', // open banner caps: the WINNER banner/tag, the best-of-3 caption + tally names
   nameTracking: '0.01em', // athlete names + initials, every plate and card
+  // Hairline over every plate flag so a white-field flag (Japan) doesn't merge
+  // into a white plate. Inset: it paints over the flag art without shrinking it.
+  flagKeyline: `inset 0 0 0 1px ${colors.overlay.nameInk}`,
 } as const;
 
 // The broadcast "protection halo" (design-system §7): a tight slate outline plus

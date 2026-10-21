@@ -427,15 +427,14 @@ export const AthleteCard = ({
           }}
         >
           <WideFlag athlete={athlete} />
-          {/* Hairline keyline so a white-field flag (Japan) doesn't merge into the
-              plate. An inset shadow on an overlay layer, not a border, so it
-              paints OVER the edge-to-edge art without shrinking it. */}
+          {/* An overlay layer: the inline-SVG wide art paints over its own box's
+              inset shadow, so the keyline sits on top of it. */}
           <Box
             data-testid="athlete-card-flag-keyline"
             sx={{
               position: 'absolute',
               inset: 0,
-              boxShadow: `inset 0 0 0 1px ${colors.overlay.nameInk}`,
+              boxShadow: overlayArt.flagKeyline,
               pointerEvents: 'none',
             }}
           />

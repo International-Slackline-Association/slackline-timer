@@ -93,6 +93,7 @@
   --tl-overlay-heading-tracking: -0.02em; /* tight display-caps tracking (art: −.01…−.03em) */
   --tl-overlay-banner-tracking: 0.08em; /* open banner caps (WINNER, best-of-3 caption) */
   --tl-overlay-name-tracking: 0.01em; /* athlete names + initials */
+  --tl-overlay-flag-keyline: inset 0 0 0 1px #231f20; /* hairline over every plate flag (= overlay-name-ink) */
 
   /* Chroma-key fill for ALL overlay surfaces — MAGENTA not green; rationale at
      `chromaKey` in tokens.ts (the canonical copy). Retune both together. */

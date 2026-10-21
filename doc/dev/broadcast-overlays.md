@@ -246,7 +246,9 @@ bridge panel without sending a request. That is exactly what the build-time
 CSP's `connect-src` admits (`http://127.0.0.1:*` / `http://localhost:*`, ADR
 0054); `h2rClient.test.ts` pins the two against each other. Pushes go through `createH2rPusher`:
 one push in flight, only the newest waiting set follows it (a slow H2R can
-otherwise land a stale athlete last), and each push aborts after 3 s.
+otherwise land a stale athlete last), and each push aborts after 3 s. With H2R
+down the bridge retries at most every 30 s (backing off 1 s, doubling, while
+every POST of a push fails) and resumes at once after the first success.
 
 The per-side WS-selection → athlete → result join is `useLiveSideAthlete`,
 factored out of `SvoLiveOverlay` and shared with the bridge.

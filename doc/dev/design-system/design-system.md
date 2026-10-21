@@ -188,24 +188,25 @@ footage, so it takes the filled-plate tier too: `nameInk`, footage shadow off
 caps there wash out to ≤1.9:1. The bandless `TOTAL` row keeps the white caps +
 footage shadow.
 
-| Token                        | Value                    | Use                                                                                                           |
-| ---------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `overlay.plate`              | `rgba(255,255,255,0.3)`  | **Empty** profile-box fill — VS photo frame, portrait card, profile bracket box (the profile art's 30% white) |
-| `overlay.plateName`          | `rgba(255,255,255,0.35)` | **Empty** name-bar fill — the name bracket's TBD plate (the names art's 35% white)                            |
-| `overlay.plateStrip`         | `rgba(255,255,255,0.48)` | Row backing band behind a VS stat label (the art's 48% white); the label on it inks `nameInk`, no shadow      |
-| `overlay.plateFilled`        | `#FFFFFF`                | **Filled** named-plate fill — solid white bar behind a dark athlete name                                      |
-| `overlay.stroke`             | `#FFFFFF`                | Plate border + thin bracket connector lines (width = `overlayArt.strokeWidth`)                                |
-| `overlay.nameInk`            | `#231f20`                | Name/value ink on a filled plate, incl. the `/stream/timer` plate's idle/stopped digits; **not** `ink.hi`     |
-| `overlay.nameInkSubordinate` | `#737172`                | Subordinate words on a filled plate (source tag, `PTS`/`AVG`), 4.85:1 — a colour step, not `nameInk` + alpha  |
-| `overlay.label`              | `#FFFFFF`                | Structural / section labels (reuses `ink.onBrand`)                                                            |
-| `overlay.scrim`              | `rgba(51,60,78,0.9)`     | Slate legibility backing for white overlay text — caption gradient + per-text shadow                          |
-| `overlay.backdrop`           | `rgba(35,31,32,0.6)`     | Full-bleed frame dim behind an overlay composition — the LAAX "60% Black" layer (distinct from `scrim`)       |
-| `chromaKey`                  | `#FF00FF`                | Chroma-key body fill for ALL overlay surfaces, painted when `?bg=key`                                         |
-| `chromaKeyGreen` / `Blue`    | `#00B140` / `#0047BB`    | The `?bg=green` / `?bg=blue` grounds (keyer presets) — they erase our own greens/blues                        |
-| `overlayArt.strokeWidth`     | `6px`                    | Plate/VS-box border + connector weight, at the art's 1920×1080 reference frame                                |
-| `overlayArt.headingTracking` | `-0.02em`                | Tight display-caps letter-spacing on overlay headings (the art runs −.01…−.03em)                              |
-| `overlayArt.bannerTracking`  | `0.08em`                 | Open banner caps — the `WINNER` banner/tag, the best-of-3 caption and tally names                             |
-| `overlayArt.nameTracking`    | `0.01em`                 | Athlete names and initials on every plate and card                                                            |
+| Token                        | Value                     | Use                                                                                                           |
+| ---------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `overlay.plate`              | `rgba(255,255,255,0.3)`   | **Empty** profile-box fill — VS photo frame, portrait card, profile bracket box (the profile art's 30% white) |
+| `overlay.plateName`          | `rgba(255,255,255,0.35)`  | **Empty** name-bar fill — the name bracket's TBD plate (the names art's 35% white)                            |
+| `overlay.plateStrip`         | `rgba(255,255,255,0.48)`  | Row backing band behind a VS stat label (the art's 48% white); the label on it inks `nameInk`, no shadow      |
+| `overlay.plateFilled`        | `#FFFFFF`                 | **Filled** named-plate fill — solid white bar behind a dark athlete name                                      |
+| `overlay.stroke`             | `#FFFFFF`                 | Plate border + thin bracket connector lines (width = `overlayArt.strokeWidth`)                                |
+| `overlay.nameInk`            | `#231f20`                 | Name/value ink on a filled plate, incl. the `/stream/timer` plate's idle/stopped digits; **not** `ink.hi`     |
+| `overlay.nameInkSubordinate` | `#737172`                 | Subordinate words on a filled plate (source tag, `PTS`/`AVG`), 4.85:1 — a colour step, not `nameInk` + alpha  |
+| `overlay.label`              | `#FFFFFF`                 | Structural / section labels (reuses `ink.onBrand`)                                                            |
+| `overlay.scrim`              | `rgba(51,60,78,0.9)`      | Slate legibility backing for white overlay text — caption gradient + per-text shadow                          |
+| `overlay.backdrop`           | `rgba(35,31,32,0.6)`      | Full-bleed frame dim behind an overlay composition — the LAAX "60% Black" layer (distinct from `scrim`)       |
+| `chromaKey`                  | `#FF00FF`                 | Chroma-key body fill for ALL overlay surfaces, painted when `?bg=key`                                         |
+| `chromaKeyGreen` / `Blue`    | `#00B140` / `#0047BB`     | The `?bg=green` / `?bg=blue` grounds (keyer presets) — they erase our own greens/blues                        |
+| `overlayArt.strokeWidth`     | `6px`                     | Plate/VS-box border + connector weight, at the art's 1920×1080 reference frame                                |
+| `overlayArt.headingTracking` | `-0.02em`                 | Tight display-caps letter-spacing on overlay headings (the art runs −.01…−.03em)                              |
+| `overlayArt.bannerTracking`  | `0.08em`                  | Open banner caps — the `WINNER` banner/tag, the best-of-3 caption and tally names                             |
+| `overlayArt.nameTracking`    | `0.01em`                  | Athlete names and initials on every plate and card                                                            |
+| `overlayArt.flagKeyline`     | `inset 0 0 0 1px #231f20` | Hairline over every plate flag, so a white-field flag reads as a bounded block on a white plate               |
 
 All three translucent-white alphas are measured in the art (the plate-opacity
 audit): every profile-language file (`Profile top 4`, `Profile Brackets`, `vs`)
@@ -225,7 +226,7 @@ CSS vars: `--tl-overlay-plate`, `--tl-overlay-plate-name`, `--tl-overlay-plate-s
 `--tl-overlay-scrim`, `--tl-overlay-backdrop`, `--tl-chroma-key`,
 `--tl-chroma-key-green`, `--tl-chroma-key-blue`, `--tl-overlay-stroke-width`,
 `--tl-overlay-heading-tracking`, `--tl-overlay-banner-tracking`,
-`--tl-overlay-name-tracking`.
+`--tl-overlay-name-tracking`, `--tl-overlay-flag-keyline`.
 
 **Name face & weights.** Names use `fonts.display` (`Oswald`, see §4) and pair a
 **bold** given name with a **lighter** family name — over the loaded `300–700`

@@ -75,7 +75,8 @@ const WideFlagItem = ({ alpha2, testId }: { alpha2: string; testId?: string }) =
         justifyContent: 'center',
       }}
     >
-      <FlagBlock code={alpha2} contain sx={{ height: '100%' }} />
+      {/* No keyline: it would draw the seam to the edge-colour fill. */}
+      <FlagBlock code={alpha2} contain sx={{ height: '100%', boxShadow: 'none' }} />
     </Box>
   );
 };

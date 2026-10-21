@@ -4,6 +4,7 @@ import { Box, Stack } from '@mui/material';
 
 import { CountryFlag, toAlpha2 } from 'app/components/CountryFlag';
 import { type Athlete } from 'app/types';
+import { overlayArt } from 'app/theme/tokens';
 
 /**
  * A flag rendered as a CSS-background block via the flag-icons class, stretched
@@ -20,7 +21,8 @@ import { type Athlete } from 'app/types';
  * `square` appends the `fis` class (the 1x1 SVG asset) and locks 1:1 (the
  * ranking and score-card plates). `contain` renders the flag whole at its
  * native 3:2, sized off its height (`WideFlag`'s fallback). Renders nothing for
- * an unknown code rather than printing it.
+ * an unknown code rather than printing it. Every block carries the
+ * `overlayArt.flagKeyline` hairline; a caller's `sx` can drop it.
  */
 export const FlagBlock = ({
   code,
@@ -50,6 +52,7 @@ export const FlagBlock = ({
           lineHeight: 0,
           backgroundPosition: 'center',
           backgroundSize: contain ? 'contain' : 'cover',
+          boxShadow: overlayArt.flagKeyline,
           ...(square && { aspectRatio: '1 / 1' }),
           ...(contain && { aspectRatio: '3 / 2' }),
           ...sx,
@@ -99,7 +102,7 @@ export const FlagRow = ({
         data-testid={testId}
         direction="row"
         spacing={0.5}
-        sx={{ alignItems: 'center', ...sx }}
+        sx={{ alignItems: 'center', '& .fi': { boxShadow: overlayArt.flagKeyline }, ...sx }}
       >
         {codes.map((code, i) => (
           <CountryFlag key={i} code={code} height={height} />

@@ -34,6 +34,7 @@ vi.mock('app/api/client', async (importOriginal) => {
 });
 
 import { AthleteCard } from 'app/pages/Stream/AthleteCard';
+import { AthleteNameStrip } from 'app/pages/Stream/AthleteNameStrip';
 import { BracketsOverlay } from 'app/pages/Stream/BracketsOverlay';
 import { RankingsOverlay } from 'app/pages/Stream/RankingsOverlay';
 import { ScoreCardOverlay } from 'app/pages/Stream/ScoreCardOverlay';
@@ -3369,6 +3370,81 @@ describe('AthleteCard (photo-less fallback)', () => {
     const band = container.querySelector('[data-band]') as HTMLElement;
     expect(band).not.toBeNull();
     expect(window.getComputedStyle(band).bottom).not.toBe('0px');
+  });
+});
+
+/**
+ * Every plate flag carries the `overlayArt.flagKeyline` hairline, so a
+ * white-field flag (JPN) reads as a bounded block on the white plate instead of
+ * a floating disc.
+ */
+describe('flag keyline', () => {
+  const japan = { ...athlete('a1', 'Jane Doe'), country: 'JPN' };
+  const expectKeyline = (flag: HTMLElement) => {
+    expect(flag).toHaveClass('fi-jp');
+    expect(window.getComputedStyle(flag).boxShadow).toBe(overlayArt.flagKeyline);
+  };
+
+  it('frames the ranking plate flag', async () => {
+    apiFetchMock.mockResolvedValue([{ athlete: japan, bestTimeMs: 83_450 }]);
+    renderOverlay(
+      `/stream/rankings/final/male?compId=${COMP}&token=tok-1`,
+      '/stream/rankings/:round/:gender',
+      <RankingsOverlay />,
+    );
+    const strip = await screen.findByTestId('ranking-flag-strip');
+    expectKeyline(within(strip).getByRole('img', { name: 'JPN' }));
+  });
+
+  it('frames the score-card row flag', async () => {
+    apiFetchMock.mockResolvedValue([
+      { athlete: japan, bestTimeMs: 0, overall: 80.25 },
+    ] satisfies RankedAthlete[]);
+    renderOverlay(
+      `/stream/scorecard/quarter/male?compId=${COMP}&token=tok-1`,
+      '/stream/scorecard/:round/:gender',
+      <ScoreCardOverlay />,
+    );
+    const strip = await screen.findByTestId('scorecard-flag-strip');
+    expectKeyline(within(strip).getByRole('img', { name: 'JPN' }));
+  });
+
+  it('frames the name-bracket plate flag', async () => {
+    const matches: Match[] = [
+      {
+        matchId: 'f1',
+        compId: COMP,
+        discipline: 'speed',
+        round: 'final',
+        roundName: 'Final',
+        gender: 'male',
+        position: 0,
+        athlete1Id: 'a1',
+        athlete2Id: 'a2',
+      },
+    ];
+    apiFetchMock.mockImplementation((path: string) => {
+      if (path.includes('/matches')) return Promise.resolve(matches);
+      if (path.includes('/athletes')) return Promise.resolve([japan, athlete('a2', 'John Roe')]);
+      throw new Error(`unexpected ${path}`);
+    });
+    renderOverlay(
+      `/stream/brackets/male?compId=${COMP}&token=tok-1&variant=name`,
+      '/stream/brackets/:gender',
+      <BracketsOverlay />,
+    );
+    const plate = within(await screen.findByTestId('playoff-bracket')).getByTestId(
+      'slot-box_final_l',
+    );
+    const strip = within(plate).getByTestId('name-plate-flag-strip');
+    expectKeyline(within(strip).getByRole('img', { name: 'JPN' }));
+  });
+
+  it('frames each inline name-strip flag', () => {
+    render(<AthleteNameStrip athlete={{ ...japan, country2: 'FRA' }} />);
+    const [first, second] = within(screen.getByTestId('name-strip-flag-block')).getAllByRole('img');
+    expectKeyline(first);
+    expect(window.getComputedStyle(second).boxShadow).toBe(overlayArt.flagKeyline);
   });
 });
 

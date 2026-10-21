@@ -115,6 +115,9 @@ describe('WideFlag', () => {
     expect(flag).not.toBeNull();
     expect(flag.className).toContain('fi-pt');
     expect(window.getComputedStyle(flag).backgroundSize).toBe('contain');
+    // No plate keyline on the contained flag: it would draw the seam to the
+    // edge-colour fill (the card foot frames the whole band instead).
+    expect(window.getComputedStyle(flag).boxShadow).toBe('none');
   });
 
   it('defaults the gap fill to the plate white when the edge colour is unmapped', () => {
