@@ -54,6 +54,8 @@ import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 
+import { externaliseInlinePolicies } from './externalPolicies';
+
 // SSM parameter names; all three must exist before the first deploy. The two
 // secrets are SecureString and reach the Lambdas as *names* only, fetched +
 // decrypted at runtime (core/secrets.ts, ADR 0025) — CFN rejects ssm-secure in
@@ -139,6 +141,8 @@ export class SlacklineTimerV1Stack extends Stack {
       description: 'Origin the browser POSTs presigned photo uploads to.',
       value: `https://${photoCdn.bucket.bucketRegionalDomainName}`,
     });
+
+    externaliseInlinePolicies(this);
   }
 }
 

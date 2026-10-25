@@ -165,6 +165,8 @@ cd server
 AWS_PROFILE=… npm run deploy:guided     # cdk bootstrap && cdk deploy
 # Every subsequent deploy:
 AWS_PROFILE=… npm run deploy            # cdk deploy
+# Then the Lambdas' inline IAM policies, which CloudFormation cannot write (§8):
+node scripts/iam/syncLambdaPolicies.mjs --apply --profile …
 ```
 
 The stack's outputs are what the web deploy reads, so nothing here has to be
@@ -542,6 +544,26 @@ deploy's `create-invalidation --paths /*` reaches AWS **literally, un-mangled**
 ---
 
 ## 8. Deploy-session gotchas
+
+- **The org SCP denies IAM writes to the CDK deploy roles.** Since 2026-08 an
+  ISA organization SCP denies IAM-escalation calls (`iam:PutRolePolicy`,
+  `iam:CreatePolicyVersion`, …) to every principal in the account except the
+  `AdministratorAccess` SSO role. Both stacks have
+  `cdk-hnb659fds-cfn-exec-role-…` stored as their service role, which
+  CloudFormation reuses on every update and which can be replaced but never
+  removed, so a template change to an inline policy fails, and so does its
+  rollback (`UPDATE_ROLLBACK_FAILED`). The backend stack therefore owns no
+  inline policies: `infra/externalPolicies.ts` moves them into the template
+  Metadata and `server/scripts/iam/syncLambdaPolicies.mjs --apply` writes them
+  with your session after each deploy (runbook and the one-time migration:
+  `server/scripts/iam/README.md`). A new Lambda still needs CloudFormation's
+  `iam:CreateRole`, which the SCP has not been seen to deny. Recovering a stuck
+  rollback, after checking that the skipped resources still hold their
+  pre-deploy state:
+
+  ```bash
+  aws cloudformation continue-update-rollback --stack-name <stack> --resources-to-skip <failed logical ids>
+  ```
 
 - **CDK SSO token expiry** (`Assuming role failed: ExpiredToken` even while
   `aws sts get-caller-identity --profile <your-profile>` succeeds — the plain CLI
