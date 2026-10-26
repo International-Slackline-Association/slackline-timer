@@ -41,11 +41,13 @@ function aws(args, { profile, region } = {}) {
 
 /** `npm run build` with the resolved build env. Throws on a failed build. */
 function buildBundle(env) {
-  const res = spawnSync('npm', ['run', 'build'], {
+  // One fixed command string: npm.cmd needs a shell on Windows, and Node
+  // deprecates an args array combined with `shell` (DEP0190).
+  const res = spawnSync('npm run build', {
     cwd: WEB_ROOT,
     stdio: 'inherit',
     windowsHide: true,
-    shell: process.platform === 'win32', // npm.cmd needs a shell on Windows
+    shell: true,
     env: { ...process.env, ...env },
   });
   if (res.status !== 0) throw new Error('`npm run build` failed — nothing was uploaded.');

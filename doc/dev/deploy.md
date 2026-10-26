@@ -165,6 +165,8 @@ cd server
 AWS_PROFILE=… npm run deploy:guided     # cdk bootstrap && cdk deploy
 # Every subsequent deploy:
 AWS_PROFILE=… npm run deploy            # cdk deploy
+# Then the Lambdas' inline IAM policies (§8):
+node scripts/iam/syncLambdaPolicies.mjs --apply --profile …
 ```
 
 The stack's outputs are what the web deploy reads, so nothing here has to be
@@ -542,6 +544,12 @@ deploy's `create-invalidation --paths /*` reaches AWS **literally, un-mangled**
 ---
 
 ## 8. Deploy-session gotchas
+
+- **The Lambdas' inline IAM policies are not CloudFormation resources.**
+  `infra/externalPolicies.ts` moves them into the template Metadata and
+  `server/scripts/iam/syncLambdaPolicies.mjs --apply` writes them with your
+  session after each deploy (runbook: `server/scripts/iam/README.md`). A grant
+  added in code is live only after that step.
 
 - **CDK SSO token expiry** (`Assuming role failed: ExpiredToken` even while
   `aws sts get-caller-identity --profile <your-profile>` succeeds — the plain CLI

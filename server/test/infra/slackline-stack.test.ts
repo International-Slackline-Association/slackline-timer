@@ -3,6 +3,7 @@ import { Annotations, Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../../infra/app';
+import { EXTERNAL_POLICIES_KEY } from '../../infra/externalPolicies';
 import { CognitoConfig, SlacklineTimerV1Stack } from '../../infra/slackline-stack';
 import { OFFLINE_ENV } from '../../scripts/offlineEnv.mjs';
 
@@ -35,16 +36,29 @@ const LAMBDA_COUNT = 13;
 // HTTP routes in the surface table (the WS system routes excluded).
 const HTTP_ROUTE_COUNT = 30;
 
+interface ExternalPolicy {
+  PolicyName: string;
+  Roles: { Ref: string }[];
+  PolicyDocument: unknown;
+}
+
+// The Lambda roles' inline policies live in the template Metadata, applied by
+// scripts/iam/syncLambdaPolicies.mjs (externalPolicies.ts).
+const externalPolicies = (): Record<string, ExternalPolicy> =>
+  (template.toJSON() as { Metadata: Record<string, Record<string, ExternalPolicy>> }).Metadata[
+    EXTERNAL_POLICIES_KEY
+  ];
+
 // A function role's grants land in its ServiceRoleDefaultPolicy; table ARNs are
 // Fn::GetAtt refs carrying the table's logical id ('SpeedlineTimerTable' relay /
 // 'CompetitionTable'), so substring checks pin which tables a role can touch.
 const fnPolicy = (fnLogicalId: string): string => {
-  const policies = template.findResources('AWS::IAM::Policy');
+  const policies = externalPolicies();
   const key = Object.keys(policies).find((id) =>
     id.startsWith(`${fnLogicalId}ServiceRoleDefaultPolicy`),
   );
   expect(key, `default policy for ${fnLogicalId}`).toBeDefined();
-  return JSON.stringify(policies[key!].Properties.PolicyDocument);
+  return JSON.stringify(policies[key!].PolicyDocument);
 };
 
 interface PolicyStatementJson {
@@ -70,6 +84,31 @@ const tableByName = (tableName: string) => {
   expect(entry, tableName).toBeDefined();
   return entry!;
 };
+
+describe('Lambda inline policies (outside CloudFormation)', () => {
+  // syncLambdaPolicies.mjs owns them (doc/dev/deploy.md §8).
+  it('synthesizes no AWS::IAM::Policy resource', () => {
+    template.resourceCountIs('AWS::IAM::Policy', 0);
+  });
+
+  it('records one policy per Lambda role in the template Metadata', () => {
+    const policies = Object.values(externalPolicies());
+    expect(policies).toHaveLength(LAMBDA_COUNT);
+    const roles = template.findResources('AWS::IAM::Role');
+    for (const policy of policies) {
+      expect(policy.Roles).toHaveLength(1);
+      expect(roles[policy.Roles[0].Ref], policy.PolicyName).toBeDefined();
+    }
+  });
+
+  it('leaves no resource depending on a removed policy', () => {
+    const resources = template.toJSON().Resources as Record<string, { DependsOn?: string[] }>;
+    const removed = new Set(Object.keys(externalPolicies()));
+    for (const [id, res] of Object.entries(resources)) {
+      for (const dep of res.DependsOn ?? []) expect(removed.has(dep), `${id} → ${dep}`).toBe(false);
+    }
+  });
+});
 
 describe('DynamoDB tables', () => {
   it('keeps both tables retained + deletion-protected (PK/SK single-table)', () => {
@@ -171,9 +210,9 @@ describe('photo CDN', () => {
   });
 
   it('grants s3:PutObject to the photoUpload function only', () => {
-    const policies = template.findResources('AWS::IAM::Policy');
+    const policies = externalPolicies();
     const putObjectPolicies = Object.keys(policies).filter((logicalId) =>
-      JSON.stringify(policies[logicalId].Properties.PolicyDocument).includes('s3:PutObject'),
+      JSON.stringify(policies[logicalId].PolicyDocument).includes('s3:PutObject'),
     );
     expect(putObjectPolicies).toHaveLength(1);
     expect(putObjectPolicies[0]).toContain('PhotoUploadFunction');
